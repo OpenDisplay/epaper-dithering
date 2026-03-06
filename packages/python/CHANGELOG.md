@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/OpenDisplay/epaper-dithering/compare/python-v0.6.0...python-v0.6.1) (2026-03-06)
+
+
+### Features
+
+* add BWRY_3_97 calibration ([b670645](https://github.com/OpenDisplay/epaper-dithering/commit/b670645e5815d71e290441f21bd74dc4319d1a7d))
+
 ## [0.6.0](https://github.com/OpenDisplay-org/epaper-dithering/compare/python-v0.5.3...python-v0.6.0) (2026-02-11)
 
 
