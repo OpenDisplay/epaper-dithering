@@ -216,3 +216,19 @@ HANSHOW_BWY = ColorPalette(
     },
     accent='yellow'
 )
+
+# 3.97" BWRY — EP397YR_800x480 (panel_ic_type=0x37 / 55), BWRY scheme
+# Measured: 2026-03-06
+# Equipment: iPhone RAW
+# Method: Photographed calibration patches with white paper reference
+# Paper reference RGB(205,205,205); normalization: value × (255/205) per channel
+# Yellow blue channel clipped to 0 (expected for yellow; kept as-is)
+BWRY_3_97 = ColorPalette(
+    colors={
+        'black': (10, 7, 14),
+        'white': (173, 178, 174),
+        'yellow': (172, 128, 0),
+        'red': (85, 24, 14),
+    },
+    accent='red'
+)
