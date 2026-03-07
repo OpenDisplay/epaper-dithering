@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/OpenDisplay/epaper-dithering/compare/python-v0.6.1...python-v0.6.2) (2026-03-07)
+
+
+### Features
+
+* add py.typed marker and fix strict mypy errors ([22ecf06](https://github.com/OpenDisplay/epaper-dithering/commit/22ecf06199712565a182e0a1dc7ff4c95271c345))
+
 ## [0.6.1](https://github.com/OpenDisplay/epaper-dithering/compare/python-v0.6.0...python-v0.6.1) (2026-03-06)
 
 
