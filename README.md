@@ -140,7 +140,8 @@ epaper-dithering/
 
 ## Future Plans
 
-- Add s-curve tone mapping for better contrast
-- Rust implementation with bindings for Python/JavaScript/other languages
-- Web-based demo/playground
+- [ ] Python and js feature parity
+- [x] Add s-curve tone mapping for better contrast
+- [ ] Rust implementation with bindings for Python/JavaScript/other languages
+- [ ] Web-based demo/playground
 
