@@ -16,6 +16,8 @@ class TestColorSchemes:
         assert ColorScheme.BWRY.color_count == 4
         assert ColorScheme.BWGBRY.color_count == 6
         assert ColorScheme.GRAYSCALE_4.color_count == 4
+        assert ColorScheme.GRAYSCALE_8.color_count == 8
+        assert ColorScheme.GRAYSCALE_16.color_count == 16
 
     def test_palette_colors_valid(self):
         """Test all palette colors are valid RGB tuples."""

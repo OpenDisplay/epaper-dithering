@@ -86,7 +86,7 @@ See [`packages/javascript/README.md`](packages/javascript/README.md) for detaile
 ## Features
 
 - **9 Dithering Algorithms**: NONE, BURKES, ORDERED, FLOYD_STEINBERG, ATKINSON, STUCKI, SIERRA, SIERRA_LITE, JARVIS_JUDICE_NINKE
-- **6 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE_4
+- **8 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE_4, GRAYSCALE_8, GRAYSCALE_16
 - **Multiple Languages**: Python and JavaScript/TypeScript implementations
 - **Universal**: Works in Python, Node.js, and browser environments
 - **Type-Safe**: Full type coverage in both languages

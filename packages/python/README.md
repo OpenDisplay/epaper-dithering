@@ -24,7 +24,7 @@ pip install epaper-dithering
 
 - **Perceptually Correct**: Uses linear RGB color space with gamma correction for accurate error diffusion
 - **8 Dithering Algorithms**: From simple ordered dithering to high-quality Jarvis-Judice-Ninke
-- **6 Color Schemes**: Support for mono, 3-color, 4-color, and 6-color e-paper displays
+- **8 Color Schemes**: Support for mono, 3-color, 4-color, 6-color, and grayscale e-paper displays
 - **Tone Mapping**: Dynamic range compression maps image luminance to the display's actual range for smoother dithering
 - **Serpentine Scanning**: Reduces directional artifacts in error diffusion (enabled by default)
 - **RGBA Support**: Automatic compositing on white background for transparent images
@@ -52,7 +52,9 @@ dithered.save("output.png")
 - **BWY** - Black, white, yellow (3-color)
 - **BWRY** - Black, white, red, yellow (4-color)
 - **BWGBRY** - Black, white, green, blue, red, yellow (6-color Spectra)
-- **GRAYSCALE_4** - 4-level grayscale
+- **GRAYSCALE_4** - 4-level grayscale (2-bit)
+- **GRAYSCALE_8** - 8-level grayscale (3-bit, e.g. Inkplate 10)
+- **GRAYSCALE_16** - 16-level grayscale (4-bit, e.g. Waveshare 6" HD)
 
 ## Dithering Algorithms
 

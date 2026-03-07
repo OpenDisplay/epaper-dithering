@@ -104,6 +104,49 @@ class ColorScheme(Enum):
         ),
     )
 
+    # NOTE: Values 6 and 7 are placeholders pending firmware assignment.
+    GRAYSCALE_8 = (
+        6,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "gray1": (36, 36, 36),
+                "gray2": (73, 73, 73),
+                "gray3": (109, 109, 109),
+                "gray4": (146, 146, 146),
+                "gray5": (182, 182, 182),
+                "gray6": (219, 219, 219),
+                "white": (255, 255, 255),
+            },
+            accent="black",
+        ),
+    )
+
+    GRAYSCALE_16 = (
+        7,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "gray1": (17, 17, 17),
+                "gray2": (34, 34, 34),
+                "gray3": (51, 51, 51),
+                "gray4": (68, 68, 68),
+                "gray5": (85, 85, 85),
+                "gray6": (102, 102, 102),
+                "gray7": (119, 119, 119),
+                "gray8": (136, 136, 136),
+                "gray9": (153, 153, 153),
+                "gray10": (170, 170, 170),
+                "gray11": (187, 187, 187),
+                "gray12": (204, 204, 204),
+                "gray13": (221, 221, 221),
+                "gray14": (238, 238, 238),
+                "white": (255, 255, 255),
+            },
+            accent="black",
+        ),
+    )
+
     def __init__(self, value: int, palette: ColorPalette):
         self._value_ = value  # type: ignore[assignment]
         self.palette = palette
@@ -123,7 +166,7 @@ class ColorScheme(Enum):
         """Get ColorScheme from firmware int value.
 
         Args:
-            value: Firmware color scheme value (0-5)
+            value: Firmware color scheme value (0-7)
 
         Returns:
             Matching ColorScheme
