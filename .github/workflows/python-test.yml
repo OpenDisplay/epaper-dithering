@@ -10,6 +10,7 @@ on:
     paths:
       - 'packages/python/**'
       - '.github/workflows/python-test.yml'
+  workflow_dispatch:
 
 defaults:
   run:
