@@ -62,6 +62,7 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 
+
 [tool.pylint.format]
 max-line-length = 120
 
@@ -80,10 +81,13 @@ max-branches = 15
 
 [tool.pylint.messages_control]
 disable = [
-    "fixme",                    # TODO comments are fine
-    "duplicate-code",           # algorithmic variants share structure by design
-    "consider-using-enumerate", # numpy indexing patterns don't benefit from enumerate
+    "fixme",                      # TODO comments are fine
+    "duplicate-code",             # algorithmic variants share structure by design
+    "consider-using-enumerate",   # numpy indexing patterns don't benefit from enumerate
     "consider-using-max-builtin", # explicit comparison is clearer for float edge cases
+    "import-outside-toplevel",    # pytest lazy imports in test methods
+    "too-few-public-methods",     # single-test test classes are fine
+    "too-many-function-args",     # false positives from pylint path resolution in monorepo
 ]
 
 [tool.pytest.ini_options]

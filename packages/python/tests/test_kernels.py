@@ -59,7 +59,7 @@ class TestKernelWeights:
         For left-to-right scanning: dx > 0 on same row (dy=0),
         or any dx on future rows (dy > 0).
         """
-        for dx, dy, weight in kernel.offsets:
+        for dx, dy, _weight in kernel.offsets:
             assert dy >= 0, f"{kernel.name}: offset ({dx},{dy}) points backwards"
             if dy == 0:
                 assert dx > 0, f"{kernel.name}: offset ({dx},{dy}) on current row must be forward"

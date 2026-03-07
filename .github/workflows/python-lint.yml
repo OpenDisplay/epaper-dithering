@@ -11,10 +11,6 @@ on:
       - 'packages/python/**'
       - '.github/workflows/python-lint.yml'
 
-defaults:
-  run:
-    working-directory: packages/python
-
 jobs:
   lint:
     name: Lint
@@ -29,10 +25,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv --project packages/python sync --all-extras
 
-      - name: Run ruff
-        run: uv run ruff check .
-
-      - name: Run mypy
-        run: uv run mypy src/epaper_dithering
+      - name: Run prek
+        run: uv --project packages/python run prek run --all-files --config packages/python/.pre-commit-config.yaml
