@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "epaper-dithering"
-version = "0.6.2"
+version = "0.6.3"
 description = "Dithering algorithms for e-paper/e-ink displays"
 readme = "README.md"
 license = "MIT"
