@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.3](https://github.com/OpenDisplay/epaper-dithering/compare/python-v0.6.2...python-v0.6.3) (2026-03-07)
+
+
+### Features
+
+* add prek and update typing ([f323692](https://github.com/OpenDisplay/epaper-dithering/commit/f3236925ccb065ff23d161f93dbb0fe789094dd0))
+
+
+### Bug Fixes
+
+* updated hooks and ci ([c54a675](https://github.com/OpenDisplay/epaper-dithering/commit/c54a6754a409e1a16cc3afa353357cdc4ac4030d))
+
 ## [0.6.2](https://github.com/OpenDisplay/epaper-dithering/compare/python-v0.6.1...python-v0.6.2) (2026-03-07)
 
 
