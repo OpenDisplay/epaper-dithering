@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.4](https://github.com/OpenDisplay/epaper-dithering/compare/python-v0.6.3...python-v0.6.4) (2026-03-07)
+
+
+### Features
+
+* add GRAYSCALE_8 and GRAYSCALE_16 ([4e9711a](https://github.com/OpenDisplay/epaper-dithering/commit/4e9711a6b4a6545fe4451bce2fef59fef3cbfe3e))
+
 ## [0.6.3](https://github.com/OpenDisplay/epaper-dithering/compare/python-v0.6.2...python-v0.6.3) (2026-03-07)
 
 
