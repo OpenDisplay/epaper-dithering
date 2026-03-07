@@ -143,7 +143,7 @@ def find_closest_palette_color_lab(
 def _lab_f(t: float) -> float:
     """CIE LAB nonlinear function (scalar version)."""
     if t > _EPSILON:
-        return t ** (1.0 / 3.0)
+        return float(t ** (1.0 / 3.0))
     return (_KAPPA * t + 16.0) / 116.0
 
 

@@ -9,6 +9,8 @@ Based on fast_compress_dynamic_range() from esp32-photoframe by aitjcize.
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 
 # ITU-R BT.709 luminance coefficients (same as sRGB)
@@ -83,7 +85,7 @@ def compress_dynamic_range(
         result[near_black, 1] = black_level
         result[near_black, 2] = black_level
 
-    return np.clip(result, 0.0, 1.0)
+    return cast(np.ndarray, np.clip(result, 0.0, 1.0))
 
 
 def auto_compress_dynamic_range(
@@ -153,4 +155,4 @@ def auto_compress_dynamic_range(
         result[near_black, 1] = black_Y
         result[near_black, 2] = black_Y
 
-    return np.clip(result, 0.0, 1.0)
+    return cast(np.ndarray, np.clip(result, 0.0, 1.0))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 from PIL import Image
@@ -195,7 +196,7 @@ def error_diffusion_dither(
         if tone_compression == "auto":
             pixels_linear = auto_compress_dynamic_range(pixels_linear, palette_linear)
         else:
-            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, tone_compression)
+            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, cast(float, tone_compression))
 
     # Pre-compute palette LAB components for scalar per-pixel matching
     palette_L, palette_a, palette_b, palette_C = precompute_palette_lab(palette_linear)
@@ -485,7 +486,7 @@ def direct_palette_map(
         if tone_compression == "auto":
             pixels_linear = auto_compress_dynamic_range(pixels_linear, palette_linear)
         else:
-            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, tone_compression)
+            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, cast(float, tone_compression))
 
     # Find closest palette color for ALL pixels at once using LAB
     output_pixels = find_closest_palette_color_lab(pixels_linear, palette_linear)
@@ -555,7 +556,7 @@ def ordered_dither(
         if tone_compression == "auto":
             pixels_linear = auto_compress_dynamic_range(pixels_linear, palette_linear)
         else:
-            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, tone_compression)
+            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, cast(float, tone_compression))
 
     # ===== VECTORIZED ORDERED DITHERING =====
 
