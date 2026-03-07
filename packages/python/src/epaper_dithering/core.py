@@ -14,11 +14,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def dither_image(
-        image: Image.Image,
-        color_scheme: ColorScheme | ColorPalette,
-        mode: DitherMode = DitherMode.BURKES,
-        serpentine: bool = True,
-        tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    mode: DitherMode = DitherMode.BURKES,
+    serpentine: bool = True,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Apply dithering to image for e-paper display.
 

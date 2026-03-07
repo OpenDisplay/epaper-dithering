@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from epaper_dithering.color_space import linear_to_srgb, srgb_to_linear
 
 

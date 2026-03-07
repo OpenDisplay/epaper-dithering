@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
 
 import numpy as np
 from PIL import Image
@@ -47,10 +46,10 @@ FLOYD_STEINBERG = ErrorDiffusionKernel(
     name="Floyd-Steinberg",
     divisor=16,
     offsets=[
-        (1, 0, 7),   # Right: 7/16
+        (1, 0, 7),  # Right: 7/16
         (-1, 1, 3),  # Down-left: 3/16
-        (0, 1, 5),   # Down: 5/16
-        (1, 1, 1),   # Down-right: 1/16
+        (0, 1, 5),  # Down: 5/16
+        (1, 1, 1),  # Down-right: 1/16
     ],
 )
 
@@ -58,8 +57,13 @@ BURKES = ErrorDiffusionKernel(
     name="Burkes",
     divisor=32,
     offsets=[
-        (1, 0, 8), (2, 0, 4),  # Current row
-        (-2, 1, 2), (-1, 1, 4), (0, 1, 8), (1, 1, 4), (2, 1, 2),  # Next row
+        (1, 0, 8),
+        (2, 0, 4),  # Current row
+        (-2, 1, 2),
+        (-1, 1, 4),
+        (0, 1, 8),
+        (1, 1, 4),
+        (2, 1, 2),  # Next row
     ],
 )
 
@@ -67,9 +71,16 @@ SIERRA = ErrorDiffusionKernel(
     name="Sierra",
     divisor=32,
     offsets=[
-        (1, 0, 5), (2, 0, 3),  # Current row
-        (-2, 1, 2), (-1, 1, 4), (0, 1, 5), (1, 1, 4), (2, 1, 2),  # Row +1
-        (-1, 2, 2), (0, 2, 3), (1, 2, 2),  # Row +2
+        (1, 0, 5),
+        (2, 0, 3),  # Current row
+        (-2, 1, 2),
+        (-1, 1, 4),
+        (0, 1, 5),
+        (1, 1, 4),
+        (2, 1, 2),  # Row +1
+        (-1, 2, 2),
+        (0, 2, 3),
+        (1, 2, 2),  # Row +2
     ],
 )
 
@@ -77,9 +88,9 @@ SIERRA_LITE = ErrorDiffusionKernel(
     name="Sierra Lite",
     divisor=4,
     offsets=[
-        (1, 0, 2),   # Right: 2/4
+        (1, 0, 2),  # Right: 2/4
         (-1, 1, 1),  # Down-left: 1/4
-        (0, 1, 1),   # Down: 1/4
+        (0, 1, 1),  # Down: 1/4
     ],
 )
 
@@ -87,8 +98,11 @@ ATKINSON = ErrorDiffusionKernel(
     name="Atkinson",
     divisor=8,
     offsets=[
-        (1, 0, 1), (2, 0, 1),  # Current row
-        (-1, 1, 1), (0, 1, 1), (1, 1, 1),  # Row +1
+        (1, 0, 1),
+        (2, 0, 1),  # Current row
+        (-1, 1, 1),
+        (0, 1, 1),
+        (1, 1, 1),  # Row +1
         (0, 2, 1),  # Row +2
     ],
 )
@@ -97,9 +111,18 @@ STUCKI = ErrorDiffusionKernel(
     name="Stucki",
     divisor=42,
     offsets=[
-        (1, 0, 8), (2, 0, 4),  # Current row
-        (-2, 1, 2), (-1, 1, 4), (0, 1, 8), (1, 1, 4), (2, 1, 2),  # Row +1
-        (-2, 2, 1), (-1, 2, 2), (0, 2, 4), (1, 2, 2), (2, 2, 1),  # Row +2
+        (1, 0, 8),
+        (2, 0, 4),  # Current row
+        (-2, 1, 2),
+        (-1, 1, 4),
+        (0, 1, 8),
+        (1, 1, 4),
+        (2, 1, 2),  # Row +1
+        (-2, 2, 1),
+        (-1, 2, 2),
+        (0, 2, 4),
+        (1, 2, 2),
+        (2, 2, 1),  # Row +2
     ],
 )
 
@@ -107,19 +130,23 @@ JARVIS_JUDICE_NINKE = ErrorDiffusionKernel(
     name="Jarvis-Judice-Ninke",
     divisor=48,
     offsets=[
-        (1, 0, 7), (2, 0, 5),  # Current row
-        (-2, 1, 3), (-1, 1, 5), (0, 1, 7), (1, 1, 5), (2, 1, 3),  # Row +1
-        (-2, 2, 1), (-1, 2, 3), (0, 2, 5), (1, 2, 3), (2, 2, 1),  # Row +2
+        (1, 0, 7),
+        (2, 0, 5),  # Current row
+        (-2, 1, 3),
+        (-1, 1, 5),
+        (0, 1, 7),
+        (1, 1, 5),
+        (2, 1, 3),  # Row +1
+        (-2, 2, 1),
+        (-1, 2, 3),
+        (0, 2, 5),
+        (1, 2, 3),
+        (2, 2, 1),  # Row +2
     ],
 )
 
 # Bayer 4x4 matrix normalized to [-0.5, 0.5] (centered around 0)
-_BAYER_4X4 = (
-    np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]],
-             dtype=np.float32)
-    / 16.0
-    - 0.5
-)
+_BAYER_4X4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], dtype=np.float32) / 16.0 - 0.5
 
 
 def get_palette_colors(color_scheme: ColorScheme | ColorPalette) -> list[tuple[int, int, int]]:
@@ -195,8 +222,8 @@ def error_diffusion_dither(
     if isinstance(color_scheme, ColorPalette) and tone_compression != 0:
         if tone_compression == "auto":
             pixels_linear = auto_compress_dynamic_range(pixels_linear, palette_linear)
-        else:
-            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, cast(float, tone_compression))
+        elif isinstance(tone_compression, float):
+            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, tone_compression)
 
     # Pre-compute palette LAB components for scalar per-pixel matching
     palette_L, palette_a, palette_b, palette_C = precompute_palette_lab(palette_linear)
@@ -274,8 +301,10 @@ def error_diffusion_dither(
 
 
 def floyd_steinberg_dither(
-    image: Image.Image, color_scheme: ColorScheme | ColorPalette,
-    serpentine: bool = True, tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    serpentine: bool = True,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Apply Floyd-Steinberg error diffusion dithering.
 
@@ -298,8 +327,10 @@ def floyd_steinberg_dither(
 
 
 def burkes_dither(
-    image: Image.Image, color_scheme: ColorScheme | ColorPalette,
-    serpentine: bool = True, tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    serpentine: bool = True,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Apply Burkes error diffusion dithering.
 
@@ -320,8 +351,10 @@ def burkes_dither(
 
 
 def sierra_dither(
-    image: Image.Image, color_scheme: ColorScheme | ColorPalette,
-    serpentine: bool = True, tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    serpentine: bool = True,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Apply Sierra error diffusion dithering.
 
@@ -345,8 +378,10 @@ def sierra_dither(
 
 
 def sierra_lite_dither(
-    image: Image.Image, color_scheme: ColorScheme | ColorPalette,
-    serpentine: bool = True, tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    serpentine: bool = True,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Apply Sierra Lite error diffusion dithering.
 
@@ -369,8 +404,10 @@ def sierra_lite_dither(
 
 
 def atkinson_dither(
-    image: Image.Image, color_scheme: ColorScheme | ColorPalette,
-    serpentine: bool = True, tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    serpentine: bool = True,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Apply Atkinson error diffusion dithering.
 
@@ -394,8 +431,10 @@ def atkinson_dither(
 
 
 def stucki_dither(
-    image: Image.Image, color_scheme: ColorScheme | ColorPalette,
-    serpentine: bool = True, tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    serpentine: bool = True,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Apply Stucki error diffusion dithering.
 
@@ -419,8 +458,10 @@ def stucki_dither(
 
 
 def jarvis_judice_ninke_dither(
-    image: Image.Image, color_scheme: ColorScheme | ColorPalette,
-    serpentine: bool = True, tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    serpentine: bool = True,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Apply Jarvis-Judice-Ninke error diffusion dithering.
 
@@ -449,7 +490,9 @@ def jarvis_judice_ninke_dither(
 
 
 def direct_palette_map(
-    image: Image.Image, color_scheme: ColorScheme | ColorPalette, tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Map image colors directly to palette without dithering.
 
@@ -485,8 +528,8 @@ def direct_palette_map(
     if isinstance(color_scheme, ColorPalette) and tone_compression != 0:
         if tone_compression == "auto":
             pixels_linear = auto_compress_dynamic_range(pixels_linear, palette_linear)
-        else:
-            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, cast(float, tone_compression))
+        elif isinstance(tone_compression, float):
+            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, tone_compression)
 
     # Find closest palette color for ALL pixels at once using LAB
     output_pixels = find_closest_palette_color_lab(pixels_linear, palette_linear)
@@ -501,7 +544,9 @@ def direct_palette_map(
 
 
 def ordered_dither(
-    image: Image.Image, color_scheme: ColorScheme | ColorPalette, tone_compression: float | str = "auto",
+    image: Image.Image,
+    color_scheme: ColorScheme | ColorPalette,
+    tone_compression: float | str = "auto",
 ) -> Image.Image:
     """Apply ordered (Bayer) dithering with full vectorization.
 
@@ -528,10 +573,7 @@ def ordered_dither(
     """
     # Bayer 4x4 matrix normalized to [-0.5, 0.5] (centered around 0)
     bayer_matrix = (
-        np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]],
-                 dtype=np.float32)
-        / 16.0
-        - 0.5
+        np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], dtype=np.float32) / 16.0 - 0.5
     )
 
     # ===== Image Preprocessing =====
@@ -555,14 +597,14 @@ def ordered_dither(
     if isinstance(color_scheme, ColorPalette) and tone_compression != 0:
         if tone_compression == "auto":
             pixels_linear = auto_compress_dynamic_range(pixels_linear, palette_linear)
-        else:
-            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, cast(float, tone_compression))
+        elif isinstance(tone_compression, float):
+            pixels_linear = compress_dynamic_range(pixels_linear, palette_linear, tone_compression)
 
     # ===== VECTORIZED ORDERED DITHERING =====
 
     # Create threshold matrix for entire image using broadcasting
     y_indices = np.arange(height)[:, np.newaxis] % 4  # Shape: (height, 1)
-    x_indices = np.arange(width)[np.newaxis, :] % 4   # Shape: (1, width)
+    x_indices = np.arange(width)[np.newaxis, :] % 4  # Shape: (1, width)
     threshold_matrix = bayer_matrix[y_indices, x_indices]  # Shape: (height, width)
 
     # Add threshold to all pixels at once

@@ -52,7 +52,7 @@ def srgb_to_linear(srgb: np.ndarray) -> np.ndarray:
     linear = np.where(
         normalized <= 0.04045,
         normalized / 12.92,  # Linear section for dark values
-        np.power((normalized + 0.055) / 1.055, 2.4)  # Gamma section
+        np.power((normalized + 0.055) / 1.055, 2.4),  # Gamma section
     )
 
     return linear
@@ -99,7 +99,7 @@ def linear_to_srgb(linear: np.ndarray) -> np.ndarray:
     normalized = np.where(
         linear <= 0.0031308,
         linear * 12.92,  # Linear section
-        1.055 * np.power(linear, 1.0 / 2.4) - 0.055  # Gamma section
+        1.055 * np.power(linear, 1.0 / 2.4) - 0.055,  # Gamma section
     )
 
     # Convert to [0, 255] and round (not truncate!)

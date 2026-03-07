@@ -1,9 +1,8 @@
 """Tests for palette definitions and firmware conventions."""
 
 import pytest
-from PIL import Image
-
 from epaper_dithering import ColorScheme, DitherMode, dither_image
+from PIL import Image
 
 
 class TestColorSchemes:
@@ -28,8 +27,9 @@ class TestColorSchemes:
     def test_accent_color_defined(self):
         """Test each scheme has an accent color."""
         for scheme in ColorScheme:
-            assert scheme.accent_color in scheme.palette.colors, \
+            assert scheme.accent_color in scheme.palette.colors, (
                 f"Accent color '{scheme.accent_color}' should be in palette"
+            )
 
     def test_palette_color_order_matches_firmware(self):
         """Test palette color ordering matches bb_epaper firmware conventions.
@@ -40,12 +40,14 @@ class TestColorSchemes:
         causes colors to display swapped on real hardware.
         """
         bwry_keys = list(ColorScheme.BWRY.palette.colors.keys())
-        assert bwry_keys == ['black', 'white', 'yellow', 'red'], \
+        assert bwry_keys == ["black", "white", "yellow", "red"], (
             f"BWRY order must be black,white,yellow,red (firmware convention), got {bwry_keys}"
+        )
 
         bwgbry_keys = list(ColorScheme.BWGBRY.palette.colors.keys())
-        assert bwgbry_keys == ['black', 'white', 'yellow', 'red', 'blue', 'green'], \
+        assert bwgbry_keys == ["black", "white", "yellow", "red", "blue", "green"], (
             f"BWGBRY order must be black,white,yellow,red,blue,green, got {bwgbry_keys}"
+        )
 
     def test_from_value_method(self):
         """Test ColorScheme.from_value() works correctly."""
@@ -91,31 +93,30 @@ class TestMeasuredPaletteIntegration:
         from epaper_dithering import ColorPalette
 
         measured = ColorPalette(
-            colors={'black': (2, 2, 2), 'white': (179, 182, 171), 'red': (117, 10, 0)},
-            accent='red'
+            colors={"black": (2, 2, 2), "white": (179, 182, 171), "red": (117, 10, 0)}, accent="red"
         )
         result = dither_image(small_test_image, measured, DitherMode.BURKES)
 
-        assert result.mode == 'P'
+        assert result.mode == "P"
         assert result.size == small_test_image.size
 
     def test_backward_compatibility_colorscheme(self, small_test_image):
         """Test existing ColorScheme API still works unchanged."""
         result = dither_image(small_test_image, ColorScheme.BWR)
-        assert result.mode == 'P'
+        assert result.mode == "P"
 
     def test_predefined_measured_palettes_work(self, small_test_image):
         """Test exported measured palette constants."""
         from epaper_dithering import HANSHOW_BWR, MONO_4_26, SPECTRA_7_3_6COLOR
 
         result = dither_image(small_test_image, SPECTRA_7_3_6COLOR, DitherMode.BURKES)
-        assert result.mode == 'P'
+        assert result.mode == "P"
 
         result = dither_image(small_test_image, MONO_4_26, DitherMode.FLOYD_STEINBERG)
-        assert result.mode == 'P'
+        assert result.mode == "P"
 
         result = dither_image(small_test_image, HANSHOW_BWR, DitherMode.SIERRA)
-        assert result.mode == 'P'
+        assert result.mode == "P"
 
 
 class TestPureColorMapping:
@@ -128,8 +129,9 @@ class TestPureColorMapping:
             img = Image.new("RGB", (4, 4), rgb)
             result = dither_image(img, scheme, DitherMode.NONE)
             pixels = list(result.get_flattened_data())
-            assert all(p == idx for p in pixels), \
+            assert all(p == idx for p in pixels), (
                 f"{scheme.name}: {name} {rgb} should map to index {idx}, got {set(pixels)}"
+            )
 
 
 class TestSpectraNormalization:
@@ -145,16 +147,15 @@ class TestSpectraNormalization:
 
         paper = (215, 217, 218)
         raw_colors = {
-            'black': (22, 11, 30),
-            'white': (156, 172, 175),
-            'yellow': (170, 157, 0),
-            'red': (102, 8, 0),
-            'blue': (0, 59, 119),
-            'green': (34, 70, 49),
+            "black": (22, 11, 30),
+            "white": (156, 172, 175),
+            "yellow": (170, 157, 0),
+            "red": (102, 8, 0),
+            "blue": (0, 59, 119),
+            "green": (34, 70, 49),
         }
 
         for name, raw in raw_colors.items():
             expected = tuple(round(raw[c] * 255 / paper[c]) for c in range(3))
             actual = SPECTRA_7_3_6COLOR.colors[name]
-            assert actual == expected, \
-                f"{name}: expected {expected} from normalization, got {actual}"
+            assert actual == expected, f"{name}: expected {expected} from normalization, got {actual}"

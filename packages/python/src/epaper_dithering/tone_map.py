@@ -9,8 +9,6 @@ Based on fast_compress_dynamic_range() from esp32-photoframe by aitjcize.
 
 from __future__ import annotations
 
-from typing import cast
-
 import numpy as np
 
 # ITU-R BT.709 luminance coefficients (same as sRGB)
@@ -42,21 +40,15 @@ def compress_dynamic_range(
         return pixels_linear
 
     # Display black/white luminance from measured palette
-    black_Y = (_LUM_R * palette_linear[0, 0]
-               + _LUM_G * palette_linear[0, 1]
-               + _LUM_B * palette_linear[0, 2])
-    white_Y = (_LUM_R * palette_linear[1, 0]
-               + _LUM_G * palette_linear[1, 1]
-               + _LUM_B * palette_linear[1, 2])
+    black_Y = _LUM_R * palette_linear[0, 0] + _LUM_G * palette_linear[0, 1] + _LUM_B * palette_linear[0, 2]
+    white_Y = _LUM_R * palette_linear[1, 0] + _LUM_G * palette_linear[1, 1] + _LUM_B * palette_linear[1, 2]
     display_range = white_Y - black_Y
 
     if display_range <= 0:
         return pixels_linear
 
     # Per-pixel luminance
-    Y = (_LUM_R * pixels_linear[:, :, 0]
-         + _LUM_G * pixels_linear[:, :, 1]
-         + _LUM_B * pixels_linear[:, :, 2])
+    Y = _LUM_R * pixels_linear[:, :, 0] + _LUM_G * pixels_linear[:, :, 1] + _LUM_B * pixels_linear[:, :, 2]
 
     # Compressed luminance mapped to display range
     compressed_Y = black_Y + Y * display_range
@@ -85,7 +77,8 @@ def compress_dynamic_range(
         result[near_black, 1] = black_level
         result[near_black, 2] = black_level
 
-    return cast(np.ndarray, np.clip(result, 0.0, 1.0))
+    clipped: np.ndarray = np.clip(result, 0.0, 1.0)
+    return clipped
 
 
 def auto_compress_dynamic_range(
@@ -110,21 +103,15 @@ def auto_compress_dynamic_range(
         Modified pixels_linear array with compressed dynamic range.
     """
     # Display black/white luminance from measured palette
-    black_Y = (_LUM_R * palette_linear[0, 0]
-               + _LUM_G * palette_linear[0, 1]
-               + _LUM_B * palette_linear[0, 2])
-    white_Y = (_LUM_R * palette_linear[1, 0]
-               + _LUM_G * palette_linear[1, 1]
-               + _LUM_B * palette_linear[1, 2])
+    black_Y = _LUM_R * palette_linear[0, 0] + _LUM_G * palette_linear[0, 1] + _LUM_B * palette_linear[0, 2]
+    white_Y = _LUM_R * palette_linear[1, 0] + _LUM_G * palette_linear[1, 1] + _LUM_B * palette_linear[1, 2]
     display_range = white_Y - black_Y
 
     if display_range <= 0:
         return pixels_linear
 
     # Per-pixel luminance
-    Y = (_LUM_R * pixels_linear[:, :, 0]
-         + _LUM_G * pixels_linear[:, :, 1]
-         + _LUM_B * pixels_linear[:, :, 2])
+    Y = _LUM_R * pixels_linear[:, :, 0] + _LUM_G * pixels_linear[:, :, 1] + _LUM_B * pixels_linear[:, :, 2]
 
     # Image luminance percentiles (ignore 2% outliers at each end)
     p_low = float(np.percentile(Y, 2))
@@ -155,4 +142,5 @@ def auto_compress_dynamic_range(
         result[near_black, 1] = black_Y
         result[near_black, 2] = black_Y
 
-    return cast(np.ndarray, np.clip(result, 0.0, 1.0))
+    clipped: np.ndarray = np.clip(result, 0.0, 1.0)
+    return clipped

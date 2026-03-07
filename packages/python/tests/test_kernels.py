@@ -1,7 +1,6 @@
 """Tests for error diffusion kernel definitions."""
 
 import pytest
-
 from epaper_dithering.algorithms import (
     ATKINSON,
     BURKES,
@@ -35,8 +34,7 @@ class TestKernelWeights:
         summed to 104 with divisor 200 (52% propagation instead of 100%).
         """
         weight_sum = sum(weight for _, _, weight in kernel.offsets)
-        assert weight_sum == kernel.divisor, \
-            f"{kernel.name}: weights sum to {weight_sum}, expected {kernel.divisor}"
+        assert weight_sum == kernel.divisor, f"{kernel.name}: weights sum to {weight_sum}, expected {kernel.divisor}"
 
     def test_atkinson_propagates_75_percent(self):
         """Atkinson intentionally propagates only 6/8 (75%) of error.
@@ -46,8 +44,7 @@ class TestKernelWeights:
         """
         weight_sum = sum(weight for _, _, weight in ATKINSON.offsets)
         assert ATKINSON.divisor == 8
-        assert weight_sum == 6, \
-            f"Atkinson should propagate 6/8 of error, weights sum to {weight_sum}"
+        assert weight_sum == 6, f"Atkinson should propagate 6/8 of error, weights sum to {weight_sum}"
 
     @pytest.mark.parametrize("kernel", ALL_KERNELS + [ATKINSON], ids=lambda k: k.name)
     def test_all_weights_positive(self, kernel):

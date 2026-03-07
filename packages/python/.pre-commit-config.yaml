@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        language: system
+        entry: uv --project packages/python run ruff check --fix --config=packages/python/pyproject.toml
+        types: [python]
+      - id: ruff-format
+        name: ruff-format
+        language: system
+        entry: uv --project packages/python run ruff format --config=packages/python/pyproject.toml
+        types: [python]
+      - id: mypy
+        name: mypy
+        language: system
+        entry: uv --project packages/python run mypy --config-file=packages/python/pyproject.toml packages/python/src/
+        pass_filenames: false
+      - id: pylint
+        name: pylint
+        language: system
+        entry: uv --project packages/python run pylint --rcfile=packages/python/pyproject.toml packages/python/src/
+        pass_filenames: false

@@ -9,6 +9,7 @@ from enum import Enum
 @dataclass(frozen=True)
 class ColorPalette:
     """Color palette for an e-paper display."""
+
     colors: dict[str, tuple[int, int, int]]  # name -> RGB tuple
     accent: str  # Primary accent color name
 
@@ -27,63 +28,81 @@ class ColorScheme(Enum):
         scheme.accent_color    # "red"
     """
 
-    MONO = (0, ColorPalette(
-        colors={
-            'black': (0, 0, 0),
-            'white': (255, 255, 255),
-        },
-        accent='black'
-    ))
+    MONO = (
+        0,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "white": (255, 255, 255),
+            },
+            accent="black",
+        ),
+    )
 
-    BWR = (1, ColorPalette(
-        colors={
-            'black': (0, 0, 0),
-            'white': (255, 255, 255),
-            'red': (255, 0, 0),
-        },
-        accent='red'
-    ))
+    BWR = (
+        1,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "white": (255, 255, 255),
+                "red": (255, 0, 0),
+            },
+            accent="red",
+        ),
+    )
 
-    BWY = (2, ColorPalette(
-        colors={
-            'black': (0, 0, 0),
-            'white': (255, 255, 255),
-            'yellow': (255, 255, 0),
-        },
-        accent='yellow'
-    ))
+    BWY = (
+        2,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "white": (255, 255, 255),
+                "yellow": (255, 255, 0),
+            },
+            accent="yellow",
+        ),
+    )
 
-    BWRY = (3, ColorPalette(
-        colors={
-            'black': (0, 0, 0),
-            'white': (255, 255, 255),
-            'yellow': (255, 255, 0),
-            'red': (255, 0, 0),
-        },
-        accent='red'
-    ))
+    BWRY = (
+        3,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "white": (255, 255, 255),
+                "yellow": (255, 255, 0),
+                "red": (255, 0, 0),
+            },
+            accent="red",
+        ),
+    )
 
-    BWGBRY = (4, ColorPalette(
-        colors={
-            'black': (0, 0, 0),
-            'white': (255, 255, 255),
-            'yellow': (255, 255, 0),
-            'red': (255, 0, 0),
-            'blue': (0, 0, 255),
-            'green': (0, 255, 0),
-        },
-        accent='red'
-    ))
+    BWGBRY = (
+        4,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "white": (255, 255, 255),
+                "yellow": (255, 255, 0),
+                "red": (255, 0, 0),
+                "blue": (0, 0, 255),
+                "green": (0, 255, 0),
+            },
+            accent="red",
+        ),
+    )
 
-    GRAYSCALE_4 = (5, ColorPalette(
-        colors={
-            'black': (0, 0, 0),
-            'gray1': (85, 85, 85),
-            'gray2': (170, 170, 170),
-            'white': (255, 255, 255),
-        },
-        accent='black'
-    ))
+    GRAYSCALE_4 = (
+        5,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "gray1": (85, 85, 85),
+                "gray2": (170, 170, 170),
+                "white": (255, 255, 255),
+            },
+            accent="black",
+        ),
+    )
 
     def __init__(self, value: int, palette: ColorPalette):
         self._value_ = value  # type: ignore[assignment]
@@ -152,69 +171,69 @@ class ColorScheme(Enum):
 # Normalization: per-channel scaling value × (255 / paper_channel)
 SPECTRA_7_3_6COLOR = ColorPalette(
     colors={
-        'black': (26, 13, 35),
-        'white': (185, 202, 205),
-        'yellow': (202, 184, 0),
-        'red': (121, 9, 0),
-        'blue': (0, 69, 139),
-        'green': (40, 82, 57),
+        "black": (26, 13, 35),
+        "white": (185, 202, 205),
+        "yellow": (202, 184, 0),
+        "red": (121, 9, 0),
+        "blue": (0, 69, 139),
+        "green": (40, 82, 57),
     },
-    accent='red'
+    accent="red",
 )
 
 # 4.26" Monochrome (MONO scheme)
 # TODO: Measure actual display
 MONO_4_26 = ColorPalette(
     colors={
-        'black': (5, 5, 5),           # Measure: likely darker than pure black
-        'white': (220, 220, 220),     # Measure: real displays ~200-230, not 255
+        "black": (5, 5, 5),  # Measure: likely darker than pure black
+        "white": (220, 220, 220),  # Measure: real displays ~200-230, not 255
     },
-    accent='black'
+    accent="black",
 )
 
 # 4.2" BWRY (BWRY scheme)
 # TODO: Measure actual display
 BWRY_4_2 = ColorPalette(
     colors={
-        'black': (5, 5, 5),           # Measure
-        'white': (200, 200, 200),     # Measure
-        'yellow': (200, 180, 0),      # Measure
-        'red': (120, 15, 5),          # Measure
+        "black": (5, 5, 5),  # Measure
+        "white": (200, 200, 200),  # Measure
+        "yellow": (200, 180, 0),  # Measure
+        "red": (120, 15, 5),  # Measure
     },
-    accent='red'
+    accent="red",
 )
 
 # Solum BWR (harvested display, BWR scheme)
 # TODO: Measure actual display
 SOLUM_BWR = ColorPalette(
     colors={
-        'black': (5, 5, 5),           # Measure
-        'white': (200, 200, 200),     # Measure
-        'red': (120, 15, 5),          # Measure
+        "black": (5, 5, 5),  # Measure
+        "white": (200, 200, 200),  # Measure
+        "red": (120, 15, 5),  # Measure
     },
-    accent='red'
+    accent="red",
 )
 
 # Hanshow BWR (harvested display, BWR scheme)
 # TODO: Measure actual display
 HANSHOW_BWR = ColorPalette(
     colors={
-        'black': (5, 5, 5),           # Measure
-        'white': (200, 200, 200),     # Measure
-        'red': (120, 15, 5),          # Measure
+        "black": (5, 5, 5),  # Measure
+        "white": (200, 200, 200),  # Measure
+        "red": (120, 15, 5),  # Measure
     },
-    accent='red'
+    accent="red",
 )
 
 # Hanshow BWY (harvested display, BWY scheme)
 # TODO: Measure actual display
 HANSHOW_BWY = ColorPalette(
     colors={
-        'black': (5, 5, 5),           # Measure
-        'white': (200, 200, 200),     # Measure
-        'yellow': (200, 180, 0),      # Measure
+        "black": (5, 5, 5),  # Measure
+        "white": (200, 200, 200),  # Measure
+        "yellow": (200, 180, 0),  # Measure
     },
-    accent='yellow'
+    accent="yellow",
 )
 
 # 3.97" BWRY — EP397YR_800x480 (panel_ic_type=0x37 / 55), BWRY scheme
@@ -225,10 +244,10 @@ HANSHOW_BWY = ColorPalette(
 # Yellow blue channel clipped to 0 (expected for yellow; kept as-is)
 BWRY_3_97 = ColorPalette(
     colors={
-        'black': (10, 7, 14),
-        'white': (173, 178, 174),
-        'yellow': (172, 128, 0),
-        'red': (85, 24, 14),
+        "black": (10, 7, 14),
+        "white": (173, 178, 174),
+        "yellow": (172, 128, 0),
+        "red": (85, 24, 14),
     },
-    accent='red'
+    accent="red",
 )

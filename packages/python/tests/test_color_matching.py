@@ -2,12 +2,11 @@
 
 import numpy as np
 import pytest
-from PIL import Image
-
 from epaper_dithering import ColorScheme, DitherMode, dither_image
 from epaper_dithering.color_space import srgb_to_linear
 from epaper_dithering.color_space_lab import rgb_to_lab
 from epaper_dithering.tone_map import auto_compress_dynamic_range, compress_dynamic_range
+from PIL import Image
 
 
 class TestLABConversion:
@@ -67,8 +66,9 @@ class TestColorMatchingAccuracy:
 
         pixels = list(result.get_flattened_data())
         green_idx = 5  # SPECTRA order: black=0, white=1, yellow=2, red=3, blue=4, green=5
-        assert all(p == green_idx for p in pixels), \
+        assert all(p == green_idx for p in pixels), (
             f"Bright green should map to palette green (idx 5), got indices: {set(pixels)}"
+        )
 
     def test_pure_blue_matches_blue_not_black(self):
         """Blue should match palette blue, not black.
@@ -82,8 +82,9 @@ class TestColorMatchingAccuracy:
 
         pixels = list(result.get_flattened_data())
         blue_idx = 4
-        assert all(p == blue_idx for p in pixels), \
+        assert all(p == blue_idx for p in pixels), (
             f"Pure blue should map to palette blue (idx 4), got indices: {set(pixels)}"
+        )
 
     def test_measured_vs_pure_produces_different_output(self):
         """Measured colors should produce different dithering than pure RGB."""
@@ -93,8 +94,7 @@ class TestColorMatchingAccuracy:
 
         pure = ColorScheme.BWR
         measured = ColorPalette(
-            colors={'black': (5, 5, 5), 'white': (180, 180, 170), 'red': (115, 12, 2)},
-            accent='red'
+            colors={"black": (5, 5, 5), "white": (180, 180, 170), "red": (115, 12, 2)}, accent="red"
         )
 
         result_pure = dither_image(gradient, pure, DitherMode.FLOYD_STEINBERG)
@@ -115,26 +115,26 @@ class TestCompressDynamicRange:
         """Compressed pixel luminance should fall within [black_Y, white_Y]."""
         # Simulate a display with black=(30,30,30) and white=(200,200,200)
         palette_linear = self._make_palette_linear([30, 30, 30], [200, 200, 200])
-        black_Y = float(0.2126729 * palette_linear[0, 0]
-                        + 0.7151522 * palette_linear[0, 1]
-                        + 0.0721750 * palette_linear[0, 2])
-        white_Y = float(0.2126729 * palette_linear[1, 0]
-                        + 0.7151522 * palette_linear[1, 1]
-                        + 0.0721750 * palette_linear[1, 2])
+        black_Y = float(
+            0.2126729 * palette_linear[0, 0] + 0.7151522 * palette_linear[0, 1] + 0.0721750 * palette_linear[0, 2]
+        )
+        white_Y = float(
+            0.2126729 * palette_linear[1, 0] + 0.7151522 * palette_linear[1, 1] + 0.0721750 * palette_linear[1, 2]
+        )
 
         # Create a gradient from black to white in linear space
         pixels = np.linspace(0.0, 1.0, 100).reshape(10, 10, 1).repeat(3, axis=2).astype(np.float32)
         result = compress_dynamic_range(pixels, palette_linear, strength=1.0)
 
         # Compute luminance of result
-        result_Y = (0.2126729 * result[:, :, 0]
-                    + 0.7151522 * result[:, :, 1]
-                    + 0.0721750 * result[:, :, 2])
+        result_Y = 0.2126729 * result[:, :, 0] + 0.7151522 * result[:, :, 1] + 0.0721750 * result[:, :, 2]
 
-        assert result_Y.min() >= black_Y - 1e-5, \
+        assert result_Y.min() >= black_Y - 1e-5, (
             f"Min luminance {result_Y.min():.4f} should be >= black_Y {black_Y:.4f}"
-        assert result_Y.max() <= white_Y + 1e-5, \
+        )
+        assert result_Y.max() <= white_Y + 1e-5, (
             f"Max luminance {result_Y.max():.4f} should be <= white_Y {white_Y:.4f}"
+        )
 
     def test_strength_zero_is_identity(self):
         """strength=0.0 should return pixels unchanged."""
@@ -172,9 +172,9 @@ class TestCompressDynamicRange:
 
         result = compress_dynamic_range(pixels, palette_linear, strength=1.0)
 
-        black_Y = float(0.2126729 * palette_linear[0, 0]
-                        + 0.7151522 * palette_linear[0, 1]
-                        + 0.0721750 * palette_linear[0, 2])
+        black_Y = float(
+            0.2126729 * palette_linear[0, 0] + 0.7151522 * palette_linear[0, 1] + 0.0721750 * palette_linear[0, 2]
+        )
         # Near-black pixels should be set to approximately display black luminance
         assert result.mean() == pytest.approx(black_Y, abs=0.01)
 
@@ -189,9 +189,7 @@ class TestAutoCompressDynamicRange:
 
     def _luminance(self, pixels):
         """Compute per-pixel luminance."""
-        return (0.2126729 * pixels[:, :, 0]
-                + 0.7151522 * pixels[:, :, 1]
-                + 0.0721750 * pixels[:, :, 2])
+        return 0.2126729 * pixels[:, :, 0] + 0.7151522 * pixels[:, :, 1] + 0.0721750 * pixels[:, :, 2]
 
     def test_full_range_gradient_matches_linear(self):
         """Full-range gradient should produce similar result to linear compression."""
@@ -219,8 +217,7 @@ class TestAutoCompressDynamicRange:
         auto_range = float(auto_Y.max() - auto_Y.min())
         linear_range = float(linear_Y.max() - linear_Y.min())
 
-        assert auto_range > linear_range, \
-            f"Auto range {auto_range:.4f} should exceed linear range {linear_range:.4f}"
+        assert auto_range > linear_range, f"Auto range {auto_range:.4f} should exceed linear range {linear_range:.4f}"
 
     def test_uniform_image_falls_back(self):
         """Uniform image should fall back to linear compression."""
@@ -234,12 +231,12 @@ class TestAutoCompressDynamicRange:
     def test_output_luminance_within_display_range(self):
         """Auto-compressed output luminance should stay within display range (with tolerance)."""
         palette_linear = self._make_palette_linear([30, 30, 30], [200, 200, 200])
-        black_Y = float(0.2126729 * palette_linear[0, 0]
-                        + 0.7151522 * palette_linear[0, 1]
-                        + 0.0721750 * palette_linear[0, 2])
-        white_Y = float(0.2126729 * palette_linear[1, 0]
-                        + 0.7151522 * palette_linear[1, 1]
-                        + 0.0721750 * palette_linear[1, 2])
+        black_Y = float(
+            0.2126729 * palette_linear[0, 0] + 0.7151522 * palette_linear[0, 1] + 0.0721750 * palette_linear[0, 2]
+        )
+        white_Y = float(
+            0.2126729 * palette_linear[1, 0] + 0.7151522 * palette_linear[1, 1] + 0.0721750 * palette_linear[1, 2]
+        )
 
         pixels = np.linspace(0.0, 1.0, 100).reshape(10, 10, 1).repeat(3, axis=2).astype(np.float32)
         result = auto_compress_dynamic_range(pixels, palette_linear)

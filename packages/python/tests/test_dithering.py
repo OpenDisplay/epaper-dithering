@@ -2,9 +2,8 @@
 
 import numpy as np
 import pytest
-from PIL import Image
-
 from epaper_dithering import ColorScheme, DitherMode, dither_image
+from PIL import Image
 
 
 class TestDitheringAlgorithms:
@@ -15,7 +14,7 @@ class TestDitheringAlgorithms:
         """Test each dithering mode produces valid palette image."""
         result = dither_image(small_test_image, ColorScheme.BWR, mode)
 
-        assert result.mode == 'P', f"Output should be palette mode, got {result.mode}"
+        assert result.mode == "P", f"Output should be palette mode, got {result.mode}"
         assert result.size == small_test_image.size, "Output size should match input"
 
         palette = result.getpalette()
@@ -26,7 +25,7 @@ class TestDitheringAlgorithms:
         """Test each color scheme works correctly."""
         result = dither_image(small_test_image, scheme, DitherMode.BURKES)
 
-        assert result.mode == 'P'
+        assert result.mode == "P"
         palette = result.getpalette()
         assert len(palette) >= scheme.color_count * 3, "Palette should contain all scheme colors"
 
@@ -40,7 +39,7 @@ class TestDitheringAlgorithms:
         rgba_img = Image.new("RGBA", (10, 10), color=(128, 128, 128, 255))
         result = dither_image(rgba_img, ColorScheme.BWR, DitherMode.BURKES)
 
-        assert result.mode == 'P'
+        assert result.mode == "P"
         assert result.size == rgba_img.size
 
     @pytest.mark.parametrize("scheme", list(ColorScheme))
@@ -61,8 +60,7 @@ class TestDitheringAlgorithms:
         result = dither_image(gradient, scheme, DitherMode.FLOYD_STEINBERG)
         result_pixels = np.array(result)
         max_idx = result_pixels.max()
-        assert max_idx < scheme.color_count, \
-            f"{scheme.name}: pixel index {max_idx} >= color count {scheme.color_count}"
+        assert max_idx < scheme.color_count, f"{scheme.name}: pixel index {max_idx} >= color count {scheme.color_count}"
 
 
 class TestColorScience:
@@ -79,8 +77,7 @@ class TestColorScience:
 
         histogram = result.histogram()[:4]
 
-        assert all(count > 0 for count in histogram), \
-            f"All 4 grayscale levels should be used, got counts: {histogram}"
+        assert all(count > 0 for count in histogram), f"All 4 grayscale levels should be used, got counts: {histogram}"
 
         assert histogram[1] > 100, "Gray1 should be used in midtones"
         assert histogram[2] > 100, "Gray2 should be used in midtones"
@@ -91,15 +88,17 @@ class TestColorScience:
         result_white = dither_image(rgba_white, ColorScheme.MONO, DitherMode.NONE)
         histogram_white = result_white.histogram()
 
-        assert histogram_white[1] > histogram_white[0], \
+        assert histogram_white[1] > histogram_white[0], (
             f"Semi-transparent white should stay white, got {histogram_white[:2]}"
+        )
 
         rgba_transparent = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
         result_transparent = dither_image(rgba_transparent, ColorScheme.MONO, DitherMode.NONE)
         histogram_transparent = result_transparent.histogram()
 
-        assert histogram_transparent[1] == 100, \
+        assert histogram_transparent[1] == 100, (
             f"Fully transparent should become white background, got {histogram_transparent[:2]}"
+        )
 
     def test_serpentine_parameter_works(self):
         """Test serpentine parameter can be enabled/disabled."""
@@ -110,20 +109,17 @@ class TestColorScience:
                 gray_value = int(x * 255 / 99)
                 pixels[x, y] = (gray_value, gray_value, gray_value)
 
-        result_serpentine = dither_image(
-            gradient, ColorScheme.MONO, DitherMode.FLOYD_STEINBERG, serpentine=True
-        )
-        result_raster = dither_image(
-            gradient, ColorScheme.MONO, DitherMode.FLOYD_STEINBERG, serpentine=False
-        )
+        result_serpentine = dither_image(gradient, ColorScheme.MONO, DitherMode.FLOYD_STEINBERG, serpentine=True)
+        result_raster = dither_image(gradient, ColorScheme.MONO, DitherMode.FLOYD_STEINBERG, serpentine=False)
 
-        assert result_serpentine.mode == 'P'
-        assert result_raster.mode == 'P'
+        assert result_serpentine.mode == "P"
+        assert result_raster.mode == "P"
 
         array_serpentine = np.array(result_serpentine)
         array_raster = np.array(result_raster)
-        assert not np.array_equal(array_serpentine, array_raster), \
+        assert not np.array_equal(array_serpentine, array_raster), (
             "Serpentine should produce different output than raster"
+        )
 
     def test_deterministic_output(self):
         """Test that dithering produces identical output on repeated runs."""
@@ -132,8 +128,7 @@ class TestColorScience:
         result1 = dither_image(img, ColorScheme.BWR, DitherMode.FLOYD_STEINBERG)
         result2 = dither_image(img, ColorScheme.BWR, DitherMode.FLOYD_STEINBERG)
 
-        assert np.array_equal(np.array(result1), np.array(result2)), \
-            "Dithering should be deterministic"
+        assert np.array_equal(np.array(result1), np.array(result2)), "Dithering should be deterministic"
 
     def test_ordered_dithering_uses_threshold_correctly(self):
         """Test ordered dithering produces reasonable distribution."""
@@ -149,8 +144,7 @@ class TestColorScience:
         black_count = pixels.count(0)
         white_count = pixels.count(1)
         ratio = black_count / (black_count + white_count)
-        assert 0.20 < ratio < 0.35, \
-            f"Should be ~25% black with LAB matching, got ratio {ratio:.2f}"
+        assert 0.20 < ratio < 0.35, f"Should be ~25% black with LAB matching, got ratio {ratio:.2f}"
 
     def test_all_error_diffusion_with_serpentine(self):
         """Test all error diffusion algorithms accept serpentine parameter."""
@@ -168,10 +162,10 @@ class TestColorScience:
 
         for mode in error_diffusion_modes:
             result_true = dither_image(img, ColorScheme.MONO, mode, serpentine=True)
-            assert result_true.mode == 'P', f"{mode.name} should work with serpentine=True"
+            assert result_true.mode == "P", f"{mode.name} should work with serpentine=True"
 
             result_false = dither_image(img, ColorScheme.MONO, mode, serpentine=False)
-            assert result_false.mode == 'P', f"{mode.name} should work with serpentine=False"
+            assert result_false.mode == "P", f"{mode.name} should work with serpentine=False"
 
 
 class TestToneCompression:
@@ -184,7 +178,7 @@ class TestToneCompression:
         img = Image.new("RGB", (20, 20), (200, 200, 200))
         result = dither_image(img, SPECTRA_7_3_6COLOR, DitherMode.FLOYD_STEINBERG, tone_compression=1.0)
 
-        assert result.mode == 'P'
+        assert result.mode == "P"
         assert result.size == (20, 20)
 
     @pytest.mark.parametrize("mode", list(DitherMode))
@@ -195,7 +189,7 @@ class TestToneCompression:
         img = Image.new("RGB", (10, 10), (128, 128, 128))
         result = dither_image(img, SPECTRA_7_3_6COLOR, mode, tone_compression=1.0)
 
-        assert result.mode == 'P'
+        assert result.mode == "P"
         assert result.size == (10, 10)
 
     def test_tone_compression_zero_matches_no_compression(self):
@@ -208,8 +202,8 @@ class TestToneCompression:
         result_scheme = dither_image(img, ColorScheme.BWGBRY, DitherMode.NONE, tone_compression=1.0)
 
         # Both should produce valid palette output
-        assert result_zero.mode == 'P'
-        assert result_scheme.mode == 'P'
+        assert result_zero.mode == "P"
+        assert result_scheme.mode == "P"
 
     def test_tone_compression_skipped_for_color_scheme(self):
         """Tone compression should be skipped for theoretical ColorScheme."""
@@ -220,10 +214,12 @@ class TestToneCompression:
         result_tc1 = dither_image(img, ColorScheme.MONO, DitherMode.NONE, tone_compression=1.0)
         result_auto = dither_image(img, ColorScheme.MONO, DitherMode.NONE, tone_compression="auto")
 
-        assert np.array_equal(np.array(result_tc0), np.array(result_tc1)), \
+        assert np.array_equal(np.array(result_tc0), np.array(result_tc1)), (
             "Tone compression should have no effect on theoretical ColorScheme"
-        assert np.array_equal(np.array(result_tc0), np.array(result_auto)), \
+        )
+        assert np.array_equal(np.array(result_tc0), np.array(result_auto)), (
             "Auto tone compression should have no effect on theoretical ColorScheme"
+        )
 
     @pytest.mark.parametrize("mode", list(DitherMode))
     def test_auto_tone_compression_all_modes(self, mode):
@@ -233,7 +229,7 @@ class TestToneCompression:
         img = Image.new("RGB", (10, 10), (128, 128, 128))
         result = dither_image(img, SPECTRA_7_3_6COLOR, mode)
 
-        assert result.mode == 'P'
+        assert result.mode == "P"
         assert result.size == (10, 10)
 
     def test_tone_compression_changes_measured_output(self):
@@ -251,5 +247,6 @@ class TestToneCompression:
         result_off = dither_image(gradient, SPECTRA_7_3_6COLOR, DitherMode.FLOYD_STEINBERG, tone_compression=0.0)
         result_on = dither_image(gradient, SPECTRA_7_3_6COLOR, DitherMode.FLOYD_STEINBERG, tone_compression=1.0)
 
-        assert not np.array_equal(np.array(result_off), np.array(result_on)), \
+        assert not np.array_equal(np.array(result_off), np.array(result_on)), (
             "Tone compression should produce different output than no compression"
+        )

@@ -12,9 +12,8 @@ import argparse
 import math
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
-
 from epaper_dithering import ColorScheme
+from PIL import Image, ImageDraw, ImageFont
 
 
 def generate_patches(scheme: ColorScheme, width: int, height: int) -> Image.Image:
@@ -47,8 +46,10 @@ def generate_patches(scheme: ColorScheme, width: int, height: int) -> Image.Imag
         bright = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) > 128
         draw.text(
             (x + cell_w // 2, y + cell_h - font.size),
-            name.upper(), fill=(0, 0, 0) if bright else (255, 255, 255),
-            font=font, anchor="mm",
+            name.upper(),
+            fill=(0, 0, 0) if bright else (255, 255, 255),
+            font=font,
+            anchor="mm",
         )
 
     return img

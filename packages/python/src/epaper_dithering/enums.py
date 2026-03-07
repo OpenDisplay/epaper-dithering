@@ -10,6 +10,7 @@ class DitherMode(IntEnum):
 
     Values are compatible with OpenDisplay firmware conventions.
     """
+
     NONE = 0
     BURKES = 1
     ORDERED = 2

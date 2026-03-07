@@ -37,11 +37,14 @@ import numpy as np
 
 # sRGB to XYZ matrix (D65 illuminant, sRGB primaries)
 # From http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
-_M_RGB_TO_XYZ = np.array([
-    [0.4124564, 0.3575761, 0.1804375],
-    [0.2126729, 0.7151522, 0.0721750],
-    [0.0193339, 0.1191920, 0.9503041],
-], dtype=np.float64)
+_M_RGB_TO_XYZ = np.array(
+    [
+        [0.4124564, 0.3575761, 0.1804375],
+        [0.2126729, 0.7151522, 0.0721750],
+        [0.0193339, 0.1191920, 0.9503041],
+    ],
+    dtype=np.float64,
+)
 
 # D65 reference white point
 _XN = 0.95047
@@ -51,17 +54,18 @@ _D65_WHITE = np.array([_XN, _YN, _ZN], dtype=np.float64)
 
 # CIE LAB constants
 _EPSILON = 216.0 / 24389.0  # 0.008856...
-_KAPPA = 24389.0 / 27.0     # 903.296...
+_KAPPA = 24389.0 / 27.0  # 903.296...
 
 # LCH distance weights for dithering
-_WL = 0.5   # lightness: de-emphasized (error diffusion compensates)
-_WC = 1.0   # chroma: standard weight
-_WH = 2.0   # hue: emphasized (error diffusion cannot compensate)
+_WL = 0.5  # lightness: de-emphasized (error diffusion compensates)
+_WC = 1.0  # chroma: standard weight
+_WH = 2.0  # hue: emphasized (error diffusion cannot compensate)
 
 
 # =============================================================================
 # Vectorized Functions (for batch operations: direct mapping, ordered dither)
 # =============================================================================
+
 
 def rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
     """Convert linear RGB to CIELAB color space.
@@ -128,10 +132,10 @@ def find_closest_palette_color_lab(
 
     # LCH decomposition: da^2 + db^2 = dC^2 + dH^2
     dC = C_pixels[..., np.newaxis] - C_palette[np.newaxis, :]
-    dH_sq = np.maximum(0.0, da ** 2 + db ** 2 - dC ** 2)
+    dH_sq = np.maximum(0.0, da**2 + db**2 - dC**2)
 
     # Weighted distance
-    distances = (_WL * dL) ** 2 + (_WC * dC) ** 2 + _WH ** 2 * dH_sq
+    distances = (_WL * dL) ** 2 + (_WC * dC) ** 2 + _WH**2 * dH_sq
 
     return np.argmin(distances, axis=-1)  # type: ignore[no-any-return]
 
@@ -139,6 +143,7 @@ def find_closest_palette_color_lab(
 # =============================================================================
 # Scalar Functions (for per-pixel error diffusion — no numpy overhead)
 # =============================================================================
+
 
 def _lab_f(t: float) -> float:
     """CIE LAB nonlinear function (scalar version)."""
@@ -166,7 +171,9 @@ def _rgb_to_lab_scalar(r: float, g: float, b: float) -> tuple[float, float, floa
 
 
 def _match_pixel_lch(
-    r: float, g: float, b: float,
+    r: float,
+    g: float,
+    b: float,
     palette_L: tuple[float, ...],
     palette_a: tuple[float, ...],
     palette_b: tuple[float, ...],
@@ -207,9 +214,9 @@ def _match_pixel_lch(
     return best_idx
 
 
-def precompute_palette_lab(palette_linear: np.ndarray) -> tuple[
-    tuple[float, ...], tuple[float, ...], tuple[float, ...], tuple[float, ...]
-]:
+def precompute_palette_lab(
+    palette_linear: np.ndarray,
+) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
     """Pre-compute palette LAB components for scalar matching.
 
     Call once before the error diffusion loop, then pass results to
