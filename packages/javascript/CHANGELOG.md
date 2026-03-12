@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/OpenDisplay/epaper-dithering/compare/javascript-v2.1.4...javascript-v2.2.0) (2026-03-12)
+
+
+### Features
+
+* update js implementation to match python implementation features ([6a05215](https://github.com/OpenDisplay/epaper-dithering/commit/6a052159b1ec6f8cb15ba641281c2898f21e6e1a)), closes [#19](https://github.com/OpenDisplay/epaper-dithering/issues/19)
+
 ## [2.1.4](https://github.com/OpenDisplay-org/epaper-dithering/compare/javascript-v2.1.3...javascript-v2.1.4) (2026-02-09)
 
 

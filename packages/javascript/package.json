@@ -1,6 +1,6 @@
 {
   "name": "@opendisplay/epaper-dithering",
-  "version": "2.1.4",
+  "version": "2.2.0",
   "description": "Dithering algorithms for e-paper/e-ink displays (JavaScript/TypeScript)",
   "type": "module",
   "main": "./dist/index.cjs",
