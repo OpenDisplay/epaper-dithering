@@ -163,21 +163,20 @@ interface ColorPalette {
 }
 ```
 
-## Local Development / Preview
+## Preview Tool
 
-A browser-based preview tool is included at [`dev.html`](./dev.html).
+An interactive browser tool for comparing dithering modes and palettes:
 
+**Hosted** (always latest release): https://opendisplay.github.io/epaper-dithering/
+
+**Local** (against your working branch):
 ```bash
 cd packages/javascript
 bun run dev
-# opens http://localhost:3456/dev.html
+# → http://localhost:3456/dev.html
 ```
 
-Features: 
-- drag & drop or paste from clipboard
-- live re-render on setting change
-- timing display
-- palette swatch preview.
+Features: drag & drop or paste from clipboard, live re-render on every setting change, timing display, palette swatch preview.
 
 ## Related Projects
 

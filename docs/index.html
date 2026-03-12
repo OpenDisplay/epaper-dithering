@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dither Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0a0a0a;
+      --surface:    #111111;
+      --border:     #252525;
+      --border-hi:  #383838;
+      --text:       #d8d8d8;
+      --muted:      #555;
+      --accent:     #e8a000;
+      --accent-glow:rgba(232,160,0,0.12);
+      --green:      #3dba6f;
+      --font:       'IBM Plex Mono', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 12px;
+      overflow: hidden;
+    }
+
+    /* ── Layout ──────────────────────────────────────────── */
+
+    .shell {
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 40px 1fr;
+      grid-template-columns: 200px 1fr;
+    }
+
+    /* ── Header ──────────────────────────────────────────── */
+
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .logo {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .logo-sep { color: var(--border-hi); }
+
+    .header-status {
+      margin-left: auto;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .header-status .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--border-hi);
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .header-status.ready .dot  { background: var(--green); }
+    .header-status.working .dot { background: var(--accent); animation: pulse 0.7s ease-in-out infinite alternate; }
+
+    @keyframes pulse { to { opacity: 0.3; } }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+
+    aside {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      padding: 16px 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    aside::-webkit-scrollbar { width: 3px; }
+    aside::-webkit-scrollbar-thumb { background: var(--border-hi); }
+
+    .group-label {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    /* Upload */
+    .upload-zone {
+      border: 1px dashed var(--border-hi);
+      padding: 14px 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+      color: var(--muted);
+      line-height: 1.7;
+      user-select: none;
+    }
+
+    .upload-zone:hover, .upload-zone.over {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+      color: var(--accent);
+    }
+
+    .upload-zone .u-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+    .upload-zone .u-hint { font-size: 9px; letter-spacing: 0.1em; }
+
+    #fileInput { display: none; }
+
+    /* Select */
+    .field { display: flex; flex-direction: column; gap: 5px; }
+
+    select {
+      background: var(--bg);
+      border: 1px solid var(--border-hi);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 11px;
+      padding: 5px 8px;
+      width: 100%;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      transition: border-color 0.15s;
+    }
+
+    select:focus { border-color: var(--accent); }
+
+    select option { background: #1a1a1a; }
+
+    /* Toggle */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    .toggle { position: relative; width: 30px; height: 16px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+    .track {
+      position: absolute;
+      inset: 0;
+      background: var(--border-hi);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle input:checked ~ .track { background: var(--accent); }
+
+    .track::after {
+      content: '';
+      position: absolute;
+      left: 2px; top: 2px;
+      width: 12px; height: 12px;
+      background: #fff;
+      transition: transform 0.2s;
+    }
+
+    .toggle input:checked ~ .track::after { transform: translateX(14px); }
+
+    /* Stats */
+    .stats { display: flex; flex-direction: column; gap: 5px; }
+
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    .stat-k { color: var(--muted); }
+    .stat-v { color: var(--text); }
+    .stat-v.hi { color: var(--accent); }
+
+    /* Palette swatches */
+    .swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+
+    .swatch {
+      width: 16px;
+      height: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      cursor: default;
+      flex-shrink: 0;
+    }
+
+    /* ── Canvas area ─────────────────────────────────────── */
+
+    .canvas-area {
+      overflow: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .canvas-area::-webkit-scrollbar { width: 4px; height: 4px; }
+    .canvas-area::-webkit-scrollbar-thumb { background: var(--border-hi); }
+
+    .canvas-row {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .canvas-block { display: flex; flex-direction: column; gap: 7px; }
+
+    .canvas-title {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .canvas-title .badge {
+      background: var(--border);
+      color: var(--muted);
+      padding: 1px 5px;
+      font-size: 8px;
+      letter-spacing: 0.1em;
+    }
+
+    .canvas-frame {
+      border: 1px solid var(--border);
+      background:
+        repeating-conic-gradient(#161616 0% 25%, #0f0f0f 0% 50%)
+        0 0 / 12px 12px;
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .canvas-frame.lit { border-color: var(--accent); }
+
+    .canvas-frame canvas {
+      display: block;
+      max-width: min(560px, calc(50vw - 140px));
+      max-height: 65vh;
+      width: auto;
+      height: auto;
+    }
+
+    /* Empty state */
+    .empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--muted);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .empty-glyph {
+      font-size: 52px;
+      opacity: 0.07;
+      line-height: 1;
+    }
+
+    .empty-text {
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      opacity: 0.4;
+    }
+
+    /* Drop overlay */
+    #dropOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.88);
+      border: 3px solid var(--accent);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #dropOverlay.show { display: flex; }
+
+    .drop-label {
+      font-size: 14px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .drop-sub {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+    }
+
+    /* Divider */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0 -14px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header>
+    <span class="logo">Dither<span class="logo-sep"> / </span>Lab</span>
+    <span id="headerStatus" class="header-status">
+      <span class="dot"></span>
+      <span id="statusText">drop an image to begin</span>
+    </span>
+  </header>
+
+  <aside>
+
+    <!-- Upload -->
+    <div>
+      <div class="group-label">Image</div>
+      <div class="upload-zone" id="uploadZone">
+        <span class="u-icon">⬡</span>
+        <span class="u-hint">click or drop image</span>
+      </div>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <hr class="divider">
+
+    <!-- Color scheme -->
+    <div class="field">
+      <div class="group-label">Color Scheme</div>
+      <select id="schemeSelect">
+        <optgroup label="Standard">
+          <option value="MONO">MONO — 2 color</option>
+          <option value="BWR">BWR — black/white/red</option>
+          <option value="BWY">BWY — black/white/yellow</option>
+          <option value="BWRY">BWRY — 4 color</option>
+          <option value="BWGBRY" selected>BWGBRY — Spectra 6</option>
+          <option value="GRAYSCALE_4">GRAYSCALE 4</option>
+          <option value="GRAYSCALE_8">GRAYSCALE 8</option>
+          <option value="GRAYSCALE_16">GRAYSCALE 16</option>
+        </optgroup>
+        <optgroup label="Measured Palettes">
+          <option value="SPECTRA_7_3_6COLOR">Spectra 7.3" 6-color</option>
+          <option value="BWRY_3_97">BWRY 3.97" 800×480</option>
+          <option value="MONO_4_26">Mono 4.26"</option>
+          <option value="BWRY_4_2">BWRY 4.2"</option>
+          <option value="SOLUM_BWR">Solum BWR</option>
+          <option value="HANSHOW_BWR">Hanshow BWR</option>
+          <option value="HANSHOW_BWY">Hanshow BWY</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <!-- Dither mode -->
+    <div class="field">
+      <div class="group-label">Algorithm</div>
+      <select id="modeSelect">
+        <option value="NONE">None — direct map</option>
+        <option value="ORDERED">Ordered — Bayer 4×4</option>
+        <option value="FLOYD_STEINBERG">Floyd-Steinberg</option>
+        <option value="BURKES" selected>Burkes</option>
+        <option value="ATKINSON">Atkinson</option>
+        <option value="STUCKI">Stucki</option>
+        <option value="SIERRA">Sierra</option>
+        <option value="SIERRA_LITE">Sierra Lite</option>
+        <option value="JARVIS_JUDICE_NINKE">Jarvis-Judice-Ninke</option>
+      </select>
+    </div>
+
+    <!-- Serpentine -->
+    <div>
+      <div class="group-label">Options</div>
+      <div class="toggle-row">
+        <span>Serpentine scan</span>
+        <label class="toggle">
+          <input type="checkbox" id="serpentineToggle" checked>
+          <span class="track"></span>
+        </label>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Palette -->
+    <div>
+      <div class="group-label">Palette</div>
+      <div class="swatches" id="swatches"></div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Stats -->
+    <div class="stats" id="stats">
+      <div class="stat"><span class="stat-k">size</span><span class="stat-v" id="statSize">—</span></div>
+      <div class="stat"><span class="stat-k">colors</span><span class="stat-v" id="statColors">—</span></div>
+      <div class="stat"><span class="stat-k">time</span><span class="stat-v hi" id="statTime">—</span></div>
+    </div>
+
+  </aside>
+
+  <!-- Canvas area -->
+  <div class="canvas-area" id="canvasArea">
+
+    <div class="empty" id="emptyState">
+      <div class="empty-glyph">◈</div>
+      <div class="empty-text">no image loaded</div>
+    </div>
+
+    <div class="canvas-row" id="canvasRow" style="display:none">
+      <div class="canvas-block">
+        <div class="canvas-title">Original</div>
+        <div class="canvas-frame" id="origFrame">
+          <canvas id="origCanvas"></canvas>
+        </div>
+      </div>
+      <div class="canvas-block">
+        <div class="canvas-title">
+          Dithered
+          <span class="badge" id="algoBadge">BURKES</span>
+        </div>
+        <div class="canvas-frame lit" id="dithFrame">
+          <canvas id="dithCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Full-page drag overlay -->
+<div id="dropOverlay">
+  <div class="drop-label">Drop Image</div>
+  <div class="drop-sub">png · jpg · webp · gif</div>
+</div>
+
+<script type="module">
+import {
+  ditherImage,
+  ColorScheme,
+  DitherMode,
+  SPECTRA_7_3_6COLOR,
+  BWRY_3_97,
+  MONO_4_26,
+  BWRY_4_2,
+  SOLUM_BWR,
+  HANSHOW_BWR,
+  HANSHOW_BWY,
+} from 'https://esm.sh/@opendisplay/epaper-dithering';
+
+// ── Scheme / mode lookup maps ────────────────────────────────────
+
+const SCHEMES = {
+  MONO:             ColorScheme.MONO,
+  BWR:              ColorScheme.BWR,
+  BWY:              ColorScheme.BWY,
+  BWRY:             ColorScheme.BWRY,
+  BWGBRY:           ColorScheme.BWGBRY,
+  GRAYSCALE_4:      ColorScheme.GRAYSCALE_4,
+  GRAYSCALE_8:      ColorScheme.GRAYSCALE_8,
+  GRAYSCALE_16:     ColorScheme.GRAYSCALE_16,
+  SPECTRA_7_3_6COLOR,
+  BWRY_3_97,
+  MONO_4_26,
+  BWRY_4_2,
+  SOLUM_BWR,
+  HANSHOW_BWR,
+  HANSHOW_BWY,
+};
+
+const MODES = {
+  NONE:              DitherMode.NONE,
+  ORDERED:           DitherMode.ORDERED,
+  FLOYD_STEINBERG:   DitherMode.FLOYD_STEINBERG,
+  BURKES:            DitherMode.BURKES,
+  ATKINSON:          DitherMode.ATKINSON,
+  STUCKI:            DitherMode.STUCKI,
+  SIERRA:            DitherMode.SIERRA,
+  SIERRA_LITE:       DitherMode.SIERRA_LITE,
+  JARVIS_JUDICE_NINKE: DitherMode.JARVIS_JUDICE_NINKE,
+};
+
+// ── State ────────────────────────────────────────────────────────
+
+let currentImageData = null; // raw ImageData from the loaded image
+
+// ── DOM refs ─────────────────────────────────────────────────────
+
+const uploadZone      = document.getElementById('uploadZone');
+const fileInput       = document.getElementById('fileInput');
+const schemeSelect    = document.getElementById('schemeSelect');
+const modeSelect      = document.getElementById('modeSelect');
+const serpentine      = document.getElementById('serpentineToggle');
+const origCanvas      = document.getElementById('origCanvas');
+const dithCanvas      = document.getElementById('dithCanvas');
+const canvasRow       = document.getElementById('canvasRow');
+const emptyState      = document.getElementById('emptyState');
+const swatches        = document.getElementById('swatches');
+const algoBadge       = document.getElementById('algoBadge');
+const statSize        = document.getElementById('statSize');
+const statColors      = document.getElementById('statColors');
+const statTime        = document.getElementById('statTime');
+const headerStatus    = document.getElementById('headerStatus');
+const statusText      = document.getElementById('statusText');
+const dropOverlay     = document.getElementById('dropOverlay');
+
+// ── Core: dither and render ──────────────────────────────────────
+
+function runDither() {
+  if (!currentImageData) return;
+
+  const schemeKey = schemeSelect.value;
+  const modeKey   = modeSelect.value;
+  const useSerpentine = serpentine.checked;
+
+  const scheme = SCHEMES[schemeKey];
+  const mode   = MODES[modeKey];
+
+  setStatus('working', 'processing…');
+  algoBadge.textContent = modeKey.replace(/_/g, '-');
+
+  // Defer to let status update paint
+  requestAnimationFrame(() => {
+    const t0 = performance.now();
+
+    const imageBuffer = {
+      width:  currentImageData.width,
+      height: currentImageData.height,
+      data:   currentImageData.data,
+    };
+
+    const result = ditherImage(imageBuffer, scheme, mode, useSerpentine);
+
+    const elapsed = performance.now() - t0;
+
+    // Render dithered result
+    dithCanvas.width  = result.width;
+    dithCanvas.height = result.height;
+    const ctx = dithCanvas.getContext('2d');
+    const out = ctx.createImageData(result.width, result.height);
+
+    for (let i = 0; i < result.indices.length; i++) {
+      const c = result.palette[result.indices[i]];
+      out.data[i * 4]     = c.r;
+      out.data[i * 4 + 1] = c.g;
+      out.data[i * 4 + 2] = c.b;
+      out.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(out, 0, 0);
+
+    // Update palette swatches
+    swatches.innerHTML = '';
+    for (const color of result.palette) {
+      const s = document.createElement('div');
+      s.className = 'swatch';
+      s.style.background = `rgb(${color.r},${color.g},${color.b})`;
+      s.title = `rgb(${color.r},${color.g},${color.b})`;
+      swatches.appendChild(s);
+    }
+
+    // Stats
+    statColors.textContent = result.palette.length;
+    statTime.textContent   = elapsed < 1000
+      ? `${elapsed.toFixed(1)} ms`
+      : `${(elapsed / 1000).toFixed(2)} s`;
+
+    setStatus('ready', `${result.width}×${result.height} · ${elapsed.toFixed(0)}ms`);
+  });
+}
+
+// ── Image loading ────────────────────────────────────────────────
+
+function loadFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      // Draw to offscreen canvas to get pixel data
+      const tmp = document.createElement('canvas');
+      tmp.width  = img.naturalWidth;
+      tmp.height = img.naturalHeight;
+      const ctx = tmp.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      currentImageData = ctx.getImageData(0, 0, tmp.width, tmp.height);
+
+      // Render original
+      origCanvas.width  = img.naturalWidth;
+      origCanvas.height = img.naturalHeight;
+      origCanvas.getContext('2d').drawImage(img, 0, 0);
+
+      // Show canvases
+      emptyState.style.display  = 'none';
+      canvasRow.style.display   = 'flex';
+
+      statSize.textContent = `${img.naturalWidth}×${img.naturalHeight}`;
+      document.title = `Dither Lab — ${file.name}`;
+
+      runDither();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Status helper ────────────────────────────────────────────────
+
+function setStatus(type, text) {
+  headerStatus.className = `header-status ${type}`;
+  statusText.textContent = text;
+}
+
+// ── Event wiring ─────────────────────────────────────────────────
+
+uploadZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
+schemeSelect.addEventListener('change', runDither);
+modeSelect.addEventListener('change', runDither);
+serpentine.addEventListener('change', runDither);
+
+// Sidebar drag-and-drop
+uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('over'));
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('over');
+  loadFile(e.dataTransfer.files[0]);
+});
+
+// Global drag-and-drop overlay
+let dragCounter = 0;
+document.addEventListener('dragenter', (e) => {
+  if (e.dataTransfer.types.includes('Files')) {
+    dragCounter++;
+    dropOverlay.classList.add('show');
+  }
+});
+document.addEventListener('dragleave', () => {
+  dragCounter--;
+  if (dragCounter === 0) dropOverlay.classList.remove('show');
+});
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragCounter = 0;
+  dropOverlay.classList.remove('show');
+  loadFile(e.dataTransfer.files[0]);
+});
+document.addEventListener('dragover', (e) => e.preventDefault());
+
+// Paste image from clipboard
+document.addEventListener('paste', (e) => {
+  const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+  if (item) loadFile(item.getAsFile());
+});
+</script>
+</body>
+</html>
