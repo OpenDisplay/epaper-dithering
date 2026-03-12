@@ -7,11 +7,13 @@ High-quality dithering algorithms for e-paper/e-ink displays, implemented in Typ
 ## Features
 
 - **9 Dithering Algorithms**: From fast ordered dithering to high-quality error diffusion
-- **6 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE_4
+- **8 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE\_4/8/16
+- **Measured Palettes**: Use real display-calibrated colors for accurate dithering (SPECTRA\_7\_3\_6COLOR, BWRY\_3\_97, and more)
+- **LCH Color Matching**: Perceptual LAB color space with hue-weighted distance — hue errors can't be recovered by error diffusion, so they're prioritized
+- **Serpentine Scanning**: Alternates row direction to eliminate directional artifacts
 - **Universal**: Works in browser (Canvas API) and Node.js (with sharp/jimp)
 - **Zero Dependencies**: Pure TypeScript, no image library dependencies
-- **Fast**: Optimized typed array operations
-- **Type-Safe**: Full TypeScript support with exported types
+- **Fast**: 256-entry sRGB LUT, pre-computed palette LAB arrays, typed array pixel buffers
 
 ## Installation
 
@@ -19,8 +21,6 @@ High-quality dithering algorithms for e-paper/e-ink displays, implemented in Typ
 npm install @opendisplay/epaper-dithering
 # or
 bun add @opendisplay/epaper-dithering
-# or
-yarn add @opendisplay/epaper-dithering
 ```
 
 ## Quick Start
@@ -30,12 +30,10 @@ yarn add @opendisplay/epaper-dithering
 ```typescript
 import { ditherImage, ColorScheme, DitherMode } from '@opendisplay/epaper-dithering';
 
-// Load image
 const img = new Image();
 img.src = 'photo.jpg';
 await img.decode();
 
-// Convert to ImageBuffer
 const canvas = document.createElement('canvas');
 canvas.width = img.width;
 canvas.height = img.height;
@@ -43,37 +41,34 @@ const ctx = canvas.getContext('2d')!;
 ctx.drawImage(img, 0, 0);
 const imageData = ctx.getImageData(0, 0, img.width, img.height);
 
-const imageBuffer = {
-  width: imageData.width,
-  height: imageData.height,
-  data: imageData.data,
-};
-
-// Dither
 const dithered = ditherImage(
-  imageBuffer,
+  { width: imageData.width, height: imageData.height, data: imageData.data },
   ColorScheme.BWR,
-  DitherMode.FLOYD_STEINBERG
+  DitherMode.FLOYD_STEINBERG,
 );
 
 // Render result
-const resultCanvas = document.createElement('canvas');
-resultCanvas.width = dithered.width;
-resultCanvas.height = dithered.height;
-const resultCtx = resultCanvas.getContext('2d')!;
-const resultData = resultCtx.createImageData(dithered.width, dithered.height);
-
+const out = ctx.createImageData(dithered.width, dithered.height);
 for (let i = 0; i < dithered.indices.length; i++) {
-  const color = dithered.palette[dithered.indices[i]];
-  resultData.data[i * 4] = color.r;
-  resultData.data[i * 4 + 1] = color.g;
-  resultData.data[i * 4 + 2] = color.b;
-  resultData.data[i * 4 + 3] = 255;
+  const c = dithered.palette[dithered.indices[i]];
+  out.data[i * 4] = c.r; out.data[i * 4 + 1] = c.g;
+  out.data[i * 4 + 2] = c.b; out.data[i * 4 + 3] = 255;
 }
-
-resultCtx.putImageData(resultData, 0, 0);
-document.body.appendChild(resultCanvas);
+ctx.putImageData(out, 0, 0);
 ```
+
+### Measured Palettes
+
+Standard `ColorScheme` values use ideal sRGB colors (e.g. white = 255,255,255). Real e-paper displays reflect significantly less light. Use a measured `ColorPalette` for accurate dithering:
+
+```typescript
+import { ditherImage, SPECTRA_7_3_6COLOR, BWRY_3_97 } from '@opendisplay/epaper-dithering';
+
+// Automatically applies tone compression to fit the display's actual dynamic range
+const dithered = ditherImage(imageBuffer, SPECTRA_7_3_6COLOR, DitherMode.BURKES);
+```
+
+Available measured palettes: `SPECTRA_7_3_6COLOR`, `BWRY_3_97`, `MONO_4_26`, `BWRY_4_2`, `SOLUM_BWR`, `HANSHOW_BWR`, `HANSHOW_BWY`.
 
 ### Node.js (with sharp)
 
@@ -81,119 +76,85 @@ document.body.appendChild(resultCanvas);
 import sharp from 'sharp';
 import { ditherImage, ColorScheme, DitherMode } from '@opendisplay/epaper-dithering';
 
-// Load image
 const { data, info } = await sharp('photo.jpg')
   .ensureAlpha()
   .raw()
   .toBuffer({ resolveWithObject: true });
 
-const imageBuffer = {
-  width: info.width,
-  height: info.height,
-  data: new Uint8ClampedArray(data),
-};
+const dithered = ditherImage(
+  { width: info.width, height: info.height, data: new Uint8ClampedArray(data) },
+  ColorScheme.BWR,
+  DitherMode.BURKES,
+);
 
-// Dither
-const dithered = ditherImage(imageBuffer, ColorScheme.BWR, DitherMode.BURKES);
-
-// Convert back to RGBA
 const rgbaBuffer = Buffer.alloc(dithered.width * dithered.height * 4);
 for (let i = 0; i < dithered.indices.length; i++) {
-  const color = dithered.palette[dithered.indices[i]];
-  rgbaBuffer[i * 4] = color.r;
-  rgbaBuffer[i * 4 + 1] = color.g;
-  rgbaBuffer[i * 4 + 2] = color.b;
-  rgbaBuffer[i * 4 + 3] = 255;
+  const c = dithered.palette[dithered.indices[i]];
+  rgbaBuffer[i * 4] = c.r; rgbaBuffer[i * 4 + 1] = c.g;
+  rgbaBuffer[i * 4 + 2] = c.b; rgbaBuffer[i * 4 + 3] = 255;
 }
 
-// Save
-await sharp(rgbaBuffer, {
-  raw: {
-    width: dithered.width,
-    height: dithered.height,
-    channels: 4,
-  },
-})
+await sharp(rgbaBuffer, { raw: { width: dithered.width, height: dithered.height, channels: 4 } })
   .png()
   .toFile('dithered.png');
 ```
 
 ## API Reference
 
-### `ditherImage(image, colorScheme, mode?)`
+### `ditherImage(image, colorScheme, mode?, serpentine?)`
 
-Apply dithering algorithm to image for e-paper display.
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `image` | `ImageBuffer` | — | RGBA input image |
+| `colorScheme` | `ColorScheme \| ColorPalette` | — | Target palette (enum or measured) |
+| `mode` | `DitherMode` | `BURKES` | Dithering algorithm |
+| `serpentine` | `boolean` | `true` | Alternate row direction to reduce artifacts |
 
-**Parameters:**
-- `image: ImageBuffer` - Input image in RGBA format
-- `colorScheme: ColorScheme` - Target e-paper color scheme
-- `mode?: DitherMode` - Dithering algorithm (default: `DitherMode.BURKES`)
-
-**Returns:** `PaletteImageBuffer` - Palette-indexed image with color information
+Returns `PaletteImageBuffer`.
 
 ### Color Schemes
 
 ```typescript
 enum ColorScheme {
-  MONO = 0,          // Black & White (2 colors)
-  BWR = 1,           // Black, White, Red (3 colors)
-  BWY = 2,           // Black, White, Yellow (3 colors)
-  BWRY = 3,          // Black, White, Red, Yellow (4 colors)
-  BWGBRY = 4,        // Black, White, Green, Blue, Red, Yellow (6 colors)
-  GRAYSCALE_4 = 5,   // 4-level grayscale
+  MONO         = 0,  // Black & White (2 colors)
+  BWR          = 1,  // Black, White, Red (3 colors)
+  BWY          = 2,  // Black, White, Yellow (3 colors)
+  BWRY         = 3,  // Black, White, Red, Yellow (4 colors)
+  BWGBRY       = 4,  // Black, White, Green, Blue, Red, Yellow (6 colors)
+  GRAYSCALE_4  = 5,  // 4-level grayscale
+  GRAYSCALE_8  = 6,  // 8-level grayscale
+  GRAYSCALE_16 = 7,  // 16-level grayscale
 }
 ```
 
 ### Dither Modes
 
-```typescript
-enum DitherMode {
-  NONE = 0,                  // No dithering (direct palette mapping)
-  BURKES = 1,                // Burkes (default - good quality/speed balance)
-  ORDERED = 2,               // Ordered (4×4 Bayer matrix - fast)
-  FLOYD_STEINBERG = 3,       // Floyd-Steinberg (most popular)
-  ATKINSON = 4,              // Atkinson (classic Macintosh style)
-  STUCKI = 5,                // Stucki (high quality)
-  SIERRA = 6,                // Sierra (high quality)
-  SIERRA_LITE = 7,           // Sierra Lite (fast)
-  JARVIS_JUDICE_NINKE = 8,   // Jarvis-Judice-Ninke (highest quality, slowest)
-}
-```
+| Mode | Quality | Speed | Notes |
+|---|---|---|---|
+| `NONE` | — | Fastest | Direct palette mapping |
+| `ORDERED` | Low | Very fast | 4×4 Bayer matrix |
+| `SIERRA_LITE` | Medium | Fast | 3-neighbor kernel |
+| `FLOYD_STEINBERG` | Good | Medium | Most popular |
+| `BURKES` | Good | Medium | **Default** |
+| `ATKINSON` | Good | Medium | Classic Mac aesthetic |
+| `SIERRA` | High | Medium | — |
+| `STUCKI` | Very high | Slow | — |
+| `JARVIS_JUDICE_NINKE` | Highest | Slowest | — |
 
-## Algorithm Comparison
-
-| Algorithm | Quality | Speed | Use Case |
-|-----------|---------|-------|----------|
-| NONE | Lowest | Fastest | Testing, solid colors |
-| ORDERED | Low | Very Fast | Simple images, patterns |
-| SIERRA_LITE | Medium | Fast | Quick previews |
-| BURKES | Good | Medium | **Default - best balance** |
-| FLOYD_STEINBERG | Good | Medium | Popular choice, smooth gradients |
-| ATKINSON | Good | Medium | Classic retro aesthetic |
-| SIERRA | High | Medium | Detailed images |
-| STUCKI | Very High | Slow | Photos, high detail |
-| JARVIS_JUDICE_NINKE | Highest | Slowest | Maximum quality |
-
-## Types
+### Types
 
 ```typescript
-interface RGB {
-  r: number; // 0-255
-  g: number; // 0-255
-  b: number; // 0-255
-}
-
 interface ImageBuffer {
   width: number;
   height: number;
-  data: Uint8ClampedArray; // RGBA format
+  data: Uint8ClampedArray; // RGBA, row-major
 }
 
 interface PaletteImageBuffer {
   width: number;
   height: number;
-  indices: Uint8Array;      // Palette index per pixel
-  palette: RGB[];           // Available colors
+  indices: Uint8Array; // palette index per pixel
+  palette: RGB[];      // sRGB colors
 }
 
 interface ColorPalette {
@@ -202,32 +163,23 @@ interface ColorPalette {
 }
 ```
 
-## Helper Functions
+## Local Development / Preview
 
-### `getPalette(scheme: ColorScheme): ColorPalette`
+A browser-based preview tool is included at [`dev.html`](./dev.html).
 
-Get color palette for a color scheme.
+```bash
+cd packages/javascript
+bun run dev
+# opens http://localhost:3456/dev.html
+```
 
-### `getColorCount(scheme: ColorScheme): number`
-
-Get number of colors in a color scheme.
-
-### `fromValue(value: number): ColorScheme`
-
-Create ColorScheme from firmware integer value (0-5).
-
-## Performance
-
-Expected performance on an 800×600 image:
-- **ORDERED**: ~50ms
-- **SIERRA_LITE**: ~100ms
-- **BURKES/FLOYD_STEINBERG**: ~150ms
-- **SIERRA/ATKINSON**: ~200ms
-- **STUCKI/JARVIS**: ~300ms
-
-Performance varies by device and JavaScript engine.
+Features: 
+- drag & drop or paste from clipboard
+- live re-render on setting change
+- timing display
+- palette swatch preview.
 
 ## Related Projects
 
-- **Python**: [`epaper-dithering`](https://pypi.org/project/epaper-dithering/) - Python implementation
-- **OpenDisplay**: [`py-opendisplay`](https://github.com/OpenDisplay-org/py-opendisplay) - Python library for OpenDisplay BLE Devices
+- **Python**: [`epaper-dithering`](https://pypi.org/project/epaper-dithering/) — Python implementation (feature superset)
+- **OpenDisplay**: [`py-opendisplay`](https://github.com/OpenDisplay-org/py-opendisplay) — Python library for OpenDisplay BLE devices
