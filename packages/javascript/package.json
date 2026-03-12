@@ -55,8 +55,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OpenDisplay-org/epaper-dithering.git",
+    "url": "git+https://github.com/OpenDisplay/epaper-dithering.git",
     "directory": "packages/javascript"
   },
-  "homepage": "https://github.com/OpenDisplay-org/epaper-dithering#readme"
+  "homepage": "https://github.com/OpenDisplay/epaper-dithering#readme"
 }
