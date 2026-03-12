@@ -50,6 +50,7 @@
       padding: 0 20px;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
+      flex-shrink: 0;
     }
 
     .logo {
@@ -83,6 +84,28 @@
     .header-status.working .dot { background: var(--accent); animation: pulse 0.7s ease-in-out infinite alternate; }
 
     @keyframes pulse { to { opacity: 0.3; } }
+
+    /* Settings toggle — hidden on desktop */
+    #settingsBtn {
+      display: none;
+      background: none;
+      border: 1px solid var(--border-hi);
+      color: var(--muted);
+      font-family: var(--font);
+      font-size: 14px;
+      width: 30px;
+      height: 26px;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    #settingsBtn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
 
     /* ── Sidebar ─────────────────────────────────────────── */
 
@@ -150,7 +173,6 @@
     }
 
     select:focus { border-color: var(--accent); }
-
     select option { background: #1a1a1a; }
 
     /* Toggle */
@@ -332,6 +354,110 @@
       border-top: 1px solid var(--border);
       margin: 0 -14px;
     }
+
+    /* Controls grid — single column on desktop, two columns on mobile */
+    .controls-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* ── Mobile ──────────────────────────────────────────── */
+
+    @media (max-width: 700px) {
+      html, body { overflow: auto; height: auto; }
+
+      .shell {
+        height: auto;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+      }
+
+      #settingsBtn { display: flex; }
+
+      /* Sidebar becomes a collapsible panel */
+      aside {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        /* collapsed by default */
+        max-height: 0;
+        overflow: hidden;
+        padding: 0 14px;
+        gap: 0;
+        transition: max-height 0.3s ease, padding 0.3s ease, gap 0.3s ease;
+      }
+
+      aside.open {
+        max-height: 900px;
+        padding: 16px 14px;
+        gap: 16px;
+        overflow-y: auto;
+      }
+
+      /* Two-column layout for the selects on mobile */
+      .controls-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+
+      /* Prevent iOS Safari zoom on select focus — must be 16px */
+      select {
+        font-size: 16px;
+        padding: 10px 8px;
+      }
+
+      .upload-zone {
+        padding: 20px 10px;
+      }
+
+      .upload-zone .u-icon { font-size: 28px; }
+      .upload-zone .u-hint { font-size: 11px; }
+
+      /* Larger toggle target on mobile */
+      .toggle { width: 44px; height: 24px; }
+      .toggle input:checked ~ .track::after { transform: translateX(20px); }
+      .track::after { width: 18px; height: 18px; }
+
+      .canvas-area {
+        padding: 16px;
+        overflow: visible;
+        flex: none;
+      }
+
+      /* Stack canvases vertically */
+      .canvas-row {
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .canvas-block { width: 100%; }
+
+      .canvas-frame {
+        display: block;
+        width: 100%;
+      }
+
+      .canvas-frame canvas {
+        max-width: 100%;
+        max-height: 50vh;
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+      }
+
+      .empty { min-height: 40vh; }
+
+      .divider { margin: 0 -14px; }
+    }
   </style>
 </head>
 <body>
@@ -340,13 +466,14 @@
 
   <header>
     <span class="logo">Dither<span class="logo-sep"> / </span>Lab</span>
+    <button id="settingsBtn" title="Toggle settings">≡</button>
     <span id="headerStatus" class="header-status">
       <span class="dot"></span>
-      <span id="statusText">drop an image to begin</span>
+      <span id="statusText">tap to load an image</span>
     </span>
   </header>
 
-  <aside>
+  <aside id="sidebar">
 
     <!-- Upload -->
     <div>
@@ -360,46 +487,51 @@
 
     <hr class="divider">
 
-    <!-- Color scheme -->
-    <div class="field">
-      <div class="group-label">Color Scheme</div>
-      <select id="schemeSelect">
-        <optgroup label="Standard">
-          <option value="MONO">MONO — 2 color</option>
-          <option value="BWR">BWR — black/white/red</option>
-          <option value="BWY">BWY — black/white/yellow</option>
-          <option value="BWRY">BWRY — 4 color</option>
-          <option value="BWGBRY" selected>BWGBRY — Spectra 6</option>
-          <option value="GRAYSCALE_4">GRAYSCALE 4</option>
-          <option value="GRAYSCALE_8">GRAYSCALE 8</option>
-          <option value="GRAYSCALE_16">GRAYSCALE 16</option>
-        </optgroup>
-        <optgroup label="Measured Palettes">
-          <option value="SPECTRA_7_3_6COLOR">Spectra 7.3" 6-color</option>
-          <option value="BWRY_3_97">BWRY 3.97" 800×480</option>
-          <option value="MONO_4_26">Mono 4.26"</option>
-          <option value="BWRY_4_2">BWRY 4.2"</option>
-          <option value="SOLUM_BWR">Solum BWR</option>
-          <option value="HANSHOW_BWR">Hanshow BWR</option>
-          <option value="HANSHOW_BWY">Hanshow BWY</option>
-        </optgroup>
-      </select>
-    </div>
+    <!-- Controls grid (2-col on mobile, single-col on desktop) -->
+    <div class="controls-grid">
 
-    <!-- Dither mode -->
-    <div class="field">
-      <div class="group-label">Algorithm</div>
-      <select id="modeSelect">
-        <option value="NONE">None — direct map</option>
-        <option value="ORDERED">Ordered — Bayer 4×4</option>
-        <option value="FLOYD_STEINBERG">Floyd-Steinberg</option>
-        <option value="BURKES" selected>Burkes</option>
-        <option value="ATKINSON">Atkinson</option>
-        <option value="STUCKI">Stucki</option>
-        <option value="SIERRA">Sierra</option>
-        <option value="SIERRA_LITE">Sierra Lite</option>
-        <option value="JARVIS_JUDICE_NINKE">Jarvis-Judice-Ninke</option>
-      </select>
+      <!-- Color scheme -->
+      <div class="field">
+        <div class="group-label">Color Scheme</div>
+        <select id="schemeSelect">
+          <optgroup label="Standard">
+            <option value="MONO">MONO — 2 color</option>
+            <option value="BWR">BWR — black/white/red</option>
+            <option value="BWY">BWY — black/white/yellow</option>
+            <option value="BWRY">BWRY — 4 color</option>
+            <option value="BWGBRY" selected>BWGBRY — Spectra 6</option>
+            <option value="GRAYSCALE_4">GRAYSCALE 4</option>
+            <option value="GRAYSCALE_8">GRAYSCALE 8</option>
+            <option value="GRAYSCALE_16">GRAYSCALE 16</option>
+          </optgroup>
+          <optgroup label="Measured Palettes">
+            <option value="SPECTRA_7_3_6COLOR">Spectra 7.3" 6-color</option>
+            <option value="BWRY_3_97">BWRY 3.97" 800×480</option>
+            <option value="MONO_4_26">Mono 4.26"</option>
+            <option value="BWRY_4_2">BWRY 4.2"</option>
+            <option value="SOLUM_BWR">Solum BWR</option>
+            <option value="HANSHOW_BWR">Hanshow BWR</option>
+            <option value="HANSHOW_BWY">Hanshow BWY</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- Dither mode -->
+      <div class="field">
+        <div class="group-label">Algorithm</div>
+        <select id="modeSelect">
+          <option value="NONE">None — direct map</option>
+          <option value="ORDERED">Ordered — Bayer 4×4</option>
+          <option value="FLOYD_STEINBERG">Floyd-Steinberg</option>
+          <option value="BURKES" selected>Burkes</option>
+          <option value="ATKINSON">Atkinson</option>
+          <option value="STUCKI">Stucki</option>
+          <option value="SIERRA">Sierra</option>
+          <option value="SIERRA_LITE">Sierra Lite</option>
+          <option value="JARVIS_JUDICE_NINKE">Jarvis-Judice-Ninke</option>
+        </select>
+      </div>
+
     </div>
 
     <!-- Serpentine -->
@@ -517,7 +649,7 @@ const MODES = {
 
 // ── State ────────────────────────────────────────────────────────
 
-let currentImageData = null; // raw ImageData from the loaded image
+let currentImageData = null;
 
 // ── DOM refs ─────────────────────────────────────────────────────
 
@@ -538,6 +670,24 @@ const statTime        = document.getElementById('statTime');
 const headerStatus    = document.getElementById('headerStatus');
 const statusText      = document.getElementById('statusText');
 const dropOverlay     = document.getElementById('dropOverlay');
+const settingsBtn     = document.getElementById('settingsBtn');
+const sidebar         = document.getElementById('sidebar');
+
+// ── Settings toggle (mobile) ─────────────────────────────────────
+
+settingsBtn.addEventListener('click', () => {
+  const open = sidebar.classList.toggle('open');
+  settingsBtn.classList.toggle('active', open);
+});
+
+// Close sidebar when a setting changes on mobile
+function onSettingChange() {
+  runDither();
+  if (window.innerWidth <= 700) {
+    sidebar.classList.remove('open');
+    settingsBtn.classList.remove('active');
+  }
+}
 
 // ── Core: dither and render ──────────────────────────────────────
 
@@ -554,21 +704,16 @@ function runDither() {
   setStatus('working', 'processing…');
   algoBadge.textContent = modeKey.replace(/_/g, '-');
 
-  // Defer to let status update paint
   requestAnimationFrame(() => {
     const t0 = performance.now();
 
-    const imageBuffer = {
-      width:  currentImageData.width,
-      height: currentImageData.height,
-      data:   currentImageData.data,
-    };
-
-    const result = ditherImage(imageBuffer, scheme, mode, useSerpentine);
+    const result = ditherImage(
+      { width: currentImageData.width, height: currentImageData.height, data: currentImageData.data },
+      scheme, mode, useSerpentine,
+    );
 
     const elapsed = performance.now() - t0;
 
-    // Render dithered result
     dithCanvas.width  = result.width;
     dithCanvas.height = result.height;
     const ctx = dithCanvas.getContext('2d');
@@ -583,7 +728,6 @@ function runDither() {
     }
     ctx.putImageData(out, 0, 0);
 
-    // Update palette swatches
     swatches.innerHTML = '';
     for (const color of result.palette) {
       const s = document.createElement('div');
@@ -593,7 +737,6 @@ function runDither() {
       swatches.appendChild(s);
     }
 
-    // Stats
     statColors.textContent = result.palette.length;
     statTime.textContent   = elapsed < 1000
       ? `${elapsed.toFixed(1)} ms`
@@ -608,11 +751,16 @@ function runDither() {
 function loadFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
 
+  // Close settings panel on mobile after loading
+  if (window.innerWidth <= 700) {
+    sidebar.classList.remove('open');
+    settingsBtn.classList.remove('active');
+  }
+
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
     img.onload = () => {
-      // Draw to offscreen canvas to get pixel data
       const tmp = document.createElement('canvas');
       tmp.width  = img.naturalWidth;
       tmp.height = img.naturalHeight;
@@ -620,14 +768,12 @@ function loadFile(file) {
       ctx.drawImage(img, 0, 0);
       currentImageData = ctx.getImageData(0, 0, tmp.width, tmp.height);
 
-      // Render original
       origCanvas.width  = img.naturalWidth;
       origCanvas.height = img.naturalHeight;
       origCanvas.getContext('2d').drawImage(img, 0, 0);
 
-      // Show canvases
-      emptyState.style.display  = 'none';
-      canvasRow.style.display   = 'flex';
+      emptyState.style.display = 'none';
+      canvasRow.style.display  = 'flex';
 
       statSize.textContent = `${img.naturalWidth}×${img.naturalHeight}`;
       document.title = `Dither Lab — ${file.name}`;
@@ -650,11 +796,10 @@ function setStatus(type, text) {
 
 uploadZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
-schemeSelect.addEventListener('change', runDither);
-modeSelect.addEventListener('change', runDither);
-serpentine.addEventListener('change', runDither);
+schemeSelect.addEventListener('change', onSettingChange);
+modeSelect.addEventListener('change', onSettingChange);
+serpentine.addEventListener('change', onSettingChange);
 
-// Sidebar drag-and-drop
 uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('over'); });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('over'));
 uploadZone.addEventListener('drop', (e) => {
@@ -663,7 +808,6 @@ uploadZone.addEventListener('drop', (e) => {
   loadFile(e.dataTransfer.files[0]);
 });
 
-// Global drag-and-drop overlay
 let dragCounter = 0;
 document.addEventListener('dragenter', (e) => {
   if (e.dataTransfer.types.includes('Files')) {
@@ -683,7 +827,6 @@ document.addEventListener('drop', (e) => {
 });
 document.addEventListener('dragover', (e) => e.preventDefault());
 
-// Paste image from clipboard
 document.addEventListener('paste', (e) => {
   const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
   if (item) loadFile(item.getAsFile());
