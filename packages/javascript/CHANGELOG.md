@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/OpenDisplay/epaper-dithering/compare/javascript-v2.2.0...javascript-v2.2.1) (2026-03-12)
+
+
+### Bug Fixes
+
+* update repo link ([0cd5a96](https://github.com/OpenDisplay/epaper-dithering/commit/0cd5a961669aa3753b785c84dd1480162b4e8a9a))
+
 ## [2.2.0](https://github.com/OpenDisplay/epaper-dithering/compare/javascript-v2.1.4...javascript-v2.2.0) (2026-03-12)
 
 
