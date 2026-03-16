@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.6.5](https://github.com/OpenDisplay/epaper-dithering/compare/python-v0.6.4...python-v0.6.5) (2026-03-16)
+
+
+### Features
+
+* add auto mode for gamut compression ([9a9ffee](https://github.com/OpenDisplay/epaper-dithering/commit/9a9ffee1f734af51c3a96fa09178a3a1036538be))
+* add comparison script ([d60c797](https://github.com/OpenDisplay/epaper-dithering/commit/d60c79773623dae363a6688f2bc36b2999f5455f))
+* add gamut compression ([c5e4df9](https://github.com/OpenDisplay/epaper-dithering/commit/c5e4df90c1cf33ce1b4e1f12d184c1f382254352))
+* add gamut_compression sheet to compare script ([f0c1db4](https://github.com/OpenDisplay/epaper-dithering/commit/f0c1db4e7d485fd8eb2f5313f34a832477d90421))
+* add SPECTRA_7_3_6COLOR_V2 palette with calibrated measurements ([fac7112](https://github.com/OpenDisplay/epaper-dithering/commit/fac71125e4efa1da0f7c7b0371f2d435d7309006))
+* change lab to oklab ([7904094](https://github.com/OpenDisplay/epaper-dithering/commit/79040946367ab20f38cce9ca5746466d499fefa3))
+* **compare:** add gamut_compression contact sheet; fix int literals ([7755c3d](https://github.com/OpenDisplay/epaper-dithering/commit/7755c3dde42fed2b199c7823c47fb1d114374177))
+* **tone-map:** continuous strength for auto gamut compression ([68d9b7c](https://github.com/OpenDisplay/epaper-dithering/commit/68d9b7cf53e27e0df7ab7d4a387957a54ca22fc2))
+* **tone-map:** hue-preserving gamut compression ([bdddc97](https://github.com/OpenDisplay/epaper-dithering/commit/bdddc9756c9098ef6bd4bf616b7385cb2f317d52))
+* **tone-map:** iterative optimization for auto gamut compression strength ([4263183](https://github.com/OpenDisplay/epaper-dithering/commit/4263183aabc97113908dafa22bb9c89fe8e9cfe7))
+* **tone-map:** use Reinhard 2004 log-skewness for auto compression strength ([715dc0a](https://github.com/OpenDisplay/epaper-dithering/commit/715dc0af89fc1236ef7f50fcdc0b30f5520f0bd8))
+
+
+### Bug Fixes
+
+* correct OKLab LCH weights and gamut compression gating ([05685a8](https://github.com/OpenDisplay/epaper-dithering/commit/05685a86529d9ef3319b8785b38a0f27b62aebb8))
+* **tests:** update LAB/auto-compress tests for OKLab and conservative auto strength ([86b1075](https://github.com/OpenDisplay/epaper-dithering/commit/86b107513085ba7b0967022f3c3b95f677c84104))
+* use sRGB space for error diffusion, conditional auto tone compression ([fab9017](https://github.com/OpenDisplay/epaper-dithering/commit/fab9017f500e0e81945be41667d2a3015859b4bc))
+
 ## [0.6.4](https://github.com/OpenDisplay/epaper-dithering/compare/python-v0.6.3...python-v0.6.4) (2026-03-07)
 
 

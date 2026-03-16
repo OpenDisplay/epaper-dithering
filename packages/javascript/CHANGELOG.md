@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/OpenDisplay/epaper-dithering/compare/javascript-v2.2.1...javascript-v2.3.0) (2026-03-16)
+
+
+### Features
+
+* add toneCompression parameter (number | 'auto') to errorDiffusionDither, ([157bd6f](https://github.com/OpenDisplay/epaper-dithering/commit/157bd6fb180a2ad9957fb63dc74c2c22542ff6ee))
+
 ## [2.2.1](https://github.com/OpenDisplay/epaper-dithering/compare/javascript-v2.2.0...javascript-v2.2.1) (2026-03-12)
 
 
