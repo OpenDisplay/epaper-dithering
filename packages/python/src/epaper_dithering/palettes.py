@@ -92,6 +92,24 @@ class ColorScheme(Enum):
         ),
     )
 
+    # 7-color ACeP (e.g. Inkplate 6COLOR). Color order = panel native nibbles:
+    # black0 white1 green2 blue3 red4 yellow5 orange6.
+    BWGBRYO = (
+        8,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "white": (255, 255, 255),
+                "green": (0, 255, 0),
+                "blue": (0, 0, 255),
+                "red": (255, 0, 0),
+                "yellow": (255, 255, 0),
+                "orange": (255, 128, 0),
+            },
+            accent="red",
+        ),
+    )
+
     GRAYSCALE_4 = (
         5,
         ColorPalette(
@@ -223,3 +241,4 @@ BWRY_3_97: ColorPalette = _MEASURED["BWRY_3_97"]
 SOLUM_BWR: ColorPalette = _MEASURED["SOLUM_BWR"]
 HANSHOW_BWR: ColorPalette = _MEASURED["HANSHOW_BWR"]
 HANSHOW_BWY: ColorPalette = _MEASURED["HANSHOW_BWY"]
+INKPLATE_6COLOR: ColorPalette = _MEASURED["INKPLATE_6COLOR"]

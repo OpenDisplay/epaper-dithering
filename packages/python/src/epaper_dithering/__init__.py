@@ -11,6 +11,7 @@ from .palettes import (
     BWRY_4_2,
     HANSHOW_BWR,
     HANSHOW_BWY,
+    INKPLATE_6COLOR,
     MONO_4_26,
     SOLUM_BWR,
     SPECTRA_7_3_6COLOR,
@@ -35,4 +36,5 @@ __all__ = [
     "SOLUM_BWR",
     "HANSHOW_BWR",
     "HANSHOW_BWY",
+    "INKPLATE_6COLOR",
 ]

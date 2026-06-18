@@ -36,6 +36,12 @@ pub static CATALOG: &[MeasuredPaletteEntry] = &[
         color_names: &["black", "white", "yellow", "red", "blue", "green"],
     },
     MeasuredPaletteEntry {
+        id: "INKPLATE_6COLOR",
+        palette: &INKPLATE_6COLOR,
+        scheme: ColorScheme::Bwgbryo,
+        color_names: &["black", "white", "green", "blue", "red", "yellow", "orange"],
+    },
+    MeasuredPaletteEntry {
         id: "MONO_4_26",
         palette: &MONO_4_26,
         scheme: ColorScheme::Mono,
@@ -101,6 +107,24 @@ pub static SPECTRA_7_3_6COLOR_V2: Palette = Palette {
         [ 50,  84,  60],  // green
     ]),
     accent_idx: 3, // red
+};
+
+// ── Inkplate 6COLOR 7-color ACeP ─────────────────────────────────────────────
+
+/// Inkplate 6COLOR (600x448 7-color ACeP, EP585C / panel_ic_type 0x0043).
+/// Color order = panel native nibbles: black0 white1 green2 blue3 red4 yellow5 orange6.
+/// TODO: nominal values — measure the actual display for calibrated RGB.
+pub static INKPLATE_6COLOR: Palette = Palette {
+    colors: Cow::Borrowed(&[
+        [ 30,  30,  35],  // black
+        [190, 195, 190],  // white
+        [ 40,  95,  60],  // green
+        [ 35,  60, 130],  // blue
+        [150,  35,  30],  // red
+        [200, 175,   0],  // yellow
+        [200,  95,  25],  // orange
+    ]),
+    accent_idx: 4, // red
 };
 
 // ── Monochrome displays ───────────────────────────────────────────────────────

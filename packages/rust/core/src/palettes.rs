@@ -49,6 +49,9 @@ pub enum ColorScheme {
     Grayscale16 = 6,
     /// Reserved: 8-level grayscale, pending firmware value assignment.
     Grayscale8 = 7,
+    /// 7-color ACeP (e.g. Inkplate 6COLOR). Color order matches the panel's
+    /// native nibble codes: black0 white1 green2 blue3 red4 yellow5 orange6.
+    Bwgbryo    = 8,
 }
 
 // ── Palette data ─────────────────────────────────────────────────────────────
@@ -75,6 +78,14 @@ static PALETTE_BWGBRY: Palette = Palette {
         [255, 0, 0], [0, 0, 255], [0, 255, 0],
     ]),
     accent_idx: 3,
+};
+// 7-color ACeP. Order = panel native nibbles: black0 white1 green2 blue3 red4 yellow5 orange6.
+static PALETTE_BWGBRYO: Palette = Palette {
+    colors: Cow::Borrowed(&[
+        [0, 0, 0], [255, 255, 255], [0, 255, 0], [0, 0, 255],
+        [255, 0, 0], [255, 255, 0], [255, 128, 0],
+    ]),
+    accent_idx: 4, // red
 };
 static PALETTE_GRAYSCALE4: Palette = Palette {
     colors: Cow::Borrowed(&[[0, 0, 0], [85, 85, 85], [170, 170, 170], [255, 255, 255]]),
@@ -110,6 +121,7 @@ impl ColorScheme {
             ColorScheme::Grayscale4  => &PALETTE_GRAYSCALE4,
             ColorScheme::Grayscale16 => &PALETTE_GRAYSCALE16,
             ColorScheme::Grayscale8  => &PALETTE_GRAYSCALE8,
+            ColorScheme::Bwgbryo     => &PALETTE_BWGBRYO,
         }
     }
 }
@@ -135,6 +147,7 @@ impl TryFrom<u8> for ColorScheme {
             5 => Ok(ColorScheme::Grayscale4),
             6 => Ok(ColorScheme::Grayscale16),
             7 => Ok(ColorScheme::Grayscale8),
+            8 => Ok(ColorScheme::Bwgbryo),
             _ => Err(DitherError::UnknownColorScheme(v)),
         }
     }
@@ -171,5 +184,27 @@ mod tests {
         assert_eq!(ColorScheme::Mono.palette().colors.len(), 2);
         assert_eq!(ColorScheme::Bwgbry.palette().colors.len(), 6);
         assert_eq!(ColorScheme::Grayscale16.palette().colors.len(), 16);
+        assert_eq!(ColorScheme::Bwgbryo.palette().colors.len(), 7);
+    }
+
+    #[test]
+    fn bwgbryo_is_value_8() {
+        assert_eq!(u8::from(ColorScheme::Bwgbryo), 8);
+        assert_eq!(ColorScheme::try_from(8), Ok(ColorScheme::Bwgbryo));
+    }
+
+    #[test]
+    fn bwgbryo_order_matches_panel_native_nibbles() {
+        // The dither output index is the 4bpp nibble sent to the panel, so the
+        // palette order MUST match the Inkplate 6COLOR's native codes:
+        // black0 white1 green2 blue3 red4 yellow5 orange6.
+        let c = &ColorScheme::Bwgbryo.palette().colors;
+        assert_eq!(c[0], [0, 0, 0], "idx0 black");
+        assert_eq!(c[1], [255, 255, 255], "idx1 white");
+        assert_eq!(c[2], [0, 255, 0], "idx2 green");
+        assert_eq!(c[3], [0, 0, 255], "idx3 blue");
+        assert_eq!(c[4], [255, 0, 0], "idx4 red");
+        assert_eq!(c[5], [255, 255, 0], "idx5 yellow");
+        assert_eq!(c[6], [255, 128, 0], "idx6 orange");
     }
 }
