@@ -113,16 +113,22 @@ pub static SPECTRA_7_3_6COLOR_V2: Palette = Palette {
 
 /// Inkplate 6COLOR (600x448 7-color ACeP, EP585C / panel_ic_type 0x0043).
 /// Color order = panel native nibbles: black0 white1 green2 blue3 red4 yellow5 orange6.
-/// TODO: nominal values — measure the actual display for calibrated RGB.
+/// Hue-representative values tuned 2026-06-18 so source colors select the correct ink
+/// (these drive matching only; the panel always renders its own ink for each nibble).
+/// Derived from a forced-nibble calibration capture, then de-washed: the panel's raw
+/// inks photograph very desaturated (esp. green, contaminated by ghosting), which makes
+/// nearest-color matching send vivid greens->yellow and blues->black. Boosting saturation
+/// toward each ink's true hue fixes ink selection. TODO: precise per-ink measurement on a
+/// ghosting-cleared panel for tone-accurate values.
 pub static INKPLATE_6COLOR: Palette = Palette {
     colors: Cow::Borrowed(&[
-        [ 30,  30,  35],  // black
-        [190, 195, 190],  // white
-        [ 40,  95,  60],  // green
-        [ 35,  60, 130],  // blue
-        [150,  35,  30],  // red
-        [200, 175,   0],  // yellow
-        [200,  95,  25],  // orange
+        [ 45,  45,  70],  // black (dark blue-gray)
+        [230, 230, 230],  // white
+        [ 60, 150,  80],  // green
+        [ 40,  70, 190],  // blue
+        [200,  40,  40],  // red
+        [235, 215,  90],  // yellow
+        [225, 120,  40],  // orange
     ]),
     accent_idx: 4, // red
 };
