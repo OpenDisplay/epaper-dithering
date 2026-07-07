@@ -116,3 +116,4 @@ cargo test --workspace
 ## Related Projects
 
 - **py-opendisplay**: [Python library for OpenDisplay BLE e-paper devices](https://github.com/OpenDisplay-org/py-opendisplay)
+- **hass-eink-dashboard**: [Home Assistant custom component that renders e-ink dashboard images for Kindle, TRMNL, and OpenDisplay devices.](https://github.com/cryptomilk/hass-eink-dashboard)
