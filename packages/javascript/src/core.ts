@@ -70,6 +70,14 @@ export function ditherImage(
     gamut = 0.0,
   } = options;
 
+  const expectedLength = image.width * image.height * 4;
+  if (image.data.length !== expectedLength) {
+    throw new Error(
+      `image data length (${image.data.length}) does not match width × height × 4 ` +
+      `(${image.width} × ${image.height} × 4 = ${expectedLength})`,
+    );
+  }
+
   const rgba = new Uint8Array(image.data.buffer, image.data.byteOffset, image.data.byteLength);
   const pixels = wasmCompositeRgba(rgba);
 
@@ -78,7 +86,7 @@ export function ditherImage(
   const toneArg  = isScheme ? 0.0 : parseCompression(tone);
   const gamutArg = isScheme ? 0.0 : parseCompression(gamut);
 
-  let schemeId = 0;
+  let schemeId: number | undefined = undefined;
   let paletteBytes: Uint8Array;
   let accentIdx = 0;
   let outputColors: { r: number; g: number; b: number }[];
@@ -88,7 +96,7 @@ export function ditherImage(
     paletteBytes = new Uint8Array(0);
     outputColors = Object.values(getPalette(palette).colors);
   } else {
-    schemeId = palette.scheme ?? 255;
+    schemeId = palette.scheme ?? undefined;
     const colors = Object.values(palette.colors);
     paletteBytes = new Uint8Array(colors.flatMap(c => [c.r, c.g, c.b]));
     accentIdx = Object.keys(palette.colors).indexOf(palette.accent);
