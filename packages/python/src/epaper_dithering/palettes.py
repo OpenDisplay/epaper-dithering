@@ -105,24 +105,6 @@ class ColorScheme(Enum):
         ),
     )
 
-    # Value 7 is reserved for future 8-level grayscale firmware support.
-    GRAYSCALE_8 = (
-        7,
-        ColorPalette(
-            colors={
-                "black": (0, 0, 0),
-                "gray1": (36, 36, 36),
-                "gray2": (73, 73, 73),
-                "gray3": (109, 109, 109),
-                "gray4": (146, 146, 146),
-                "gray5": (182, 182, 182),
-                "gray6": (219, 219, 219),
-                "white": (255, 255, 255),
-            },
-            accent="black",
-        ),
-    )
-
     GRAYSCALE_16 = (
         6,
         ColorPalette(
@@ -148,6 +130,42 @@ class ColorScheme(Enum):
         ),
     )
 
+    # Value 7: SEVEN_COLOR (protocol v2). The former GRAYSCALE_8 = 7 was a
+    # mistake (gray8 is not a real panel scheme) and was removed, not renumbered.
+    # Ink order is BWGBRY plus orange, matching the bb_epaper logical ink indices.
+    SEVEN_COLOR = (
+        7,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "white": (255, 255, 255),
+                "yellow": (255, 255, 0),
+                "red": (255, 0, 0),
+                "blue": (0, 0, 255),
+                "green": (0, 255, 0),
+                "orange": (255, 128, 0),
+            },
+            accent="red",
+        ),
+    )
+
+    # Same inks as BWGBRY; only the firmware-side plane packing differs
+    # (left-half plane then right-half plane, for dual-CS panels).
+    BWGBRY_SPLIT = (
+        8,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "white": (255, 255, 255),
+                "yellow": (255, 255, 0),
+                "red": (255, 0, 0),
+                "blue": (0, 0, 255),
+                "green": (0, 255, 0),
+            },
+            accent="red",
+        ),
+    )
+
     def __init__(self, value: int, palette: ColorPalette):
         self._value_ = value  # type: ignore[assignment]
         self.palette = palette
@@ -167,7 +185,7 @@ class ColorScheme(Enum):
         """Get ColorScheme from firmware int value.
 
         Args:
-            value: Firmware color scheme value (0-7)
+            value: Firmware color scheme value (0-8)
 
         Returns:
             Matching ColorScheme

@@ -16,8 +16,9 @@ class TestColorSchemes:
         assert ColorScheme.BWRY.color_count == 4
         assert ColorScheme.BWGBRY.color_count == 6
         assert ColorScheme.GRAYSCALE_4.color_count == 4
-        assert ColorScheme.GRAYSCALE_8.color_count == 8
         assert ColorScheme.GRAYSCALE_16.color_count == 16
+        assert ColorScheme.SEVEN_COLOR.color_count == 7
+        assert ColorScheme.BWGBRY_SPLIT.color_count == 6
 
     def test_palette_colors_valid(self):
         """Test all palette colors are valid RGB tuples."""
@@ -51,10 +52,22 @@ class TestColorSchemes:
             f"BWGBRY order must be black,white,yellow,red,blue,green, got {bwgbry_keys}"
         )
 
+        seven_color_keys = list(ColorScheme.SEVEN_COLOR.palette.colors.keys())
+        assert seven_color_keys == ["black", "white", "yellow", "red", "blue", "green", "orange"], (
+            f"SEVEN_COLOR order must be black,white,yellow,red,blue,green,orange, got {seven_color_keys}"
+        )
+
+        bwgbry_split_keys = list(ColorScheme.BWGBRY_SPLIT.palette.colors.keys())
+        assert bwgbry_split_keys == ["black", "white", "yellow", "red", "blue", "green"], (
+            f"BWGBRY_SPLIT order must be black,white,yellow,red,blue,green, got {bwgbry_split_keys}"
+        )
+
     def test_from_value_method(self):
         """Test ColorScheme.from_value() works correctly."""
         assert ColorScheme.from_value(0) == ColorScheme.MONO
         assert ColorScheme.from_value(1) == ColorScheme.BWR
+        assert ColorScheme.from_value(7) == ColorScheme.SEVEN_COLOR
+        assert ColorScheme.from_value(8) == ColorScheme.BWGBRY_SPLIT
 
         with pytest.raises(ValueError):
             ColorScheme.from_value(99)

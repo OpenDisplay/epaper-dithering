@@ -18,28 +18,37 @@ silently drifted from the truth. Compare
 `opendisplay-protocol/tools/validate_mirrors.py`, which documents the same
 principle for that repo's generated mirrors.
 
-SCOPE (this layer only)
-    This script checks LOCAL cross-language parity: Rust vs Python vs
-    TypeScript agree with each other. It does NOT check either mirror against
-    the canonical OpenDisplay firmware C header -- that is a separate,
-    heavier gate (planned) that requires the header to be vendored/available
-    and is added alongside the enum-value fixes it depends on. Keeping that
-    layer out lets this gate be blocking immediately, since it passes against
-    the mirrors as they stand today.
+TWO LAYERS
+    Layer 1 (default, always runs): LOCAL cross-language parity -- Rust vs
+    Python vs TypeScript agree with each other.
 
-    Extension point for that future layer: add a `parse_header_*` function
-    per enum (mirroring the shape of the `parse_rust_*` / `parse_python_*` /
-    `parse_ts_*` functions below), a `--header <path>` CLI flag, and fold its
-    result into `validate_enum`'s `sources` dict under a `"header"` key. No
-    other function needs to change.
+    Layer 2 (`--header <path>`, opt-in): parity against the CANONICAL source of
+    truth, `enum ColorScheme` in `opendisplay-protocol/src/opendisplay_structs.h`.
+    That header names `epaper-dithering packages/rust/core/src/palettes.rs` as
+    its designated `@external` mirror, so the header wins any disagreement.
+    It is opt-in because it needs the protocol repo checked out alongside this
+    one, which is true in CI (a dedicated job clones it) but not necessarily on
+    a contributor's machine. Layer 1 stays blocking and dependency-free.
 
-THE SIX INDEPENDENT PARSERS
+    Layer 2 applies to ColorScheme only -- DitherMode is a dithering-library
+    concept with no firmware wire representation, so the header has nothing to
+    say about it.
+
+    The header enum is a superset of the mirrors: it also carries the
+    non-epaper RGB565/RGB888/RGB16BPC schemes (values 100-102), which this
+    dithering library has no palette for. `HEADER_ONLY_MEMBERS` lists those as
+    a deliberate, reviewed exemption; every other header member must be
+    mirrored, and every mirrored member must exist in the header with the same
+    value.
+
+THE SEVEN INDEPENDENT PARSERS
     parse_rust_colorscheme    packages/rust/core/src/palettes.rs
     parse_rust_dithermode     packages/rust/core/src/enums.rs
     parse_python_colorscheme  packages/python/src/epaper_dithering/palettes.py
     parse_python_dithermode   packages/python/src/epaper_dithering/enums.py
     parse_ts_colorscheme      packages/javascript/src/palettes.ts
     parse_ts_dithermode       packages/javascript/src/enums.ts
+    parse_header_colorscheme  <opendisplay-protocol>/src/opendisplay_structs.h
 
 NAME NORMALISATION
     Member names are not spelled identically across languages: Rust uses
@@ -51,7 +60,8 @@ NAME NORMALISATION
     `--self-test` runs them as an assertion.
 
 EXIT CODES
-    0  all mirrors agree (names and values) for both enums
+    0  all mirrors agree (names and values) for both enums, and -- with
+       --header -- agree with the canonical C header
     1  a divergence was found (missing/extra member or value mismatch)
 
 Stdlib only; no third-party dependencies. Python 3.9+.
@@ -76,6 +86,25 @@ TS_ENUMS = ROOT / "packages/javascript/src/enums.ts"
 
 # name -> firmware integer value
 EnumMembers = Dict[str, int]
+
+# Header members with no counterpart in this library, by design: they are
+# non-epaper framebuffer formats (no ink palette to dither to), so the mirrors
+# deliberately do not carry them. Any OTHER header member missing from the
+# mirrors is a real divergence. Keep this list short and reviewed.
+#
+# A `frozenset`, not a dict: only membership (name) is checked below -- there
+# is no mirror value to compare these header-only members against, so a dict
+# would misleadingly imply the 100/101/102 values are pinned by this script.
+HEADER_ONLY_MEMBERS = frozenset({"RGB565", "RGB888", "RGB16BPC"})
+
+# The header spells the grayscale schemes GRAY4/GRAY16 where the mirrors spell
+# them GRAYSCALE_4/GRAYSCALE_16. That is a naming difference only -- the values
+# are the contract -- so the header parser maps them explicitly rather than
+# letting `normalize_name` silently fail to reconcile them.
+HEADER_NAME_ALIASES = {
+    "GRAY4": "GRAYSCALE_4",
+    "GRAY16": "GRAYSCALE_16",
+}
 
 
 # --- name normalisation ------------------------------------------------------
@@ -114,6 +143,42 @@ _NORMALIZE_NAME_EXAMPLES: Tuple[Tuple[str, str], ...] = (
     ("SierraLite", "SIERRA_LITE"),
     ("JarvisJudiceNinke", "JARVIS_JUDICE_NINKE"),
     ("JARVIS_JUDICE_NINKE", "JARVIS_JUDICE_NINKE"),
+    ("SevenColor", "SEVEN_COLOR"),
+    ("SEVEN_COLOR", "SEVEN_COLOR"),
+    ("BwgbrySplit", "BWGBRY_SPLIT"),
+    ("BWGBRY_SPLIT", "BWGBRY_SPLIT"),
+)
+
+# Every real member name in play, grouped by the key it MUST normalise to.
+# `_run_self_test` asserts that no two names from DIFFERENT groups collide.
+#
+# Why this matters: `validate_enum` keys members by their normalised name, so
+# two genuinely distinct members that normalise to the same key would silently
+# merge into one entry -- their value mismatch would never be reported, and a
+# member missing from one language would look present. Forward-direction
+# examples alone cannot catch that; this is the injectivity check.
+_NORMALIZE_NAME_COLLISION_GROUPS: Tuple[Tuple[str, ...], ...] = (
+    ("Mono", "MONO"),
+    ("Bwr", "BWR"),
+    ("Bwy", "BWY"),
+    ("Bwry", "BWRY"),
+    ("Bwgbry", "BWGBRY"),
+    ("BwgbrySplit", "BWGBRY_SPLIT"),
+    ("SevenColor", "SEVEN_COLOR"),
+    ("Grayscale4", "GRAYSCALE_4"),
+    ("Grayscale16", "GRAYSCALE_16"),
+    ("None", "NONE"),
+    ("Ordered", "ORDERED"),
+    ("FloydSteinberg", "FLOYD_STEINBERG"),
+    ("Burkes", "BURKES"),
+    ("Atkinson", "ATKINSON"),
+    ("Stucki", "STUCKI"),
+    ("Sierra", "SIERRA"),
+    ("SierraLite", "SIERRA_LITE"),
+    ("JarvisJudiceNinke", "JARVIS_JUDICE_NINKE"),
+    ("Rgb565", "RGB565"),
+    ("Rgb888", "RGB888"),
+    ("Rgb16Bpc", "RGB16BPC"),
 )
 
 
@@ -122,6 +187,25 @@ def _run_self_test() -> None:
         actual = normalize_name(raw)
         assert actual == expected, f"normalize_name({raw!r}) = {actual!r}, expected {expected!r}"
     print(f"[self-test] normalize_name: {len(_NORMALIZE_NAME_EXAMPLES)}/{len(_NORMALIZE_NAME_EXAMPLES)} OK")
+
+    # Injectivity: names within a group must agree; names across groups must not.
+    seen: Dict[str, Tuple[str, ...]] = {}
+    for group in _NORMALIZE_NAME_COLLISION_GROUPS:
+        keys = {normalize_name(name) for name in group}
+        assert len(keys) == 1, (
+            f"[self-test] spellings of the same member disagree: "
+            f"{ {n: normalize_name(n) for n in group} }"
+        )
+        key = keys.pop()
+        clash = seen.get(key)
+        assert clash is None, (
+            f"[self-test] COLLISION: distinct members {clash} and {group} both "
+            f"normalise to {key!r} -- validate_enum would silently merge them"
+        )
+        seen[key] = group
+    total = sum(len(g) for g in _NORMALIZE_NAME_COLLISION_GROUPS)
+    print(f"[self-test] normalize_name injectivity: {total} names -> "
+          f"{len(seen)} distinct keys, no collisions")
 
 
 # --- six independent parsers -------------------------------------------------
@@ -231,6 +315,51 @@ def parse_ts_dithermode(path: Path = TS_ENUMS) -> EnumMembers:
     return members
 
 
+def _strip_c_comments(text: str) -> str:
+    """Remove `/* ... */` (including `/**< ... */` doc comments) and `//` line
+    comments from a C source fragment.
+
+    The enum body scanned by `parse_header_colorscheme` carries per-member
+    `/**< @doc ... */` comments, and this repo's `@changed` doc notes have
+    already shown up spelling other enumerator symbols inline (e.g. the
+    historical `COLOR_SCHEME_GRAY8=7` note on `OD_COLOR_SCHEME_SEVEN_COLOR`).
+    Today that note omits the `OD_` prefix so the member regex can't match it,
+    but that's luck, not a guarantee -- a future comment that spells a full
+    `OD_COLOR_SCHEME_...=N` symbol would otherwise be parsed as a phantom
+    member. Stripping comments first removes that whole class of false match.
+    """
+    without_block_comments = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    without_line_comments = re.sub(r"//.*", "", without_block_comments)
+    return without_line_comments
+
+
+def parse_header_colorscheme(path: Path) -> EnumMembers:
+    """Parse `enum ColorScheme { OD_COLOR_SCHEME_NAME = N, ... }` from the
+    canonical `opendisplay_structs.h`.
+
+    Deliberately a seventh INDEPENDENT parser rather than a generalisation of
+    the six above: the header is the source of truth the mirrors are checked
+    against, so sharing parsing machinery with a mirror parser would let one
+    bug make the truth and a mirror agree with each other while both are wrong.
+
+    Members are returned under their short names (the `OD_COLOR_SCHEME_` prefix
+    stripped, `HEADER_NAME_ALIASES` applied) so `normalize_name` can line them
+    up with the mirrors.
+    """
+    text = path.read_text()
+    m = re.search(r"\benum ColorScheme\s*\{(.*?)\n\};", text, re.S)
+    if not m:
+        raise ValueError(f"{path}: could not find `enum ColorScheme {{ ... }};`")
+    body = _strip_c_comments(m.group(1))
+    members: EnumMembers = {}
+    for vm in re.finditer(r"OD_COLOR_SCHEME_([A-Z0-9_]+)\s*=\s*(\d+)", body):
+        raw = vm.group(1)
+        members[HEADER_NAME_ALIASES.get(raw, raw)] = int(vm.group(2))
+    if not members:
+        raise ValueError(f"{path}: found ColorScheme enum body but parsed zero members")
+    return members
+
+
 # --- comparison / reporting --------------------------------------------------
 
 def validate_enum(enum_label: str, sources: Dict[str, Tuple[Path, EnumMembers]]) -> bool:
@@ -294,6 +423,52 @@ def check_colorscheme() -> bool:
     return validate_enum("ColorScheme", sources)
 
 
+def check_colorscheme_against_header(header_path: Path) -> bool:
+    """Layer 2: compare the Rust mirror against the canonical C header.
+
+    The Rust file is the header's designated `@external` mirror, and layer 1
+    already proves Python and TypeScript match Rust, so checking Rust against
+    the header transitively pins all three.
+
+    Divergences reported:
+      * a member present in both with different values (the dangerous case --
+        it silently ships the wrong bytes to a panel);
+      * a header member absent from the mirror and not in `HEADER_ONLY_MEMBERS`;
+      * a mirror member absent from the header (an invented wire value).
+    """
+    header = {normalize_name(n): v for n, v in parse_header_colorscheme(header_path).items()}
+    mirror = {normalize_name(n): v for n, v in parse_rust_colorscheme().items()}
+    exempt = {normalize_name(n) for n in HEADER_ONLY_MEMBERS}
+
+    print(f"[ColorScheme vs header] header={len(header)} members "
+          f"({len(exempt)} non-epaper, exempt), rust={len(mirror)} members")
+    print(f"  header: {header_path}")
+
+    ok = True
+    for name in sorted(header):
+        if name in mirror:
+            if header[name] != mirror[name]:
+                ok = False
+                print(f"  DIVERGENCE [ColorScheme vs header] '{name}' VALUE MISMATCH: "
+                      f"header={header[name]}, rust:{RUST_PALETTES.name}={mirror[name]}")
+        elif name not in exempt:
+            ok = False
+            print(f"  DIVERGENCE [ColorScheme vs header] '{name}'={header[name]} is in the "
+                  f"canonical header but MISSING from rust:{RUST_PALETTES.name}")
+
+    for name in sorted(mirror):
+        if name not in header:
+            ok = False
+            print(f"  DIVERGENCE [ColorScheme vs header] '{name}'={mirror[name]} exists in "
+                  f"rust:{RUST_PALETTES.name} but NOT in the canonical header "
+                  f"(invented wire value)")
+
+    if ok:
+        print("  ColorScheme vs header: OK "
+              f"({len(header) - len(exempt)} shared members agree with the canonical header)")
+    return ok
+
+
 def check_dithermode() -> bool:
     sources = {
         "rust": (RUST_ENUMS, parse_rust_dithermode()),
@@ -318,6 +493,16 @@ def main(argv=None) -> int:
     p.add_argument("--colorscheme", action="store_true", help="check ColorScheme only")
     p.add_argument("--dithermode", action="store_true", help="check DitherMode only")
     p.add_argument("--self-test", action="store_true", help="run normalize_name's worked examples and exit")
+    p.add_argument(
+        "--header",
+        metavar="PATH",
+        type=Path,
+        default=None,
+        help=(
+            "also check ColorScheme against the canonical `enum ColorScheme` in "
+            "opendisplay-protocol/src/opendisplay_structs.h (layer 2)"
+        ),
+    )
     args = p.parse_args(argv)
 
     if args.self_test:
@@ -330,10 +515,19 @@ def main(argv=None) -> int:
     ok = True
     if do_colorscheme:
         ok &= check_colorscheme()
+        if args.header is not None:
+            if not args.header.is_file():
+                print(f"ERROR: --header path does not exist: {args.header}")
+                return 1
+            print()
+            ok &= check_colorscheme_against_header(args.header)
     if do_dithermode:
         ok &= check_dithermode()
 
-    print("\nVERDICT:", "ENUMS CONSISTENT ACROSS LANGUAGES" if ok else "DIVERGENCE FOUND")
+    verdict = "ENUMS CONSISTENT ACROSS LANGUAGES"
+    if args.header is not None and do_colorscheme:
+        verdict += " AND WITH THE CANONICAL HEADER"
+    print("\nVERDICT:", verdict if ok else "DIVERGENCE FOUND")
     return 0 if ok else 1
 
 
