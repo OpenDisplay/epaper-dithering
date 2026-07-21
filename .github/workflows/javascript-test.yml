@@ -8,12 +8,14 @@ on:
       - 'packages/rust/wasm/**'
       - 'packages/rust/core/**'
       - '.github/workflows/javascript-test.yml'
+      - 'scripts/check_enum_parity.py'
   pull_request:
     paths:
       - 'packages/javascript/**'
       - 'packages/rust/wasm/**'
       - 'packages/rust/core/**'
       - '.github/workflows/javascript-test.yml'
+      - 'scripts/check_enum_parity.py'
   workflow_dispatch:
 
 defaults:
@@ -26,6 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Enum parity
+        working-directory: .
+        run: python3 scripts/check_enum_parity.py
 
       - uses: dtolnay/rust-toolchain@stable
         with:

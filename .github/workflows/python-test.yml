@@ -7,11 +7,13 @@ on:
       - 'packages/python/**'
       - 'packages/rust/**'
       - '.github/workflows/python-test.yml'
+      - 'scripts/check_enum_parity.py'
   pull_request:
     paths:
       - 'packages/python/**'
       - 'packages/rust/**'
       - '.github/workflows/python-test.yml'
+      - 'scripts/check_enum_parity.py'
   workflow_dispatch:
 
 defaults:
@@ -58,6 +60,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Enum parity
+        working-directory: .
+        run: python3 scripts/check_enum_parity.py
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
