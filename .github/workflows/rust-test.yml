@@ -6,10 +6,12 @@ on:
     paths:
       - 'packages/rust/**'
       - '.github/workflows/rust-test.yml'
+      - 'scripts/check_enum_parity.py'
   pull_request:
     paths:
       - 'packages/rust/**'
       - '.github/workflows/rust-test.yml'
+      - 'scripts/check_enum_parity.py'
   workflow_dispatch:
 
 defaults:

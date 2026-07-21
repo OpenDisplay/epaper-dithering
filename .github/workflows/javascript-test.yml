@@ -8,12 +8,14 @@ on:
       - 'packages/rust/wasm/**'
       - 'packages/rust/core/**'
       - '.github/workflows/javascript-test.yml'
+      - 'scripts/check_enum_parity.py'
   pull_request:
     paths:
       - 'packages/javascript/**'
       - 'packages/rust/wasm/**'
       - 'packages/rust/core/**'
       - '.github/workflows/javascript-test.yml'
+      - 'scripts/check_enum_parity.py'
   workflow_dispatch:
 
 defaults:
