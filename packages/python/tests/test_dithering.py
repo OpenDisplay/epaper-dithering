@@ -1,5 +1,8 @@
 """Tests for dithering algorithms and color science."""
 
+import threading
+import time
+
 import numpy as np
 import pytest
 from epaper_dithering import ColorScheme, DitherMode, dither_image
@@ -81,6 +84,22 @@ class TestBufferValidation:
 
         pixels = bytes(10 * 10 * 3)
         indices = _rs.dither_image(pixels, 10, 10, scheme_id=ColorScheme.MONO.value)
+        assert len(indices) == 10 * 10
+
+    def test_bytearray_pixels_still_extract(self):
+        """`pixels` (and `palette_bytes`) must still accept `bytearray`, not just `bytes`.
+
+        `dither_image` takes `PyBackedBytes` now (needed to release the GIL during the
+        dither), and `PyBackedBytes::extract` supports both `PyBytes` and `PyByteArray`.
+        """
+        import epaper_dithering._rs as _rs
+
+        pixels = bytearray(10 * 10 * 3)
+        indices = _rs.dither_image(pixels, 10, 10, scheme_id=ColorScheme.MONO.value)
+        assert len(indices) == 10 * 10
+
+        palette_bytes = bytearray(b"\x00\x00\x00\xff\xff\xff")
+        indices = _rs.dither_image(pixels, 10, 10, palette_bytes=palette_bytes, accent_idx=0)
         assert len(indices) == 10 * 10
 
 
@@ -316,4 +335,124 @@ class TestToneAutoRegression:
         white_pixels = list(result.getdata()).count(1)
         assert white_pixels > 9000, (
             f"expected a mostly-white result, got {white_pixels} white pixels — auto tone collapsed the frame"
+        )
+
+
+class TestGilRelease:
+    """`dither_image` must not hold the GIL for the whole rayon-parallel dither.
+
+    Audit H2: `dither_image`/`tone_compress`/`gamut_compress` used to run their
+    rayon-parallel work with the GIL held. Because the GIL is process-global,
+    calling this from an executor thread (as Home Assistant's `drawcustom`
+    pipeline does) stalled the whole event loop for the duration of the dither.
+
+    This test calls `epaper_dithering._rs.dither_image` directly instead of the
+    public `dither_image` wrapper. The wrapper does substantial PIL work after
+    the Rust call returns (`Image.new`, `out.putdata()` over hundreds of
+    thousands of pixels, `out.putpalette()`), and PIL releases the GIL for all
+    of that. That GIL-releasing tail dominates wall time regardless of whether
+    the Rust call itself held the GIL, which completely masks the regression
+    this test exists to catch (measured: with the GIL fix reverted, the
+    PIL-wrapped call still collected as many samples as the fixed build). Only
+    the direct `_rs` call isolates the FFI boundary that was actually changed.
+    Do not "simplify" this back to the public `dither_image` API — that would
+    silently re-hollow the test.
+    """
+
+    def test_counter_thread_keeps_advancing_during_dither(self):
+        """A plain Python counter thread must keep making progress *throughout* a
+        dither running on another thread — proof the GIL is released for the
+        compute-heavy part, not just released somewhere before/after the call.
+
+        A naive "before vs. after" comparison is not sufficient: CPython can
+        switch threads on the bytecode boundary right before/after the FFI
+        call even when the call itself holds the GIL for its whole duration,
+        which would make a before/after check pass despite a real stall. So
+        this samples the counter at fixed intervals *while the dither runs on
+        a separate thread*.
+
+        The discriminating signal is the *sample count* collected by the
+        sampling loop, not any per-interval "stall" heuristic: when the GIL is
+        held for the whole FFI call, the sampling thread cannot run at all
+        during that call, so the loop collects on the order of 1 sample no
+        matter how long the call takes. When the GIL is released, the loop
+        collects roughly one sample per sleep interval.
+
+        This must be a *single* FFI call, not a loop of many small calls:
+        looping introduces yield points between calls (CPython force-switches
+        threads at the next bytecode boundary once the switch interval has
+        elapsed, even if each call itself holds the GIL throughout), which
+        lets the held-GIL case rack up one sample per iteration and defeats
+        the discrimination. A single long call has no such in-between yield
+        points.
+
+        Measured on the reference machine, calling `_rs.dither_image` directly
+        with a single call on a 3200x1920 image (tone="auto", gamut="auto"),
+        3 trials each:
+          - GIL held (fix reverted):    1-2 samples,  ~0.68s wall
+          - GIL released (fix applied): 34-37 samples, ~0.70s wall
+        We assert >= 15 samples, which sits with a wide margin above the held
+        case and well below the released case, so it should not flake on a
+        loaded CI runner.
+        """
+        from epaper_dithering import SPECTRA_7_3_6COLOR, _rs
+
+        palette_colors = list(SPECTRA_7_3_6COLOR.colors.values())
+        palette_bytes = bytes(c for rgb in palette_colors for c in rgb)
+        accent_idx = list(SPECTRA_7_3_6COLOR.colors.keys()).index(SPECTRA_7_3_6COLOR.accent)
+        scheme_id = SPECTRA_7_3_6COLOR.scheme.value if SPECTRA_7_3_6COLOR.scheme is not None else None
+
+        # 3200x1920 (4x linear scale of the display's 800x480) makes a single
+        # call run long enough (~0.7s locally) to collect a comfortable margin
+        # of samples in the released-GIL case. See measured numbers above.
+        width, height = 3200, 1920
+        img = Image.new("RGB", (width, height), color=(128, 64, 200))
+        pixels = img.tobytes()
+
+        done = threading.Event()
+
+        def run_dither():
+            _rs.dither_image(
+                pixels,
+                width,
+                height,
+                scheme_id=scheme_id,
+                palette_bytes=palette_bytes,
+                accent_idx=accent_idx,
+                mode_id=int(DitherMode.BURKES),
+                serpentine=True,
+                exposure=1.0,
+                saturation=1.0,
+                shadows=0.0,
+                highlights=0.0,
+                tone=None,  # "auto"
+                gamut=None,  # "auto"
+            )
+            done.set()
+
+        counter = {"value": 0}
+
+        def spin():
+            while not done.is_set():
+                counter["value"] += 1
+
+        worker = threading.Thread(target=run_dither)
+        spinner = threading.Thread(target=spin)
+        spinner.start()
+        worker.start()
+
+        samples = []
+        while not done.is_set():
+            samples.append(counter["value"])
+            time.sleep(0.01)
+
+        worker.join()
+        spinner.join()
+
+        # Threshold with wide margin: held-GIL case measured ~1-3 samples,
+        # released-GIL case measured ~30-45 samples on the reference machine.
+        assert len(samples) >= 15, (
+            f"only collected {len(samples)} samples while dither_image ran on another "
+            "thread — the GIL was likely held for the whole FFI call, starving the "
+            "sampling thread (this is the regression this test exists to catch)"
         )

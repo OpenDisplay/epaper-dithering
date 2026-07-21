@@ -9,6 +9,7 @@ use epaper_dithering_core::{
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::pybacked::PyBackedBytes;
 
 fn parse_mode(v: u8) -> PyResult<DitherMode> {
     DitherMode::try_from(v).map_err(|e| PyValueError::new_err(e.to_string()))
@@ -59,11 +60,12 @@ fn parse_gamut(v: Option<f64>) -> GamutCompression {
 ))]
 #[allow(clippy::too_many_arguments)]
 fn dither_image(
-    pixels: &[u8],
+    py: Python<'_>,
+    pixels: PyBackedBytes,
     width: usize,
     height: usize,
     scheme_id: Option<u8>,
-    palette_bytes: Option<&[u8]>,
+    palette_bytes: Option<PyBackedBytes>,
     accent_idx: usize,
     mode_id: u8,
     serpentine: bool,
@@ -74,7 +76,7 @@ fn dither_image(
     tone: Option<f64>,
     gamut: Option<f64>,
 ) -> PyResult<Vec<u8>> {
-    validate_image(pixels, width)?;
+    validate_image(&pixels, width)?;
     // Additionally validate against the caller's height instead of silently
     // deriving it and truncating trailing pixels on a width/length mismatch.
     // Layout is flat RGB: len = width × height × 3.
@@ -91,7 +93,7 @@ fn dither_image(
             expected,
         )));
     }
-    let img = ImageBuffer::new(pixels, width);
+    let img = ImageBuffer::new(&pixels, width);
     let config = DitherConfig {
         mode: parse_mode(mode_id)?,
         serpentine,
@@ -103,6 +105,10 @@ fn dither_image(
         gamut: parse_gamut(gamut),
     };
 
+    // Validation and `Palette` construction stay under the GIL; only the
+    // rayon-parallel dither call itself releases it, so a caller running us
+    // from an executor thread (e.g. Home Assistant's `drawcustom` pipeline)
+    // doesn't stall its event loop for the whole dither.
     match (palette_bytes, scheme_id) {
         (Some(bytes), scheme_id) => {
             if !bytes.len().is_multiple_of(3) {
@@ -122,15 +128,15 @@ fn dither_image(
             if let Some(id) = scheme_id {
                 let scheme = ColorScheme::try_from(id)
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
-                Ok(dither_with_canonical(&img, &palette, scheme.palette(), config))
+                Ok(py.detach(|| dither_with_canonical(&img, &palette, scheme.palette(), config)))
             } else {
-                Ok(dither(&img, palette, config))
+                Ok(py.detach(|| dither(&img, palette, config)))
             }
         }
         (None, Some(id)) => {
             let scheme = ColorScheme::try_from(id)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
-            Ok(dither(&img, scheme.palette(), config))
+            Ok(py.detach(|| dither(&img, scheme.palette(), config)))
         }
         (None, None) => Err(PyValueError::new_err("must provide either scheme_id or palette_bytes")),
     }
@@ -167,26 +173,26 @@ fn flatten(pixels: Vec<[f64; 3]>) -> Vec<f64> {
 /// Dynamic-range compression on a linear-RGB buffer. `strength=None` → auto (histogram-based).
 #[pyfunction]
 #[pyo3(signature = (pixels, palette_bytes, strength=None))]
-fn tone_compress(pixels: Vec<f64>, palette_bytes: &[u8], strength: Option<f64>) -> PyResult<Vec<f64>> {
+fn tone_compress(py: Python<'_>, pixels: Vec<f64>, palette_bytes: &[u8], strength: Option<f64>) -> PyResult<Vec<f64>> {
     let mut px = to_linear_pixels(&pixels)?;
     let palette = palette_from_bytes(palette_bytes)?;
-    match strength {
+    py.detach(|| match strength {
         None => tone_map::auto_compress_dynamic_range(&mut px, &palette),
         Some(s) if s > 0.0 => tone_map::compress_dynamic_range(&mut px, &palette, s),
         _ => {}
-    }
+    });
     Ok(flatten(px))
 }
 
 /// Gamut compression on a linear-RGB buffer. `strength=None` → full strength (1.0).
 #[pyfunction]
 #[pyo3(signature = (pixels, palette_bytes, strength=None))]
-fn gamut_compress(pixels: Vec<f64>, palette_bytes: &[u8], strength: Option<f64>) -> PyResult<Vec<f64>> {
+fn gamut_compress(py: Python<'_>, pixels: Vec<f64>, palette_bytes: &[u8], strength: Option<f64>) -> PyResult<Vec<f64>> {
     let mut px = to_linear_pixels(&pixels)?;
     let palette = palette_from_bytes(palette_bytes)?;
     let s = strength.unwrap_or(1.0);
     if s > 0.0 {
-        tone_map::gamut_compress(&mut px, &palette, s);
+        py.detach(|| tone_map::gamut_compress(&mut px, &palette, s));
     }
     Ok(flatten(px))
 }
