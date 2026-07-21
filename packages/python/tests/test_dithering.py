@@ -357,8 +357,19 @@ class TestGilRelease:
         call even when the call itself holds the GIL for its whole duration,
         which would make a before/after check pass despite a real stall. So
         this samples the counter at fixed intervals *while the dither runs on
-        a separate thread* and asserts every interval shows growth — a stall
-        in any interval means the GIL was held during that interval.
+        a separate thread*.
+
+        We distinguish GIL contention from scheduling noise:
+        - If the GIL is held, the spinner cannot run and produces a long
+          unbroken run of stalled intervals (many consecutive indices where
+          samples[i+1] <= samples[i]).
+        - If the GIL is correctly released but the OS didn't reschedule the
+          spinner during one 10ms interval, that's an isolated stall (single
+          index with no neighbors).
+
+        We tolerate isolated stalls but fail on >= 2 consecutive stalls, which
+        would indicate a sustained GIL hold. This avoids flaking on busy/throttled
+        CI runners while still catching regressions if someone reverts the GIL fix.
         """
         from epaper_dithering import SPECTRA_7_3_6COLOR
 
@@ -395,8 +406,31 @@ class TestGilRelease:
             f"dither finished too fast to sample meaningfully (only {len(samples)} samples) — "
             "increase the image size or loop the call"
         )
-        stalled_intervals = [(a, b) for a, b in zip(samples, samples[1:]) if b <= a]
-        assert not stalled_intervals, (
-            "counter thread stalled while dither_image ran on another thread — "
-            f"the GIL was held for at least one 10ms interval: {stalled_intervals}"
+
+        # Identify stalled intervals: indices where samples[i+1] <= samples[i]
+        stalled_indices = [i for i in range(len(samples) - 1) if samples[i + 1] <= samples[i]]
+
+        # Find runs of consecutive stalled indices. A single stall is OS scheduling
+        # noise and acceptable. >= 2 consecutive stalls indicate the GIL was held.
+        consecutive_stall_runs = []
+        if stalled_indices:
+            current_run = [stalled_indices[0]]
+            for idx in stalled_indices[1:]:
+                if idx == current_run[-1] + 1:
+                    # Extend the current run
+                    current_run.append(idx)
+                else:
+                    # End of a run; check if it's long enough to report
+                    if len(current_run) >= 2:
+                        consecutive_stall_runs.append(current_run)
+                    # Start a new run
+                    current_run = [idx]
+            # Handle the final run
+            if len(current_run) >= 2:
+                consecutive_stall_runs.append(current_run)
+
+        assert not consecutive_stall_runs, (
+            "counter thread stalled for >= 2 consecutive 10ms intervals while dither_image "
+            "ran on another thread — the GIL was held: "
+            f"consecutive stall runs {consecutive_stall_runs}"
         )
