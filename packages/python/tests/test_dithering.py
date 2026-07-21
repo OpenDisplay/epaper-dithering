@@ -1,5 +1,8 @@
 """Tests for dithering algorithms and color science."""
 
+import threading
+import time
+
 import numpy as np
 import pytest
 from epaper_dithering import ColorScheme, DitherMode, dither_image
@@ -81,6 +84,22 @@ class TestBufferValidation:
 
         pixels = bytes(10 * 10 * 3)
         indices = _rs.dither_image(pixels, 10, 10, scheme_id=ColorScheme.MONO.value)
+        assert len(indices) == 10 * 10
+
+    def test_bytearray_pixels_still_extract(self):
+        """`pixels` (and `palette_bytes`) must still accept `bytearray`, not just `bytes`.
+
+        `dither_image` takes `PyBackedBytes` now (needed to release the GIL during the
+        dither), and `PyBackedBytes::extract` supports both `PyBytes` and `PyByteArray`.
+        """
+        import epaper_dithering._rs as _rs
+
+        pixels = bytearray(10 * 10 * 3)
+        indices = _rs.dither_image(pixels, 10, 10, scheme_id=ColorScheme.MONO.value)
+        assert len(indices) == 10 * 10
+
+        palette_bytes = bytearray(b"\x00\x00\x00\xff\xff\xff")
+        indices = _rs.dither_image(pixels, 10, 10, palette_bytes=palette_bytes, accent_idx=0)
         assert len(indices) == 10 * 10
 
 
@@ -316,4 +335,68 @@ class TestToneAutoRegression:
         white_pixels = list(result.getdata()).count(1)
         assert white_pixels > 9000, (
             f"expected a mostly-white result, got {white_pixels} white pixels — auto tone collapsed the frame"
+        )
+
+
+class TestGilRelease:
+    """`dither_image` must not hold the GIL for the whole rayon-parallel dither.
+
+    Audit H2: `dither_image`/`tone_compress`/`gamut_compress` used to run their
+    rayon-parallel work with the GIL held. Because the GIL is process-global,
+    calling this from an executor thread (as Home Assistant's `drawcustom`
+    pipeline does) stalled the whole event loop for the duration of the dither.
+    """
+
+    def test_counter_thread_keeps_advancing_during_dither(self):
+        """A plain Python counter thread must keep making progress *throughout* a
+        dither running on another thread — proof the GIL is released for the
+        compute-heavy part, not just released somewhere before/after the call.
+
+        A naive "before vs. after" comparison is not sufficient: CPython can
+        switch threads on the bytecode boundary right before/after the FFI
+        call even when the call itself holds the GIL for its whole duration,
+        which would make a before/after check pass despite a real stall. So
+        this samples the counter at fixed intervals *while the dither runs on
+        a separate thread* and asserts every interval shows growth — a stall
+        in any interval means the GIL was held during that interval.
+        """
+        from epaper_dithering import SPECTRA_7_3_6COLOR
+
+        # 800x480 is slow enough (~0.2s locally) to give several sampling
+        # intervals of headroom even on a slow/loaded CI machine.
+        img = Image.new("RGB", (800, 480), color=(128, 64, 200))
+
+        done = threading.Event()
+
+        def run_dither():
+            dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.BURKES, tone="auto", gamut="auto")
+            done.set()
+
+        counter = {"value": 0}
+
+        def spin():
+            while not done.is_set():
+                counter["value"] += 1
+
+        worker = threading.Thread(target=run_dither)
+        spinner = threading.Thread(target=spin)
+        spinner.start()
+        worker.start()
+
+        samples = []
+        while not done.is_set():
+            samples.append(counter["value"])
+            time.sleep(0.01)
+
+        worker.join()
+        spinner.join()
+
+        assert len(samples) >= 4, (
+            f"dither finished too fast to sample meaningfully (only {len(samples)} samples) — "
+            "increase the image size or loop the call"
+        )
+        stalled_intervals = [(a, b) for a, b in zip(samples, samples[1:]) if b <= a]
+        assert not stalled_intervals, (
+            "counter thread stalled while dither_image ran on another thread — "
+            f"the GIL was held for at least one 10ms interval: {stalled_intervals}"
         )
