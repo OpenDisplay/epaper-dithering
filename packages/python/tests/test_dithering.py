@@ -3,9 +3,11 @@
 import threading
 import time
 
+import epaper_dithering._rs as _rs
 import numpy as np
 import pytest
 from epaper_dithering import ColorScheme, DitherMode, dither_image
+from epaper_dithering.core import _to_rgb_bytes
 from PIL import Image
 
 
@@ -456,3 +458,85 @@ class TestGilRelease:
             "thread — the GIL was likely held for the whole FFI call, starving the "
             "sampling thread (this is the regression this test exists to catch)"
         )
+
+
+class TestCompositeRgba:
+    """Cross-language contract for RGBA -> RGB compositing.
+
+    The same fixed input and the same literal expected bytes are asserted in
+    ``packages/javascript/tests/dithering.test.ts`` and in
+    ``packages/rust/core/src/composite.rs::cross_language_reference_vector``.
+    The three copies are written independently -- none is generated from
+    another -- so a divergence in any binding fails here.
+    """
+
+    # 12 pixels: mid-gray at alpha 0/1/127/128/254/255, a saturated color at the
+    # same rounding-sensitive alphas, plus two arbitrary mixed pixels.
+    # fmt: off
+    RGBA = bytes([
+        128, 128, 128, 0,
+        128, 128, 128, 1,
+        128, 128, 128, 127,
+        128, 128, 128, 128,
+        128, 128, 128, 254,
+        128, 128, 128, 255,
+        0, 64, 200, 1,
+        0, 64, 200, 127,
+        0, 64, 200, 128,
+        0, 64, 200, 254,
+        17, 200, 3, 63,
+        250, 5, 130, 191,
+    ])
+
+    EXPECTED_RGB = bytes([
+        255, 255, 255,
+        255, 255, 255,
+        192, 192, 192,
+        191, 191, 191,
+        128, 128, 128,
+        128, 128, 128,
+        254, 254, 255,
+        128, 160, 228,
+        127, 159, 227,
+        1, 65, 200,
+        196, 241, 193,
+        251, 68, 161,
+    ])
+    # fmt: on
+
+    def test_produces_the_exact_expected_rgb_bytes(self):
+        assert _rs.composite_rgba(self.RGBA) == self.EXPECTED_RGB
+
+    def test_to_rgb_bytes_uses_the_shared_implementation(self):
+        """The public RGBA path in core.py must yield the same bytes."""
+        image = Image.frombytes("RGBA", (len(self.RGBA) // 4, 1), self.RGBA)
+        pixels, width, height = _to_rgb_bytes(image)
+        assert (width, height) == (len(self.RGBA) // 4, 1)
+        assert pixels == self.EXPECTED_RGB
+
+    def test_opaque_pixels_are_bit_identical(self):
+        opaque = bytes([12, 34, 56, 255, 200, 199, 198, 255])
+        assert _rs.composite_rgba(opaque) == bytes([12, 34, 56, 200, 199, 198])
+
+    @pytest.mark.parametrize("length", [1, 2, 3, 5, 7])
+    def test_length_not_multiple_of_four_raises(self, length):
+        with pytest.raises(ValueError, match="multiple of 4"):
+            _rs.composite_rgba(bytes(length))
+
+    def test_empty_buffer_is_accepted(self):
+        assert _rs.composite_rgba(b"") == b""
+
+    def test_matches_legacy_pil_paste_over_the_whole_channel_alpha_space(self):
+        """Opaque *and* semi-transparent output must match the pre-refactor PIL path.
+
+        Exhaustive over all 256 channel values x 256 alpha values, which is the
+        complete input space for a single channel (channels are independent).
+        """
+        px = [(c, c, c, a) for a in range(256) for c in range(256)]
+        image = Image.new("RGBA", (len(px), 1))
+        image.putdata(px)
+
+        legacy_bg = Image.new("RGB", image.size, (255, 255, 255))
+        legacy_bg.paste(image, mask=image.split()[3])
+
+        assert _rs.composite_rgba(image.tobytes()) == legacy_bg.tobytes()

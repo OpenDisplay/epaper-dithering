@@ -10,13 +10,14 @@ declare module '*.wasm' {
  * initialization are declared here.
  */
 declare module '*epaper_dithering_wasm_bg.js' {
+  /** Throws if `rgba.length` is not a multiple of 4. */
   export function composite_rgba(rgba: Uint8Array): Uint8Array;
   export function dither_image(
     pixels: Uint8Array, width: number,
-    scheme_id: number | undefined, palette_bytes: Uint8Array, accent_idx: number,
+    scheme_id: number | null | undefined, palette_bytes: Uint8Array, accent_idx: number,
     mode_id: number, serpentine: boolean,
     exposure: number, saturation: number, shadows: number, highlights: number,
-    tone?: number, gamut?: number,
+    tone?: number | null, gamut?: number | null,
   ): Uint8Array;
   export function measured_palettes(): string;
   export function __wbg_set_wasm(wasm: unknown): void;

@@ -1,6 +1,7 @@
 pub mod algorithms;
 pub mod color_space;
 pub mod color_space_lab;
+pub mod composite;
 pub mod enums;
 pub mod error;
 pub mod measured_palettes;
