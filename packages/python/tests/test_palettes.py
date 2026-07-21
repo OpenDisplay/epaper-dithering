@@ -52,6 +52,16 @@ class TestColorSchemes:
             f"BWGBRY order must be black,white,yellow,red,blue,green, got {bwgbry_keys}"
         )
 
+        seven_color_keys = list(ColorScheme.SEVEN_COLOR.palette.colors.keys())
+        assert seven_color_keys == ["black", "white", "yellow", "red", "blue", "green", "orange"], (
+            f"SEVEN_COLOR order must be black,white,yellow,red,blue,green,orange, got {seven_color_keys}"
+        )
+
+        bwgbry_split_keys = list(ColorScheme.BWGBRY_SPLIT.palette.colors.keys())
+        assert bwgbry_split_keys == ["black", "white", "yellow", "red", "blue", "green"], (
+            f"BWGBRY_SPLIT order must be black,white,yellow,red,blue,green, got {bwgbry_split_keys}"
+        )
+
     def test_from_value_method(self):
         """Test ColorScheme.from_value() works correctly."""
         assert ColorScheme.from_value(0) == ColorScheme.MONO

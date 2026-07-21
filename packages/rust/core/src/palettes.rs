@@ -247,6 +247,130 @@ mod tests {
         }
     }
 
+    /// Ties `color_names` to actual RGB values for every scheme, not just
+    /// lengths. `color_names_match_palette_lengths` only checks array length,
+    /// so a name array that is the right length but wrongly ordered (or
+    /// wrongly worded) relative to `palette().colors` would pass it silently.
+    /// Expected RGB values are written out literally rather than derived from
+    /// `palettes.rs` data, so this test cannot pass just because the code
+    /// under test agrees with itself.
+    #[test]
+    fn color_names_match_expected_rgb_values() {
+        let cases: &[(ColorScheme, &[(&str, [u8; 3])])] = &[
+            (
+                ColorScheme::Mono,
+                &[("black", [0, 0, 0]), ("white", [255, 255, 255])],
+            ),
+            (
+                ColorScheme::Bwr,
+                &[("black", [0, 0, 0]), ("white", [255, 255, 255]), ("red", [255, 0, 0])],
+            ),
+            (
+                ColorScheme::Bwy,
+                &[("black", [0, 0, 0]), ("white", [255, 255, 255]), ("yellow", [255, 255, 0])],
+            ),
+            (
+                ColorScheme::Bwry,
+                &[
+                    ("black", [0, 0, 0]),
+                    ("white", [255, 255, 255]),
+                    ("yellow", [255, 255, 0]),
+                    ("red", [255, 0, 0]),
+                ],
+            ),
+            (
+                ColorScheme::Bwgbry,
+                &[
+                    ("black", [0, 0, 0]),
+                    ("white", [255, 255, 255]),
+                    ("yellow", [255, 255, 0]),
+                    ("red", [255, 0, 0]),
+                    ("blue", [0, 0, 255]),
+                    ("green", [0, 255, 0]),
+                ],
+            ),
+            (
+                ColorScheme::BwgbrySplit,
+                &[
+                    ("black", [0, 0, 0]),
+                    ("white", [255, 255, 255]),
+                    ("yellow", [255, 255, 0]),
+                    ("red", [255, 0, 0]),
+                    ("blue", [0, 0, 255]),
+                    ("green", [0, 255, 0]),
+                ],
+            ),
+            (
+                ColorScheme::SevenColor,
+                &[
+                    ("black", [0, 0, 0]),
+                    ("white", [255, 255, 255]),
+                    ("yellow", [255, 255, 0]),
+                    ("red", [255, 0, 0]),
+                    ("blue", [0, 0, 255]),
+                    ("green", [0, 255, 0]),
+                    ("orange", [255, 128, 0]),
+                ],
+            ),
+            (
+                ColorScheme::Grayscale4,
+                &[
+                    ("black", [0, 0, 0]),
+                    ("gray1", [85, 85, 85]),
+                    ("gray2", [170, 170, 170]),
+                    ("white", [255, 255, 255]),
+                ],
+            ),
+            (
+                ColorScheme::Grayscale16,
+                &[
+                    ("black", [0, 0, 0]),
+                    ("gray1", [17, 17, 17]),
+                    ("gray2", [34, 34, 34]),
+                    ("gray3", [51, 51, 51]),
+                    ("gray4", [68, 68, 68]),
+                    ("gray5", [85, 85, 85]),
+                    ("gray6", [102, 102, 102]),
+                    ("gray7", [119, 119, 119]),
+                    ("gray8", [136, 136, 136]),
+                    ("gray9", [153, 153, 153]),
+                    ("gray10", [170, 170, 170]),
+                    ("gray11", [187, 187, 187]),
+                    ("gray12", [204, 204, 204]),
+                    ("gray13", [221, 221, 221]),
+                    ("gray14", [238, 238, 238]),
+                    ("white", [255, 255, 255]),
+                ],
+            ),
+        ];
+
+        for (scheme, expected) in cases {
+            let names = scheme.color_names();
+            let colors = &scheme.palette().colors;
+            assert_eq!(
+                names.len(),
+                expected.len(),
+                "{scheme:?}: test table length mismatch"
+            );
+            assert_eq!(
+                colors.len(),
+                expected.len(),
+                "{scheme:?}: palette length mismatch"
+            );
+            for (i, (expected_name, expected_rgb)) in expected.iter().enumerate() {
+                assert_eq!(
+                    names[i], *expected_name,
+                    "{scheme:?}: color_names[{i}] name mismatch"
+                );
+                assert_eq!(
+                    colors[i], *expected_rgb,
+                    "{scheme:?}: palette().colors[{i}] ({}) RGB mismatch",
+                    expected_name
+                );
+            }
+        }
+    }
+
     #[test]
     fn from_into_u8() {
         assert_eq!(u8::from(ColorScheme::Mono), 0u8);

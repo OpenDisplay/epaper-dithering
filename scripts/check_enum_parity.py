@@ -91,11 +91,11 @@ EnumMembers = Dict[str, int]
 # non-epaper framebuffer formats (no ink palette to dither to), so the mirrors
 # deliberately do not carry them. Any OTHER header member missing from the
 # mirrors is a real divergence. Keep this list short and reviewed.
-HEADER_ONLY_MEMBERS = {
-    "RGB565": 100,
-    "RGB888": 101,
-    "RGB16BPC": 102,
-}
+#
+# A `frozenset`, not a dict: only membership (name) is checked below -- there
+# is no mirror value to compare these header-only members against, so a dict
+# would misleadingly imply the 100/101/102 values are pinned by this script.
+HEADER_ONLY_MEMBERS = frozenset({"RGB565", "RGB888", "RGB16BPC"})
 
 # The header spells the grayscale schemes GRAY4/GRAY16 where the mirrors spell
 # them GRAYSCALE_4/GRAYSCALE_16. That is a naming difference only -- the values
@@ -315,6 +315,24 @@ def parse_ts_dithermode(path: Path = TS_ENUMS) -> EnumMembers:
     return members
 
 
+def _strip_c_comments(text: str) -> str:
+    """Remove `/* ... */` (including `/**< ... */` doc comments) and `//` line
+    comments from a C source fragment.
+
+    The enum body scanned by `parse_header_colorscheme` carries per-member
+    `/**< @doc ... */` comments, and this repo's `@changed` doc notes have
+    already shown up spelling other enumerator symbols inline (e.g. the
+    historical `COLOR_SCHEME_GRAY8=7` note on `OD_COLOR_SCHEME_SEVEN_COLOR`).
+    Today that note omits the `OD_` prefix so the member regex can't match it,
+    but that's luck, not a guarantee -- a future comment that spells a full
+    `OD_COLOR_SCHEME_...=N` symbol would otherwise be parsed as a phantom
+    member. Stripping comments first removes that whole class of false match.
+    """
+    without_block_comments = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    without_line_comments = re.sub(r"//.*", "", without_block_comments)
+    return without_line_comments
+
+
 def parse_header_colorscheme(path: Path) -> EnumMembers:
     """Parse `enum ColorScheme { OD_COLOR_SCHEME_NAME = N, ... }` from the
     canonical `opendisplay_structs.h`.
@@ -332,8 +350,9 @@ def parse_header_colorscheme(path: Path) -> EnumMembers:
     m = re.search(r"\benum ColorScheme\s*\{(.*?)\n\};", text, re.S)
     if not m:
         raise ValueError(f"{path}: could not find `enum ColorScheme {{ ... }};`")
+    body = _strip_c_comments(m.group(1))
     members: EnumMembers = {}
-    for vm in re.finditer(r"OD_COLOR_SCHEME_([A-Z0-9_]+)\s*=\s*(\d+)", m.group(1)):
+    for vm in re.finditer(r"OD_COLOR_SCHEME_([A-Z0-9_]+)\s*=\s*(\d+)", body):
         raw = vm.group(1)
         members[HEADER_NAME_ALIASES.get(raw, raw)] = int(vm.group(2))
     if not members:

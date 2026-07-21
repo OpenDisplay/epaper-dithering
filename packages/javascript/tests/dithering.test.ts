@@ -229,6 +229,29 @@ describe('ColorScheme', () => {
     }
   });
 
+  it('has correct palette key order for the protocol v2 schemes', () => {
+    // Palette color order is a wire contract: language bindings derive pixel
+    // indices from object-literal key order. A silent reorder would pass every
+    // count/accent assertion but ship wrong ink indices to hardware.
+    expect(Object.keys(getPalette(ColorScheme.SEVEN_COLOR).colors)).toEqual([
+      'black',
+      'white',
+      'yellow',
+      'red',
+      'blue',
+      'green',
+      'orange',
+    ]);
+    expect(Object.keys(getPalette(ColorScheme.BWGBRY_SPLIT).colors)).toEqual([
+      'black',
+      'white',
+      'yellow',
+      'red',
+      'blue',
+      'green',
+    ]);
+  });
+
   it('palettes have correct accent colors', () => {
     expect(getPalette(ColorScheme.MONO).accent).toBe('black');
     expect(getPalette(ColorScheme.BWR).accent).toBe('red');
