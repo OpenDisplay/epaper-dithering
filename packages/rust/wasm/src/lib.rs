@@ -36,7 +36,7 @@ fn parse_gamut(v: Option<f64>) -> GamutCompression {
 pub fn dither_image(
     pixels: &[u8],
     width: usize,
-    scheme_id: u8,
+    scheme_id: Option<u8>,
     palette_bytes: &[u8],
     accent_idx: usize,
     mode_id: u8,
@@ -72,7 +72,10 @@ pub fn dither_image(
     };
 
     if palette_bytes.is_empty() {
-        let scheme = ColorScheme::try_from(scheme_id)
+        let id = scheme_id.ok_or_else(|| {
+            JsValue::from_str("scheme_id is required when palette_bytes is empty")
+        })?;
+        let scheme = ColorScheme::try_from(id)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(dither(&img, scheme.palette(), config))
     } else {
@@ -90,10 +93,13 @@ pub fn dither_image(
             )));
         }
         let palette = Palette::new(colors, accent_idx);
-        if let Ok(scheme) = ColorScheme::try_from(scheme_id) {
-            Ok(dither_with_canonical(&img, &palette, scheme.palette(), config))
-        } else {
-            Ok(dither(&img, palette, config))
+        match scheme_id {
+            Some(id) => {
+                let scheme = ColorScheme::try_from(id)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+                Ok(dither_with_canonical(&img, &palette, scheme.palette(), config))
+            }
+            None => Ok(dither(&img, palette, config)),
         }
     }
 }

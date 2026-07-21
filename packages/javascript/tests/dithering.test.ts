@@ -14,15 +14,38 @@ describe('Dithering Algorithms', () => {
   it.each(Object.values(DitherMode).filter((v) => typeof v === 'number'))(
     'produces valid output for mode %s',
     (mode) => {
-      const image = createTestImage(10, 10, { r: 128, g: 128, b: 128 });
-      const result = ditherImage(image, ColorScheme.BWR, mode as DitherMode);
+      const image = createGradient(10, 10);
+      const result = ditherImage(image, ColorScheme.BWR, { mode: mode as DitherMode });
 
       expect(result.width).toBe(10);
       expect(result.height).toBe(10);
       expect(result.indices.length).toBe(100);
       expect(result.palette.length).toBe(3);
+
+      // Every dithering mode (ordered or error-diffusion) must actually spread
+      // error/thresholds differently than plain per-pixel thresholding (NONE) on
+      // a gradient. This ties the assertion to the specific mode under test, so
+      // a broken kernel for *that* mode fails *that* mode's case, not just some
+      // other test in the suite.
+      if (mode !== DitherMode.NONE) {
+        const baseline = ditherImage(image, ColorScheme.BWR, { mode: DitherMode.NONE });
+        const differsFromBaseline = result.indices.some((v, i) => v !== baseline.indices[i]);
+        expect(differsFromBaseline).toBe(true);
+      }
     }
   );
+
+  it('per-mode outputs are not all identical (guards against the mode option being dropped)', () => {
+    const image = createGradient(10, 10);
+    const outputs = Object.values(DitherMode)
+      .filter((v) => typeof v === 'number')
+      .map((mode) => ditherImage(image, ColorScheme.BWR, { mode: mode as DitherMode }).indices);
+
+    const distinctModePairs = outputs.some((indices, i) =>
+      outputs.slice(i + 1).some((other) => !indices.every((v, idx) => v === other[idx]))
+    );
+    expect(distinctModePairs).toBe(true);
+  });
 
   it.each(Object.values(ColorScheme).filter((v) => typeof v === 'number'))(
     'works with color scheme %s',
@@ -291,6 +314,33 @@ describe('measured palette validation', () => {
     };
     expect(() => ditherImage(image, badPalette, { mode: DitherMode.BURKES })).toThrow(
       /accent color 'crimson' not found/
+    );
+  });
+
+  it('throws instead of silently falling through when a measured palette carries an invalid scheme id', () => {
+    const image = createTestImage(4, 4, { r: 128, g: 128, b: 128 });
+    const badSchemePalette = {
+      colors: {
+        black: { r: 0, g: 0, b: 0 },
+        white: { r: 255, g: 255, b: 255 },
+      },
+      accent: 'black',
+      scheme: 99, // not a valid ColorScheme value (0-8)
+    };
+    expect(() => ditherImage(image, badSchemePalette, { mode: DitherMode.BURKES })).toThrow();
+  });
+});
+
+describe('image buffer validation', () => {
+  it('throws when data.length does not match width * height * 4', () => {
+    const shortImage = {
+      width: 10,
+      height: 10,
+      // Deliberately too short: claims 10x10 but only carries 4x10 worth of RGBA data.
+      data: new Uint8ClampedArray(4 * 10 * 4),
+    };
+    expect(() => ditherImage(shortImage, ColorScheme.BWR, { mode: DitherMode.BURKES })).toThrow(
+      /image data length/
     );
   });
 });
