@@ -18,11 +18,11 @@ _LOGGER = logging.getLogger(__name__)
 def _to_rgb_bytes(image: Image.Image) -> tuple[bytes, int, int]:
     """Convert PIL image to flat RGB bytes. Composites RGBA on white."""
     if image.mode == "RGBA":
-        bg = Image.new("RGB", image.size, (255, 255, 255))
-        bg.paste(image, mask=image.split()[3])
-        img_rgb = bg
-    else:
-        img_rgb = image.convert("RGB")
+        # Composite in Rust rather than with PIL's paste, so Python and JavaScript
+        # share one implementation and cannot drift on semi-transparent pixels.
+        width, height = image.size
+        return _rs.composite_rgba(image.tobytes()), width, height
+    img_rgb = image.convert("RGB")
     width, height = img_rgb.size
     return img_rgb.tobytes(), width, height
 

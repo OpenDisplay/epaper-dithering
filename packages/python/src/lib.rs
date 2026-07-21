@@ -1,5 +1,6 @@
 use epaper_dithering_core::{
     color_space_lab::rgb_to_oklab,
+    composite::composite_rgba_on_white,
     dither, dither_with_canonical, DitherConfig,
     enums::{DitherMode, GamutCompression, ToneCompression},
     measured_palettes::CATALOG,
@@ -10,6 +11,7 @@ use epaper_dithering_core::{
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedBytes;
+use pyo3::types::PyBytes;
 
 fn parse_mode(v: u8) -> PyResult<DitherMode> {
     DitherMode::try_from(v).map_err(|e| PyValueError::new_err(e.to_string()))
@@ -142,6 +144,20 @@ fn dither_image(
     }
 }
 
+/// Composite a flat RGBA buffer onto white, returning flat RGB bytes.
+///
+/// Shares its implementation with the WASM/JavaScript binding so both languages produce
+/// byte-identical output for semi-transparent pixels.
+///
+/// Raises `ValueError` if the buffer length is not a multiple of 4.
+#[pyfunction]
+fn composite_rgba<'py>(py: Python<'py>, rgba: PyBackedBytes) -> PyResult<Bound<'py, PyBytes>> {
+    let rgb = py
+        .detach(|| composite_rgba_on_white(&rgba))
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(PyBytes::new(py, &rgb))
+}
+
 // ── Preprocessing steps (linear-RGB buffers) for tooling/visualization ──────────
 //
 // These expose the pre-dither pipeline stages so scripts can inspect intermediate
@@ -232,6 +248,7 @@ fn measured_palettes() -> Vec<(String, Vec<u8>, Vec<String>, usize, u8)> {
 #[pymodule]
 fn _rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dither_image, m)?)?;
+    m.add_function(wrap_pyfunction!(composite_rgba, m)?)?;
     m.add_function(wrap_pyfunction!(measured_palettes, m)?)?;
     m.add_function(wrap_pyfunction!(tone_compress, m)?)?;
     m.add_function(wrap_pyfunction!(gamut_compress, m)?)?;

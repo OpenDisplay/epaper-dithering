@@ -1,4 +1,5 @@
 use epaper_dithering_core::{
+    composite::composite_rgba_on_white,
     dither, dither_with_canonical, DitherConfig,
     enums::{DitherMode, GamutCompression, ToneCompression},
     measured_palettes::CATALOG,
@@ -105,19 +106,13 @@ pub fn dither_image(
 }
 
 /// Composite an RGBA buffer onto white, returning flat RGB bytes (sRGB).
+///
+/// Thin wrapper over `epaper_dithering_core::composite::composite_rgba_on_white` so that
+/// JavaScript, Python and Rust all flatten alpha identically. Throws if the buffer length
+/// is not a multiple of 4.
 #[wasm_bindgen]
-pub fn composite_rgba(rgba: &[u8]) -> Vec<u8> {
-    let n = rgba.len() / 4;
-    let mut rgb = vec![0u8; n * 3];
-    for i in 0..n {
-        let s = i * 4;
-        let a = rgba[s + 3] as f64 / 255.0;
-        let inv = 1.0 - a;
-        rgb[i * 3]     = (rgba[s]     as f64 * a + 255.0 * inv).round() as u8;
-        rgb[i * 3 + 1] = (rgba[s + 1] as f64 * a + 255.0 * inv).round() as u8;
-        rgb[i * 3 + 2] = (rgba[s + 2] as f64 * a + 255.0 * inv).round() as u8;
-    }
-    rgb
+pub fn composite_rgba(rgba: &[u8]) -> Result<Vec<u8>, JsValue> {
+    composite_rgba_on_white(rgba).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Returns all measured palettes as a JSON string.

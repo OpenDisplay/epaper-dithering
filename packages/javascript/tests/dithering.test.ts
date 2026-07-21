@@ -9,6 +9,8 @@ import {
   SPECTRA_7_3_6COLOR,
 } from '../src';
 import { createTestImage, createGradient, createTransparentTestImage } from './fixtures';
+// Imported after '../src' so that core.ts has already run __wbg_set_wasm.
+import { composite_rgba as compositeRgba } from '../src/wasm-core/epaper_dithering_wasm_bg.js';
 
 describe('Dithering Algorithms', () => {
   it.each(Object.values(DitherMode).filter((v) => typeof v === 'number'))(
@@ -342,5 +344,67 @@ describe('image buffer validation', () => {
     expect(() => ditherImage(shortImage, ColorScheme.BWR, { mode: DitherMode.BURKES })).toThrow(
       /image data length/
     );
+  });
+});
+
+/**
+ * Cross-language contract for RGBA → RGB compositing.
+ *
+ * The same fixed input and the same literal expected bytes are asserted in
+ * `packages/python/tests/test_dithering.py::TestCompositeRgba` and in
+ * `packages/rust/core/src/composite.rs::cross_language_reference_vector`.
+ * The three copies are written independently — none is generated from another —
+ * so a divergence in any binding fails here.
+ */
+describe('RGBA compositing (shared core implementation)', () => {
+  // 12 pixels: mid-gray at alpha 0/1/127/128/254/255, a saturated color at the
+  // same rounding-sensitive alphas, plus two arbitrary mixed pixels.
+  const RGBA = new Uint8Array([
+    128, 128, 128, 0,
+    128, 128, 128, 1,
+    128, 128, 128, 127,
+    128, 128, 128, 128,
+    128, 128, 128, 254,
+    128, 128, 128, 255,
+    0, 64, 200, 1,
+    0, 64, 200, 127,
+    0, 64, 200, 128,
+    0, 64, 200, 254,
+    17, 200, 3, 63,
+    250, 5, 130, 191,
+  ]);
+
+  const EXPECTED_RGB = [
+    255, 255, 255,
+    255, 255, 255,
+    192, 192, 192,
+    191, 191, 191,
+    128, 128, 128,
+    128, 128, 128,
+    254, 254, 255,
+    128, 160, 228,
+    127, 159, 227,
+    1, 65, 200,
+    196, 241, 193,
+    251, 68, 161,
+  ];
+
+  it('produces the exact expected RGB bytes', () => {
+    expect(Array.from(compositeRgba(RGBA))).toEqual(EXPECTED_RGB);
+  });
+
+  it('leaves fully opaque pixels bit-identical to their input', () => {
+    const opaque = new Uint8Array([12, 34, 56, 255, 200, 199, 198, 255]);
+    expect(Array.from(compositeRgba(opaque))).toEqual([12, 34, 56, 200, 199, 198]);
+  });
+
+  it('throws when the buffer length is not a multiple of 4', () => {
+    for (const len of [1, 2, 3, 5, 7]) {
+      expect(() => compositeRgba(new Uint8Array(len))).toThrow(/multiple of 4/);
+    }
+  });
+
+  it('accepts an empty buffer', () => {
+    expect(Array.from(compositeRgba(new Uint8Array(0)))).toEqual([]);
   });
 });
