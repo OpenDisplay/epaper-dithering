@@ -1,0 +1,67 @@
+name: Enum Parity (canonical header)
+
+# Layer 2 of the enum parity gate.
+#
+# Layer 1 (`python3 scripts/check_enum_parity.py`, run inside the rust/python/js
+# test workflows) proves the three in-repo mirrors agree with EACH OTHER. That
+# says nothing about whether they agree with the firmware wire contract.
+#
+# This job closes that hole: it checks out the canonical protocol repo and
+# compares `packages/rust/core/src/palettes.rs` -- which
+# `opendisplay_structs.h` names as its designated `@external` mirror -- against
+# `enum ColorScheme` in that header.
+#
+# Deliberately NOT path-filtered and NOT workflow_dispatch-only: a drift gate
+# that runs only when someone remembers to press the button is the exact
+# failure this was added to fix. Drift can arrive from either side -- a change
+# here, or a change to the canonical header -- so it runs on every push and PR,
+# plus daily to catch upstream-only changes.
+#
+# If this job goes red after an upstream header change, that is the gate
+# working. Mirror the header change here; never "fix" it by editing values to
+# make the check pass.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Daily, 05:17 UTC. Catches header changes landed upstream with no
+    # corresponding commit in this repo.
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  header-parity:
+    name: ColorScheme vs opendisplay_structs.h
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out epaper-dithering
+        uses: actions/checkout@v4
+
+      # davelee98/opendisplay-protocol is public, so this needs no token and
+      # no secret -- which is what lets the job be always-on for PRs from forks.
+      - name: Check out canonical protocol repo
+        uses: actions/checkout@v4
+        with:
+          repository: davelee98/opendisplay-protocol
+          path: .protocol
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Parity script self-test
+        run: python3 scripts/check_enum_parity.py --self-test
+
+      - name: Cross-language parity (layer 1)
+        run: python3 scripts/check_enum_parity.py
+
+      - name: Parity against canonical header (layer 2)
+        run: |
+          python3 scripts/check_enum_parity.py \
+            --header .protocol/src/opendisplay_structs.h

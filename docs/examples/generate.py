@@ -99,8 +99,8 @@ SCHEMES = [
     (ColorScheme.BWRY,       "BWRY"),
     (ColorScheme.BWGBRY,     "BWGBRY (Spectra 6)"),
     (ColorScheme.GRAYSCALE_4, "Grayscale 4"),
-    (ColorScheme.GRAYSCALE_8, "Grayscale 8"),
     (ColorScheme.GRAYSCALE_16,"Grayscale 16"),
+    (ColorScheme.SEVEN_COLOR, "7-color (Spectra/ACeP)"),
 ]
 
 scheme_cells = []

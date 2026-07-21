@@ -1,8 +1,11 @@
 import type { ColorPalette } from './types';
 
 /**
- * E-paper display color schemes
- * Values match firmware conventions (0-7)
+ * E-paper display color schemes.
+ *
+ * Integer values are a firmware wire contract. Canonical source of truth:
+ * `enum ColorScheme` in `opendisplay-protocol/src/opendisplay_structs.h`, which
+ * names `packages/rust/core/src/palettes.rs` as its designated mirror.
  */
 export enum ColorScheme {
   MONO        = 0,
@@ -12,8 +15,15 @@ export enum ColorScheme {
   BWGBRY      = 4,
   GRAYSCALE_4 = 5,
   GRAYSCALE_16 = 6,
-  /** Reserved: 8-level grayscale, pending firmware value assignment. */
-  GRAYSCALE_8 = 7,
+  /**
+   * 7-color Spectra/ACeP. Protocol v2 reassigned value 7 from the former
+   * GRAYSCALE_8 (a mistake — gray8 is not a real panel scheme; removed, not
+   * renumbered). Ink order is BWGBRY plus orange, matching the bb_epaper
+   * logical ink indices.
+   */
+  SEVEN_COLOR = 7,
+  /** Spectra 6 nibbles, left-half plane then right-half plane (dual-CS panels). */
+  BWGBRY_SPLIT = 8,
 }
 
 const PALETTES: Record<ColorScheme, ColorPalette> = {
@@ -69,18 +79,29 @@ const PALETTES: Record<ColorScheme, ColorPalette> = {
     },
     accent: 'black',
   },
-  [ColorScheme.GRAYSCALE_8]: {
+  [ColorScheme.SEVEN_COLOR]: {
     colors: {
-      black: { r: 0,   g: 0,   b: 0   },
-      gray1: { r: 36,  g: 36,  b: 36  },
-      gray2: { r: 73,  g: 73,  b: 73  },
-      gray3: { r: 109, g: 109, b: 109 },
-      gray4: { r: 146, g: 146, b: 146 },
-      gray5: { r: 182, g: 182, b: 182 },
-      gray6: { r: 219, g: 219, b: 219 },
-      white: { r: 255, g: 255, b: 255 },
+      black:  { r: 0,   g: 0,   b: 0   },
+      white:  { r: 255, g: 255, b: 255 },
+      yellow: { r: 255, g: 255, b: 0   },
+      red:    { r: 255, g: 0,   b: 0   },
+      blue:   { r: 0,   g: 0,   b: 255 },
+      green:  { r: 0,   g: 255, b: 0   },
+      orange: { r: 255, g: 128, b: 0   },
     },
-    accent: 'black',
+    accent: 'red',
+  },
+  // Same inks as BWGBRY; only the firmware-side plane packing differs.
+  [ColorScheme.BWGBRY_SPLIT]: {
+    colors: {
+      black:  { r: 0,   g: 0,   b: 0   },
+      white:  { r: 255, g: 255, b: 255 },
+      yellow: { r: 255, g: 255, b: 0   },
+      red:    { r: 255, g: 0,   b: 0   },
+      blue:   { r: 0,   g: 0,   b: 255 },
+      green:  { r: 0,   g: 255, b: 0   },
+    },
+    accent: 'red',
   },
   [ColorScheme.GRAYSCALE_16]: {
     colors: {
@@ -115,9 +136,19 @@ export function getColorCount(scheme: ColorScheme): number {
   return Object.keys(PALETTES[scheme].colors).length;
 }
 
-/** Create ColorScheme from firmware integer value */
+/**
+ * Create ColorScheme from firmware integer value.
+ *
+ * Membership test, not a range check: the enum is not guaranteed to stay a
+ * contiguous 0..N run (protocol v2 already removed a value), so a range check
+ * would accept reserved gaps and reject newly added values.
+ */
+const VALID_SCHEME_VALUES: ReadonlySet<number> = new Set(
+  Object.values(ColorScheme).filter((v): v is ColorScheme => typeof v === 'number'),
+);
+
 export function fromValue(value: number): ColorScheme {
-  if (value < 0 || value > 7) {
+  if (!VALID_SCHEME_VALUES.has(value)) {
     throw new Error(`Invalid color scheme value: ${value}`);
   }
   return value as ColorScheme;

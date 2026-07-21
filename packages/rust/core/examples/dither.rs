@@ -8,7 +8,7 @@
 //   cargo run --example dither photo.jpg out.png spectra stucki auto none
 //   cargo run --example dither photo.jpg out.png spectra stucki 0.8 0.5
 //
-// Schemes: mono, bwr, bwy, bwry, bwgbry, grayscale4, grayscale8, grayscale16
+// Schemes: mono, bwr, bwy, bwry, bwgbry, grayscale4, grayscale16, seven_color, bwgbry_split
 //          spectra, spectra_v2, mono_4_26, bwry_4_2, bwry_3_97, solum_bwr, hanshow_bwr, hanshow_bwy
 // Modes:   none, ordered, floyd_steinberg, burkes, atkinson, stucki, sierra, sierra_lite, jjn
 // Tone:    auto, none, 0.0-1.0  (default: none)
@@ -46,8 +46,9 @@ fn main() {
         "bwry"         => ColorScheme::Bwry.palette(),
         "bwgbry"       => ColorScheme::Bwgbry.palette(),
         "grayscale4"   => ColorScheme::Grayscale4.palette(),
-        "grayscale8"   => ColorScheme::Grayscale8.palette(),
         "grayscale16"  => ColorScheme::Grayscale16.palette(),
+        "seven_color"  => ColorScheme::SevenColor.palette(),
+        "bwgbry_split" => ColorScheme::BwgbrySplit.palette(),
         "spectra"      => &SPECTRA_7_3_6COLOR,
         "spectra_v2"   => &SPECTRA_7_3_6COLOR_V2,
         "mono_4_26"    => &MONO_4_26,

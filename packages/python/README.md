@@ -71,7 +71,8 @@ dither_image(
 - **BWRY** - Black, white, red, yellow (4-color)
 - **BWGBRY** - Black, white, green, blue, red, yellow (6-color Spectra)
 - **GRAYSCALE_4** - 4-level grayscale (2-bit)
-- **GRAYSCALE_8** - 8-level grayscale (3-bit, e.g. Inkplate 10)
+- **SEVEN_COLOR** - 7-color Spectra/ACeP (BWGBRY + orange)
+- **BWGBRY_SPLIT** - Spectra 6, split left/right plane packing (dual-CS panels)
 - **GRAYSCALE_16** - 16-level grayscale (4-bit, e.g. Waveshare 6" HD)
 
 ## Dithering Algorithms

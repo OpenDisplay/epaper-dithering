@@ -143,8 +143,9 @@ enum ColorScheme {
   BWRY         = 3,  // Black, White, Red, Yellow (4 colors)
   BWGBRY       = 4,  // Black, White, Green, Blue, Red, Yellow (6 colors)
   GRAYSCALE_4  = 5,  // 4-level grayscale
-  GRAYSCALE_8  = 6,  // 8-level grayscale
-  GRAYSCALE_16 = 7,  // 16-level grayscale
+  GRAYSCALE_16 = 6,  // 16-level grayscale
+  SEVEN_COLOR  = 7,  // Spectra/ACeP 7-color (BWGBRY + orange)
+  BWGBRY_SPLIT = 8,  // Spectra 6, split left/right plane packing
 }
 ```
 

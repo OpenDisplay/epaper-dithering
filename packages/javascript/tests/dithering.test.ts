@@ -195,8 +195,9 @@ describe('ColorScheme', () => {
     expect(getColorCount(ColorScheme.BWRY)).toBe(4);
     expect(getColorCount(ColorScheme.BWGBRY)).toBe(6);
     expect(getColorCount(ColorScheme.GRAYSCALE_4)).toBe(4);
-    expect(getColorCount(ColorScheme.GRAYSCALE_8)).toBe(8);
     expect(getColorCount(ColorScheme.GRAYSCALE_16)).toBe(16);
+    expect(getColorCount(ColorScheme.SEVEN_COLOR)).toBe(7);
+    expect(getColorCount(ColorScheme.BWGBRY_SPLIT)).toBe(6);
   });
 
   it('fromValue works correctly for all schemes', () => {
@@ -204,11 +205,12 @@ describe('ColorScheme', () => {
     expect(fromValue(1)).toBe(ColorScheme.BWR);
     expect(fromValue(5)).toBe(ColorScheme.GRAYSCALE_4);
     expect(fromValue(6)).toBe(ColorScheme.GRAYSCALE_16);
-    expect(fromValue(7)).toBe(ColorScheme.GRAYSCALE_8);
+    expect(fromValue(7)).toBe(ColorScheme.SEVEN_COLOR);
+    expect(fromValue(8)).toBe(ColorScheme.BWGBRY_SPLIT);
   });
 
-  it('fromValue throws for out-of-range values', () => {
-    expect(() => fromValue(8)).toThrow();
+  it('fromValue throws for values that are not enum members', () => {
+    expect(() => fromValue(9)).toThrow();
     expect(() => fromValue(99)).toThrow();
     expect(() => fromValue(-1)).toThrow();
   });
@@ -234,8 +236,9 @@ describe('ColorScheme', () => {
     expect(getPalette(ColorScheme.BWRY).accent).toBe('red');
     expect(getPalette(ColorScheme.BWGBRY).accent).toBe('red');
     expect(getPalette(ColorScheme.GRAYSCALE_4).accent).toBe('black');
-    expect(getPalette(ColorScheme.GRAYSCALE_8).accent).toBe('black');
     expect(getPalette(ColorScheme.GRAYSCALE_16).accent).toBe('black');
+    expect(getPalette(ColorScheme.SEVEN_COLOR).accent).toBe('red');
+    expect(getPalette(ColorScheme.BWGBRY_SPLIT).accent).toBe('red');
   });
 });
 

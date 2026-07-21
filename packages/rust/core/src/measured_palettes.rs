@@ -5,6 +5,10 @@
 //! quality on known hardware.
 //!
 //! Color order within each palette matches the Python package (firmware contract).
+//! That invariant is enforced by `measured_palettes_follow_canonical_color_order`
+//! below: every CATALOG entry's `color_names` must equal
+//! `ColorScheme::color_names()` for its scheme, so a reordered entry cannot
+//! silently swap inks on the wire.
 
 use std::borrow::Cow;
 
@@ -170,3 +174,37 @@ pub static HANSHOW_BWY: Palette = Palette {
     ]),
     accent_idx: 2,
 };
+
+// ── Invariants ────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Measured palettes must list their colors in their scheme's canonical
+    /// index order. Index order is a wire contract with the downstream packers:
+    /// a reordered CATALOG entry would silently swap inks on real hardware.
+    #[test]
+    fn measured_palettes_follow_canonical_color_order() {
+        for entry in CATALOG {
+            assert_eq!(
+                entry.color_names,
+                entry.scheme.color_names(),
+                "{}: color_names must match the canonical order of {:?}",
+                entry.id,
+                entry.scheme
+            );
+            assert_eq!(
+                entry.palette.colors.len(),
+                entry.color_names.len(),
+                "{}: palette length must match color_names length",
+                entry.id
+            );
+            assert!(
+                entry.palette.accent_idx < entry.color_names.len(),
+                "{}: accent_idx out of range",
+                entry.id
+            );
+        }
+    }
+}
