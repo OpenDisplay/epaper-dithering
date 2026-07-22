@@ -24,7 +24,7 @@ pip install epaper-dithering
 
 - **Rust Core**: All dithering runs in a compiled Rust extension — fast enough for 800×480 images in ~30ms
 - **Perceptually Correct**: Weighted Cartesian OKLab color matching — preserves hue without the achromatic-attractor bug that plagues LCH-weighted approaches
-- **9 Dithering Algorithms**: From simple ordered dithering to high-quality Jarvis-Judice-Ninke
+- **10 Dithering Algorithms**: From simple ordered dithering to high-quality Jarvis-Judice-Ninke
 - **8 Color Schemes**: Support for mono, 3-color, 4-color, 6-color, and grayscale e-paper displays
 - **Pre-dither Adjustments**: Per-image exposure, saturation, shadows, highlights, dynamic-range compression, and gamut compression — all orthogonal knobs you can mix freely
 - **Serpentine Scanning**: Reduces directional artifacts in error diffusion (enabled by default)
@@ -88,6 +88,7 @@ dither_image(
 | ATKINSON | Good | Medium | High contrast, artistic |
 | STUCKI | Very High | Slow | Maximum quality |
 | JARVIS_JUDICE_NINKE | Highest | Slowest | Smooth gradients |
+| DIZZY | Good | Medium | Error diffusion with pseudo-random traversal — no directional structure. Ignores `serpentine` |
 
 ## Usage Examples
 

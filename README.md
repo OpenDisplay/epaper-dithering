@@ -74,7 +74,7 @@ See [`packages/javascript/README.md`](packages/javascript/README.md) for full do
 ## Features
 
 - **Rust Core**: All dithering logic in `packages/rust/core/` — shared by both packages
-- **9 Dithering Algorithms**: NONE, ORDERED, BURKES, FLOYD_STEINBERG, ATKINSON, STUCKI, SIERRA, SIERRA_LITE, JARVIS_JUDICE_NINKE
+- **10 Dithering Algorithms**: NONE, ORDERED, BURKES, FLOYD_STEINBERG, ATKINSON, STUCKI, SIERRA, SIERRA_LITE, JARVIS_JUDICE_NINKE, DIZZY
 - **9 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE_4, GRAYSCALE_16, SEVEN_COLOR (Spectra/ACeP 7), BWGBRY_SPLIT
 - **Measured Palettes**: Calibrated RGB values for real displays, linked to their canonical firmware palette
 - **OKLab Color Matching**: Weighted Cartesian OKLab — preserves hue without the achromatic-attractor bug of LCH-weighted approaches
