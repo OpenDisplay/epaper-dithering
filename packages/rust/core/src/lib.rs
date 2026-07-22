@@ -4,6 +4,7 @@ pub mod color_space_lab;
 pub mod composite;
 pub mod enums;
 pub mod error;
+pub mod kernels;
 pub mod measured_palettes;
 pub mod palettes;
 pub mod tone_map;
