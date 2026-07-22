@@ -1,0 +1,43 @@
+name: iOS Wrapper Tests
+
+# The `ios` crate is workspace-excluded (so it never breaks the Linux `cargo test --workspace`
+# in rust-test.yml), so it needs its own job. These tests build the C-ABI FFI for the HOST
+# target and exercise it — no Xcode and no Apple iOS targets required. The actual XCFramework
+# build (build-xcframework.sh) is macOS/Xcode-only and is not run in CI.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/rust/ios/**'
+      - 'packages/rust/core/**'
+      - '.github/workflows/ios-test.yml'
+  pull_request:
+    paths:
+      - 'packages/rust/ios/**'
+      - 'packages/rust/core/**'
+      - '.github/workflows/ios-test.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: packages/rust/ios
+
+jobs:
+  test:
+    name: Test (host FFI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/rust/ios
+
+      - name: Test
+        run: cargo test
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings

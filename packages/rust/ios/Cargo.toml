@@ -1,0 +1,24 @@
+[package]
+name = "epaper-dithering-ios"
+version = "0.1.0"
+edition = "2024"
+description = "C-ABI FFI wrapper around epaper-dithering-core for iOS/Swift (dithering only; matching + error diffusion)"
+license = "MIT"
+repository = "https://github.com/OpenDisplay-org/epaper-dithering"
+publish = false
+
+[lib]
+# staticlib → a `.a` we bundle into an XCFramework and link into the iOS app.
+# cdylib is also emitted so the crate can be smoke-tested as a shared object on the host.
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+epaper-dithering-core = { path = "../core" }
+
+# The XCFramework is vendored into the app repo (git), so keep the static archives lean:
+# strip DWARF debug info (globals like ed_dither are retained for linking) and LTO the core in.
+# panic = "unwind" is REQUIRED — the FFI relies on catch_unwind, so do not set panic = "abort".
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "debuginfo"

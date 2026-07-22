@@ -1,0 +1,6 @@
+# Build artifacts — the XCFramework is produced by build-xcframework.sh and vendored into
+# the consuming app repo, not committed here.
+/target
+/.build
+/EpaperDithering.xcframework
+Cargo.lock

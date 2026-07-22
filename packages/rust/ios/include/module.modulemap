@@ -1,0 +1,6 @@
+// Lets Swift `import EpaperDithering` and see the C declarations as a clean module,
+// rather than requiring a bridging header. Bundled into the XCFramework's Headers dir.
+module EpaperDithering {
+    header "epaper_dithering.h"
+    export *
+}

@@ -1,4 +1,7 @@
 [workspace]
 members = ["core"]
-exclude = ["wasm"]
+# `wasm` and `ios` are excluded so `cargo build` at the workspace root (and Linux CI) never
+# tries to cross-compile them, and so the Python sdist's cargo vendoring stays intact
+# (issue #40). Each is built independently by its own tooling.
+exclude = ["wasm", "ios"]
 resolver = "2"
