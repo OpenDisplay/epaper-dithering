@@ -288,6 +288,101 @@ describe('ColorScheme', () => {
     expect(getPalette(ColorScheme.SEVEN_COLOR).accent).toBe('red');
     expect(getPalette(ColorScheme.BWGBRY_SPLIT).accent).toBe('red');
   });
+
+  // Key order AND literal RGB values for every scheme, written out by hand rather than
+  // derived from the code under test — so this cannot pass just because the source agrees
+  // with itself. Object key order IS the palette index: the WASM core computes indices from
+  // Rust's PALETTE_* statics while `PaletteImageBuffer.palette` returns these colors, so a
+  // reorder or an RGB typo here ships the wrong ink at the right index. Every other palette
+  // assertion in this file checks only counts, accents, or 0<=c<=255 ranges and would miss it.
+  const EXPECTED_PALETTES: [ColorScheme, [string, number, number, number][]][] = [
+    [ColorScheme.MONO, [
+      ['black', 0, 0, 0],
+      ['white', 255, 255, 255],
+    ]],
+    [ColorScheme.BWR, [
+      ['black', 0, 0, 0],
+      ['white', 255, 255, 255],
+      ['red', 255, 0, 0],
+    ]],
+    [ColorScheme.BWY, [
+      ['black', 0, 0, 0],
+      ['white', 255, 255, 255],
+      ['yellow', 255, 255, 0],
+    ]],
+    // black, white, YELLOW, red — matches firmware BBEP_YELLOW=2, BBEP_RED=3.
+    [ColorScheme.BWRY, [
+      ['black', 0, 0, 0],
+      ['white', 255, 255, 255],
+      ['yellow', 255, 255, 0],
+      ['red', 255, 0, 0],
+    ]],
+    [ColorScheme.BWGBRY, [
+      ['black', 0, 0, 0],
+      ['white', 255, 255, 255],
+      ['yellow', 255, 255, 0],
+      ['red', 255, 0, 0],
+      ['blue', 0, 0, 255],
+      ['green', 0, 255, 0],
+    ]],
+    [ColorScheme.GRAYSCALE_4, [
+      ['black', 0, 0, 0],
+      ['gray1', 85, 85, 85],
+      ['gray2', 170, 170, 170],
+      ['white', 255, 255, 255],
+    ]],
+    [ColorScheme.GRAYSCALE_16, [
+      ['black', 0, 0, 0],
+      ['gray1', 17, 17, 17],
+      ['gray2', 34, 34, 34],
+      ['gray3', 51, 51, 51],
+      ['gray4', 68, 68, 68],
+      ['gray5', 85, 85, 85],
+      ['gray6', 102, 102, 102],
+      ['gray7', 119, 119, 119],
+      ['gray8', 136, 136, 136],
+      ['gray9', 153, 153, 153],
+      ['gray10', 170, 170, 170],
+      ['gray11', 187, 187, 187],
+      ['gray12', 204, 204, 204],
+      ['gray13', 221, 221, 221],
+      ['gray14', 238, 238, 238],
+      ['white', 255, 255, 255],
+    ]],
+    [ColorScheme.SEVEN_COLOR, [
+      ['black', 0, 0, 0],
+      ['white', 255, 255, 255],
+      ['yellow', 255, 255, 0],
+      ['red', 255, 0, 0],
+      ['blue', 0, 0, 255],
+      ['green', 0, 255, 0],
+      ['orange', 255, 128, 0],
+    ]],
+    [ColorScheme.BWGBRY_SPLIT, [
+      ['black', 0, 0, 0],
+      ['white', 255, 255, 255],
+      ['yellow', 255, 255, 0],
+      ['red', 255, 0, 0],
+      ['blue', 0, 0, 255],
+      ['green', 0, 255, 0],
+    ]],
+  ];
+
+  it.each(EXPECTED_PALETTES)('scheme %s has exact palette key order and RGB values', (scheme, expected) => {
+    const actual = Object.entries(getPalette(scheme).colors).map(
+      ([name, c]) => [name, c.r, c.g, c.b],
+    );
+    expect(actual).toEqual(expected);
+  });
+
+  it('pins every scheme in EXPECTED_PALETTES', () => {
+    // Guards the table above against a newly added scheme slipping past it untested.
+    const covered = EXPECTED_PALETTES.map(([scheme]) => scheme).sort((a, b) => a - b);
+    const all = Object.values(ColorScheme)
+      .filter((v): v is ColorScheme => typeof v === 'number')
+      .sort((a, b) => a - b);
+    expect(covered).toEqual(all);
+  });
 });
 
 describe('DitherMode', () => {

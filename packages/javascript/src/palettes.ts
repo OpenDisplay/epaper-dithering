@@ -1,4 +1,5 @@
 import type { ColorPalette } from './types';
+import { SCHEME_PALETTES } from './palettes.generated';
 
 /**
  * E-paper display color schemes.
@@ -26,105 +27,20 @@ export enum ColorScheme {
   BWGBRY_SPLIT = 8,
 }
 
-const PALETTES: Record<ColorScheme, ColorPalette> = {
-  [ColorScheme.MONO]: {
-    colors: {
-      black: { r: 0, g: 0, b: 0 },
-      white: { r: 255, g: 255, b: 255 },
-    },
-    accent: 'black',
-  },
-  [ColorScheme.BWR]: {
-    colors: {
-      black: { r: 0, g: 0, b: 0 },
-      white: { r: 255, g: 255, b: 255 },
-      red: { r: 255, g: 0, b: 0 },
-    },
-    accent: 'red',
-  },
-  [ColorScheme.BWY]: {
-    colors: {
-      black: { r: 0, g: 0, b: 0 },
-      white: { r: 255, g: 255, b: 255 },
-      yellow: { r: 255, g: 255, b: 0 },
-    },
-    accent: 'yellow',
-  },
-  [ColorScheme.BWRY]: {
-    colors: {
-      black: { r: 0, g: 0, b: 0 },
-      white: { r: 255, g: 255, b: 255 },
-      yellow: { r: 255, g: 255, b: 0 },
-      red: { r: 255, g: 0, b: 0 },
-    },
-    accent: 'red',
-  },
-  [ColorScheme.BWGBRY]: {
-    colors: {
-      black: { r: 0, g: 0, b: 0 },
-      white: { r: 255, g: 255, b: 255 },
-      yellow: { r: 255, g: 255, b: 0 },
-      red: { r: 255, g: 0, b: 0 },
-      blue: { r: 0, g: 0, b: 255 },
-      green: { r: 0, g: 255, b: 0 },
-    },
-    accent: 'red',
-  },
-  [ColorScheme.GRAYSCALE_4]: {
-    colors: {
-      black: { r: 0, g: 0, b: 0 },
-      gray1: { r: 85, g: 85, b: 85 },
-      gray2: { r: 170, g: 170, b: 170 },
-      white: { r: 255, g: 255, b: 255 },
-    },
-    accent: 'black',
-  },
-  [ColorScheme.SEVEN_COLOR]: {
-    colors: {
-      black:  { r: 0,   g: 0,   b: 0   },
-      white:  { r: 255, g: 255, b: 255 },
-      yellow: { r: 255, g: 255, b: 0   },
-      red:    { r: 255, g: 0,   b: 0   },
-      blue:   { r: 0,   g: 0,   b: 255 },
-      green:  { r: 0,   g: 255, b: 0   },
-      orange: { r: 255, g: 128, b: 0   },
-    },
-    accent: 'red',
-  },
-  // Same inks as BWGBRY; only the firmware-side plane packing differs.
-  [ColorScheme.BWGBRY_SPLIT]: {
-    colors: {
-      black:  { r: 0,   g: 0,   b: 0   },
-      white:  { r: 255, g: 255, b: 255 },
-      yellow: { r: 255, g: 255, b: 0   },
-      red:    { r: 255, g: 0,   b: 0   },
-      blue:   { r: 0,   g: 0,   b: 255 },
-      green:  { r: 0,   g: 255, b: 0   },
-    },
-    accent: 'red',
-  },
-  [ColorScheme.GRAYSCALE_16]: {
-    colors: {
-      black:  { r: 0,   g: 0,   b: 0   },
-      gray1:  { r: 17,  g: 17,  b: 17  },
-      gray2:  { r: 34,  g: 34,  b: 34  },
-      gray3:  { r: 51,  g: 51,  b: 51  },
-      gray4:  { r: 68,  g: 68,  b: 68  },
-      gray5:  { r: 85,  g: 85,  b: 85  },
-      gray6:  { r: 102, g: 102, b: 102 },
-      gray7:  { r: 119, g: 119, b: 119 },
-      gray8:  { r: 136, g: 136, b: 136 },
-      gray9:  { r: 153, g: 153, b: 153 },
-      gray10: { r: 170, g: 170, b: 170 },
-      gray11: { r: 187, g: 187, b: 187 },
-      gray12: { r: 204, g: 204, b: 204 },
-      gray13: { r: 221, g: 221, b: 221 },
-      gray14: { r: 238, g: 238, b: 238 },
-      white:  { r: 255, g: 255, b: 255 },
-    },
-    accent: 'black',
-  },
-};
+/**
+ * Idealized (pure sRGB) palette for every ColorScheme, keyed by firmware wire value.
+ *
+ * NOT hand-written. Generated from Rust's `PALETTE_*` statics + `ColorScheme::color_names()`
+ * by `packages/rust/core/examples/gen_ts_palettes.rs`, whose `--check` mode gates CI.
+ * This matters because `ditherImage()` gets palette *indices* from the WASM core (computed
+ * against those Rust statics) but returns the *colors* from this table: if the two ever
+ * disagreed, a consumer would render or encode the wrong ink at the right index, and every
+ * count-, length- and accent-based assertion would still pass.
+ *
+ * The generated record is typed `Record<number, ColorPalette>` (it cannot import the
+ * `ColorScheme` enum without creating a circular ES module), so it is narrowed here.
+ */
+const PALETTES = SCHEME_PALETTES as Record<ColorScheme, ColorPalette>;
 
 /** Get color palette for a color scheme */
 export function getPalette(scheme: ColorScheme): ColorPalette {

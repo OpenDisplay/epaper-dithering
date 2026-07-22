@@ -1,6 +1,10 @@
 use std::fmt;
 
-/// Errors that can occur during dithering operations.
+/// Errors from converting an untrusted integer discriminant into a core enum.
+///
+/// NOT the crate-wide error type: other modules define their own where the failure is a
+/// different category (e.g. `composite::InvalidRgbaLength`, a typed struct that carries the
+/// offending `len`). Deliberately kept separate rather than collapsed into one enum.
 #[derive(Debug, PartialEq)]
 pub enum DitherError {
     UnknownColorScheme(u8),

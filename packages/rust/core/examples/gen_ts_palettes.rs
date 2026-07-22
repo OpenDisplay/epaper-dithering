@@ -1,4 +1,6 @@
-//! Generate `packages/javascript/src/palettes.generated.ts` from `measured_palettes::CATALOG`.
+//! Generate `packages/javascript/src/palettes.generated.ts` from the Rust palette data:
+//! the idealized per-scheme palettes (`ColorScheme::palette()` + `ColorScheme::color_names()`)
+//! and the measured display palettes (`measured_palettes::CATALOG`).
 //!
 //! `packages/javascript/src/palettes.ts` used to hand-duplicate the RGB values for every
 //! measured display palette, with a comment admitting they had to be "kept in sync manually"
@@ -8,15 +10,24 @@
 //! the equivalent module at *build* time instead, mirroring the generator + `--check` idiom
 //! used by `opendisplay-protocol/tools/gen_js_structs.py`.
 //!
-//! DETERMINISM: `CATALOG` is a fixed `&'static [MeasuredPaletteEntry]` (array order, not a
-//! hash map), and every field rendered below comes straight from it -- no timestamps, no
-//! absolute paths, no iteration-order hazards. Same `CATALOG` in, byte-identical file out.
+//! The same argument applies to the *idealized* palettes: `PALETTES` in `palettes.ts` used to
+//! be hand-written, and nothing tied it to Rust's `PALETTE_*` statics even though the WASM
+//! core computes palette *indices* from those statics while `PaletteImageBuffer.palette`
+//! returned the TypeScript *colors*. Swapping two entries there shipped wrong inks while
+//! every existing gate (vitest, `check_enum_parity.py`, this generator's `--check`) passed.
+//! It is generated here too, so `--check` covers both.
 //!
-//! KEY ORDER: each palette's `colors` object is emitted in `CATALOG` entry's `color_names`
-//! order, which is asserted (by `measured_palettes_follow_canonical_color_order` in
-//! `measured_palettes.rs`) to match the scheme's canonical firmware order. That order is a
-//! wire contract -- object key order becomes palette index -- so it is preserved verbatim,
-//! never resorted.
+//! DETERMINISM: `SCHEMES` below is a fixed array in enum-discriminant order and `CATALOG` is a
+//! fixed `&'static [MeasuredPaletteEntry]` (array order, not a hash map); every field rendered
+//! below comes straight from them -- no timestamps, no absolute paths, no iteration-order
+//! hazards. Same inputs in, byte-identical file out.
+//!
+//! KEY ORDER: each measured palette's `colors` object is emitted in the `CATALOG` entry's
+//! `color_names` order, which is asserted (by `measured_palettes_follow_canonical_color_order`
+//! in `measured_palettes.rs`) to match the scheme's canonical firmware order; each idealized
+//! palette's is emitted in `ColorScheme::color_names()` order, which *is* that canonical order.
+//! That order is a wire contract -- object key order becomes palette index -- so it is
+//! preserved verbatim, never resorted.
 //!
 //! Usage:
 //!   cargo run --example gen_ts_palettes -- --write    (default; (re)generate and write)
@@ -32,6 +43,23 @@ use std::process::ExitCode;
 
 const REGEN_CMD: &str =
     "cargo run --manifest-path packages/rust/core/Cargo.toml --example gen_ts_palettes -- --write";
+
+/// Every `ColorScheme` variant, in enum-discriminant order. Written out explicitly (rather
+/// than derived) so the emitted key order is a deliberate, reviewable artifact rather than a
+/// side effect of iteration. `assert_schemes_complete` below is the coverage gate: a variant
+/// added to the enum but forgotten here aborts generation instead of silently vanishing from
+/// the generated `PALETTES`.
+const SCHEMES: &[ColorScheme] = &[
+    ColorScheme::Mono,
+    ColorScheme::Bwr,
+    ColorScheme::Bwy,
+    ColorScheme::Bwry,
+    ColorScheme::Bwgbry,
+    ColorScheme::Grayscale4,
+    ColorScheme::Grayscale16,
+    ColorScheme::SevenColor,
+    ColorScheme::BwgbrySplit,
+];
 
 /// Map a Rust `ColorScheme` variant to the matching member name of the TypeScript
 /// `ColorScheme` enum in `packages/javascript/src/palettes.ts`. Written as an explicit
@@ -52,11 +80,36 @@ fn ts_scheme_member(scheme: ColorScheme) -> &'static str {
     }
 }
 
+/// Panic if `SCHEMES` has drifted from the set of valid `ColorScheme` discriminants.
+///
+/// `ColorScheme::try_from(u8)` is the enum's own membership oracle, so sweeping the whole
+/// `u8` range finds any variant `SCHEMES` forgot (and any stale entry) without needing a
+/// derive macro or an external variant count.
+fn assert_schemes_complete() {
+    let valid: Vec<ColorScheme> = (0u8..=255).filter_map(|v| ColorScheme::try_from(v).ok()).collect();
+    assert_eq!(
+        valid.len(),
+        SCHEMES.len(),
+        "SCHEMES is out of sync with ColorScheme: {} valid discriminants, {} listed",
+        valid.len(),
+        SCHEMES.len()
+    );
+    for scheme in &valid {
+        assert!(
+            SCHEMES.contains(scheme),
+            "{scheme:?} is a valid ColorScheme but missing from SCHEMES in gen_ts_palettes.rs"
+        );
+    }
+}
+
 fn render() -> String {
+    assert_schemes_complete();
+
     let mut out = String::new();
 
     out.push_str("// @generated by packages/rust/core/examples/gen_ts_palettes.rs -- DO NOT EDIT BY HAND.\n");
-    out.push_str("// Source of truth: packages/rust/core/src/measured_palettes.rs (CATALOG)\n");
+    out.push_str("// Sources of truth: packages/rust/core/src/palettes.rs (ColorScheme::palette /\n");
+    out.push_str("// ColorScheme::color_names) and packages/rust/core/src/measured_palettes.rs (CATALOG)\n");
     out.push_str(&format!("// Regenerate: {REGEN_CMD}\n"));
     out.push_str(
         "// Drift check (CI): cargo run --manifest-path packages/rust/core/Cargo.toml --example gen_ts_palettes -- --check\n",
@@ -73,8 +126,36 @@ fn render() -> String {
     out.push_str("// importing back from palettes.ts here would create a circular ES module and risk a\n");
     out.push_str("// temporal-dead-zone error. The `ColorPalette.scheme` field's declared type is a plain\n");
     out.push_str("// `number` for the same reason; each literal is commented with its enum name.\n");
+    out.push_str("//\n");
+    out.push_str("// SCHEME_PALETTES holds the idealized (pure sRGB) palette for every ColorScheme,\n");
+    out.push_str("// mirrored from the PALETTE_* statics in palettes.rs. The WASM core computes palette\n");
+    out.push_str("// *indices* from those statics while ditherImage() returns these *colors*, so the two\n");
+    out.push_str("// must agree entry-for-entry; generating them from one source is what makes that\n");
+    out.push_str("// guaranteed rather than hoped for. Its keys are plain numeric literals for the same\n");
+    out.push_str("// no-circular-import reason as `scheme` above.\n");
     out.push('\n');
     out.push_str("import type { ColorPalette } from './types';\n\n");
+
+    out.push_str("export const SCHEME_PALETTES: Record<number, ColorPalette> = {\n");
+    for &scheme in SCHEMES {
+        let member = ts_scheme_member(scheme);
+        let value = u8::from(scheme);
+        let palette = scheme.palette();
+        let names = scheme.color_names();
+
+        out.push_str(&format!("  {value}: {{ // ColorScheme.{member}\n"));
+        out.push_str("    colors: {\n");
+        for (name, rgb) in names.iter().zip(palette.colors.iter()) {
+            out.push_str(&format!(
+                "      {name}: {{ r: {}, g: {}, b: {} }},\n",
+                rgb[0], rgb[1], rgb[2]
+            ));
+        }
+        out.push_str("    },\n");
+        out.push_str(&format!("    accent: '{}',\n", names[palette.accent_idx]));
+        out.push_str("  },\n");
+    }
+    out.push_str("};\n\n");
 
     for entry in CATALOG {
         let scheme_member = ts_scheme_member(entry.scheme);
@@ -112,7 +193,7 @@ fn output_path() -> PathBuf {
 /// Print a minimal line-oriented diff (first divergence + counts) so `--check` failures
 /// are actionable without pulling in a diff crate.
 fn report_drift(path: &Path, existing: &str, generated: &str) {
-    eprintln!("DRIFT: {} does not match `CATALOG` output.", path.display());
+    eprintln!("DRIFT: {} does not match generated output.", path.display());
     let existing_lines: Vec<&str> = existing.lines().collect();
     let generated_lines: Vec<&str> = generated.lines().collect();
     let first_diff = existing_lines
@@ -151,7 +232,12 @@ fn main() -> ExitCode {
         }
         "--check" => match fs::read_to_string(&path) {
             Ok(existing) if existing == generated => {
-                println!("OK: {} matches CATALOG ({} palettes)", path.display(), CATALOG.len());
+                println!(
+                    "OK: {} matches Rust palette data ({} schemes, {} measured palettes)",
+                    path.display(),
+                    SCHEMES.len(),
+                    CATALOG.len()
+                );
                 ExitCode::SUCCESS
             }
             Ok(existing) => {
@@ -166,7 +252,12 @@ fn main() -> ExitCode {
         },
         "--write" => match fs::write(&path, &generated) {
             Ok(()) => {
-                println!("wrote {} ({} palettes)", path.display(), CATALOG.len());
+                println!(
+                    "wrote {} ({} schemes, {} measured palettes)",
+                    path.display(),
+                    SCHEMES.len(),
+                    CATALOG.len()
+                );
                 ExitCode::SUCCESS
             }
             Err(err) => {
