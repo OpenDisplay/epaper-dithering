@@ -41,7 +41,7 @@ jobs:
         with:
           workspaces: packages/rust
 
-      - name: Measured-palette codegen drift check
+      - name: Palette codegen drift check (idealized + measured)
         working-directory: packages/rust
         run: cargo run --example gen_ts_palettes -- --check
 
