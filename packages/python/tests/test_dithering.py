@@ -540,3 +540,20 @@ class TestCompositeRgba:
         legacy_bg.paste(image, mask=image.split()[3])
 
         assert _rs.composite_rgba(image.tobytes()) == legacy_bg.tobytes()
+
+
+class TestDizzy:
+    """Dizzy dithering (DitherMode 9) must match the Rust reference byte for byte."""
+
+    def test_cross_language_reference_vector(self):
+        img = Image.new("RGB", (4, 4))
+        img.putdata([(x * 60 + y * 5,) * 3 for y in range(4) for x in range(4)])
+        out = dither_image(img, ColorScheme.BWR, mode=DitherMode.DIZZY)
+        # Frozen literals, identical to the Rust and JavaScript suites.
+        assert list(out.getdata()) == [0, 0, 1, 0, 0, 2, 2, 1, 0, 1, 1, 1, 0, 0, 2, 1]
+
+    def test_is_deterministic(self):
+        img = Image.new("RGB", (16, 16), (128, 128, 128))
+        a = dither_image(img, ColorScheme.BWR, mode=DitherMode.DIZZY)
+        b = dither_image(img, ColorScheme.BWR, mode=DitherMode.DIZZY)
+        assert list(a.getdata()) == list(b.getdata())

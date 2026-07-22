@@ -503,3 +503,29 @@ describe('RGBA compositing (shared core implementation)', () => {
     expect(Array.from(compositeRgba(new Uint8Array(0)))).toEqual([]);
   });
 });
+
+describe('Dizzy dithering', () => {
+  const rampImage = () => {
+    const data = new Uint8ClampedArray(4 * 4 * 4);
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const v = x * 60 + y * 5;
+        const o = (y * 4 + x) * 4;
+        data[o] = v; data[o + 1] = v; data[o + 2] = v; data[o + 3] = 255;
+      }
+    }
+    return { data, width: 4, height: 4 };
+  };
+
+  it('matches the Rust reference vector byte for byte', () => {
+    const result = ditherImage(rampImage(), ColorScheme.BWR, { mode: DitherMode.DIZZY });
+    // Frozen literals, identical to the Rust and Python suites.
+    expect(Array.from(result.indices)).toEqual([0, 0, 1, 0, 0, 2, 2, 1, 0, 1, 1, 1, 0, 0, 2, 1]);
+  });
+
+  it('is deterministic', () => {
+    const a = ditherImage(rampImage(), ColorScheme.BWR, { mode: DitherMode.DIZZY });
+    const b = ditherImage(rampImage(), ColorScheme.BWR, { mode: DitherMode.DIZZY });
+    expect(Array.from(a.indices)).toEqual(Array.from(b.indices));
+  });
+});

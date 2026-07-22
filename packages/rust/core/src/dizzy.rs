@@ -287,4 +287,20 @@ mod tests {
         let identity: Vec<usize> = (0..256).collect();
         assert_ne!(order, identity, "walk degenerated into raster order");
     }
+
+    #[test]
+    fn cross_language_reference_vector() {
+        // 4x4 horizontal ramp, BWR palette, dizzy. These literals are frozen and
+        // mirrored verbatim in the Python and JavaScript suites; if any surface
+        // drifts, exactly one of the three tests fails.
+        let mut img = Vec::new();
+        for y in 0..4u8 {
+            for x in 0..4u8 {
+                let v = x * 60 + y * 5;
+                img.extend_from_slice(&[v, v, v]);
+            }
+        }
+        let out = dizzy_dither(&img, 4, 4, ColorScheme::Bwr.palette());
+        assert_eq!(out, vec![0, 0, 1, 0, 0, 2, 2, 1, 0, 1, 1, 1, 0, 0, 2, 1]);
+    }
 }
