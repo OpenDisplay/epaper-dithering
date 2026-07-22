@@ -25,7 +25,7 @@ pip install epaper-dithering
 - **Rust Core**: All dithering runs in a compiled Rust extension — fast enough for 800×480 images in ~30ms
 - **Perceptually Correct**: Weighted Cartesian OKLab color matching — preserves hue without the achromatic-attractor bug that plagues LCH-weighted approaches
 - **10 Dithering Algorithms**: From simple ordered dithering to high-quality Jarvis-Judice-Ninke
-- **8 Color Schemes**: Support for mono, 3-color, 4-color, 6-color, and grayscale e-paper displays
+- **10 Color Schemes**: Support for mono, 3-color, 4-color, 6-color, 7-color, and grayscale e-paper displays
 - **Pre-dither Adjustments**: Per-image exposure, saturation, shadows, highlights, dynamic-range compression, and gamut compression — all orthogonal knobs you can mix freely
 - **Serpentine Scanning**: Reduces directional artifacts in error diffusion (enabled by default)
 - **RGBA Support**: Automatic compositing on white background for transparent images
@@ -74,6 +74,7 @@ dither_image(
 - **SEVEN_COLOR** - 7-color Spectra/ACeP (BWGBRY + orange)
 - **BWGBRY_SPLIT** - Spectra 6, split left/right plane packing (dual-CS panels)
 - **GRAYSCALE_16** - 16-level grayscale (4-bit, e.g. Waveshare 6" HD)
+- **GRAYSCALE_8** - 8-level grayscale (3-bit, e.g. Inkplate 10). Library-local value 9 — NOT a firmware wire value; never send it to a device as `color_scheme`.
 
 ## Dithering Algorithms
 

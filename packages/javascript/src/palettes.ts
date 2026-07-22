@@ -18,13 +18,23 @@ export enum ColorScheme {
   GRAYSCALE_16 = 6,
   /**
    * 7-color Spectra/ACeP. Protocol v2 reassigned value 7 from the former
-   * GRAYSCALE_8 (a mistake — gray8 is not a real panel scheme; removed, not
-   * renumbered). Ink order is BWGBRY plus orange, matching the bb_epaper
-   * logical ink indices.
+   * GRAYSCALE_8 to SEVEN_COLOR; GRAYSCALE_8 now lives at library-local value 9
+   * (below). Ink order is BWGBRY plus orange, matching the bb_epaper logical
+   * ink indices.
    */
   SEVEN_COLOR = 7,
   /** Spectra 6 nibbles, left-half plane then right-half plane (dual-CS panels). */
   BWGBRY_SPLIT = 8,
+  /**
+   * 8-level grayscale dithering target, e.g. the Inkplate 10 (issue #19).
+   *
+   * Value 9 is NOT a firmware wire value. `opendisplay_structs.h` defines
+   * `enum ColorScheme` values 0-8 and 100-102 only; it has no value 9 and none
+   * is expected to be assigned here. This variant exists purely so the
+   * dithering library can target 8-level-gray panels outside the OpenDisplay
+   * ecosystem. Never send this value to a device as a `color_scheme` field.
+   */
+  GRAYSCALE_8 = 9,
 }
 
 /**

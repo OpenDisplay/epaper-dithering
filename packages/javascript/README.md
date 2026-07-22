@@ -8,7 +8,7 @@ High-quality dithering algorithms for e-paper/e-ink displays, powered by a Rust/
 
 - **Rust/WASM Core**: Compiled Rust logic bundled inline — no async init, no external files, works everywhere
 - **10 Dithering Algorithms**: From fast ordered dithering to high-quality error diffusion
-- **9 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE\_4, GRAYSCALE\_16, SEVEN\_COLOR (Spectra/ACeP 7), BWGBRY\_SPLIT
+- **10 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE\_4, GRAYSCALE\_16, SEVEN\_COLOR (Spectra/ACeP 7), BWGBRY\_SPLIT, GRAYSCALE\_8 (library-local, e.g. Inkplate 10 — not a firmware wire value)
 - **Measured Palettes**: Use real display-calibrated colors for accurate dithering (SPECTRA\_7\_3\_6COLOR\_V2, BWRY\_3\_97, and more)
 - **OKLab Color Matching**: Weighted Cartesian OKLab — preserves hue without the achromatic-attractor bug that plagues LCH-weighted approaches
 - **Pre-dither Adjustments**: Per-image exposure, saturation, shadows, highlights, dynamic-range compression, and gamut compression — all orthogonal knobs
@@ -146,6 +146,8 @@ enum ColorScheme {
   GRAYSCALE_16 = 6,  // 16-level grayscale
   SEVEN_COLOR  = 7,  // Spectra/ACeP 7-color (BWGBRY + orange)
   BWGBRY_SPLIT = 8,  // Spectra 6, split left/right plane packing
+  GRAYSCALE_8  = 9,  // 8-level grayscale (e.g. Inkplate 10). Library-local:
+                      // NOT a firmware wire value -- never send to a device.
 }
 ```
 

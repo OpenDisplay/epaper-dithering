@@ -223,6 +223,7 @@ describe('ColorScheme', () => {
     expect(getColorCount(ColorScheme.GRAYSCALE_16)).toBe(16);
     expect(getColorCount(ColorScheme.SEVEN_COLOR)).toBe(7);
     expect(getColorCount(ColorScheme.BWGBRY_SPLIT)).toBe(6);
+    expect(getColorCount(ColorScheme.GRAYSCALE_8)).toBe(8);
   });
 
   it('fromValue works correctly for all schemes', () => {
@@ -232,10 +233,13 @@ describe('ColorScheme', () => {
     expect(fromValue(6)).toBe(ColorScheme.GRAYSCALE_16);
     expect(fromValue(7)).toBe(ColorScheme.SEVEN_COLOR);
     expect(fromValue(8)).toBe(ColorScheme.BWGBRY_SPLIT);
+    // GRAYSCALE_8 = 9 is library-local, NOT a firmware wire value (the
+    // protocol header has no value 9), but it is still a valid ColorScheme.
+    expect(fromValue(9)).toBe(ColorScheme.GRAYSCALE_8);
   });
 
   it('fromValue throws for values that are not enum members', () => {
-    expect(() => fromValue(9)).toThrow();
+    expect(() => fromValue(10)).toThrow();
     expect(() => fromValue(99)).toThrow();
     expect(() => fromValue(-1)).toThrow();
   });
@@ -287,6 +291,7 @@ describe('ColorScheme', () => {
     expect(getPalette(ColorScheme.GRAYSCALE_16).accent).toBe('black');
     expect(getPalette(ColorScheme.SEVEN_COLOR).accent).toBe('red');
     expect(getPalette(ColorScheme.BWGBRY_SPLIT).accent).toBe('red');
+    expect(getPalette(ColorScheme.GRAYSCALE_8).accent).toBe('black');
   });
 
   // Key order AND literal RGB values for every scheme, written out by hand rather than
@@ -365,6 +370,16 @@ describe('ColorScheme', () => {
       ['red', 255, 0, 0],
       ['blue', 0, 0, 255],
       ['green', 0, 255, 0],
+    ]],
+    [ColorScheme.GRAYSCALE_8, [
+      ['black', 0, 0, 0],
+      ['gray1', 36, 36, 36],
+      ['gray2', 73, 73, 73],
+      ['gray3', 109, 109, 109],
+      ['gray4', 146, 146, 146],
+      ['gray5', 182, 182, 182],
+      ['gray6', 219, 219, 219],
+      ['white', 255, 255, 255],
     ]],
   ];
 

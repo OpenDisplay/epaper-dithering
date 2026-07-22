@@ -69,6 +69,16 @@ pub enum ColorScheme {
     /// (dual-CS panels with no device framebuffer). Same palette as `Bwgbry`;
     /// only the firmware-side packing differs.
     BwgbrySplit = 8,
+    /// 8-level grayscale dithering target, e.g. the Inkplate 10 (issue #19).
+    ///
+    /// **Value 9 is NOT a firmware wire value.** `opendisplay_structs.h` defines
+    /// `enum ColorScheme` values 0-8 and 100-102 only; it has no value 9 and is
+    /// not expected to grow one for this. This variant exists purely so the
+    /// dithering library can target 8-level-gray panels that sit outside the
+    /// OpenDisplay ecosystem. Never send this value to a device as a
+    /// `color_scheme` field -- it will not be understood by any OpenDisplay
+    /// firmware.
+    Grayscale8 = 9,
 }
 
 // ── Palette data ─────────────────────────────────────────────────────────────
@@ -118,6 +128,14 @@ static PALETTE_GRAYSCALE16: Palette = Palette {
     ]),
     accent_idx: 0,
 };
+/// 8-level grayscale (e.g. Inkplate 10). Library-local; not a firmware scheme.
+static PALETTE_GRAYSCALE8: Palette = Palette {
+    colors: Cow::Borrowed(&[
+        [0, 0, 0], [36, 36, 36], [73, 73, 73], [109, 109, 109],
+        [146, 146, 146], [182, 182, 182], [219, 219, 219], [255, 255, 255],
+    ]),
+    accent_idx: 0,
+};
 
 // ── Methods ───────────────────────────────────────────────────────────────────
 
@@ -134,6 +152,7 @@ impl ColorScheme {
             ColorScheme::SevenColor  => &PALETTE_SEVEN_COLOR,
             // Same inks as Bwgbry; only the firmware-side plane packing differs.
             ColorScheme::BwgbrySplit => &PALETTE_BWGBRY,
+            ColorScheme::Grayscale8  => &PALETTE_GRAYSCALE8,
         }
     }
 
@@ -159,6 +178,9 @@ impl ColorScheme {
             ColorScheme::SevenColor => {
                 &["black", "white", "yellow", "red", "blue", "green", "orange"]
             }
+            ColorScheme::Grayscale8 => &[
+                "black", "gray1", "gray2", "gray3", "gray4", "gray5", "gray6", "white",
+            ],
         }
     }
 }
@@ -185,6 +207,9 @@ impl TryFrom<u8> for ColorScheme {
             6 => Ok(ColorScheme::Grayscale16),
             7 => Ok(ColorScheme::SevenColor),
             8 => Ok(ColorScheme::BwgbrySplit),
+            // Library-local, NOT a firmware wire value (see the `Grayscale8`
+            // variant doc comment). The protocol header has no value 9.
+            9 => Ok(ColorScheme::Grayscale8),
             _ => Err(DitherError::UnknownColorScheme(v)),
         }
     }
@@ -207,6 +232,13 @@ mod tests {
         assert_eq!(u8::from(ColorScheme::Grayscale16), 6);
         assert_eq!(u8::from(ColorScheme::SevenColor), 7);
         assert_eq!(u8::from(ColorScheme::BwgbrySplit), 8);
+    }
+
+    /// `Grayscale8` = 9 is NOT in the header (it stops at 8, then jumps to
+    /// 100-102) -- this pins the library-local value, not a firmware contract.
+    #[test]
+    fn grayscale8_is_library_local_value_nine() {
+        assert_eq!(u8::from(ColorScheme::Grayscale8), 9);
     }
 
     #[test]
@@ -238,6 +270,7 @@ mod tests {
             ColorScheme::Grayscale16,
             ColorScheme::SevenColor,
             ColorScheme::BwgbrySplit,
+            ColorScheme::Grayscale8,
         ] {
             assert_eq!(
                 scheme.color_names().len(),
@@ -342,6 +375,19 @@ mod tests {
                     ("white", [255, 255, 255]),
                 ],
             ),
+            (
+                ColorScheme::Grayscale8,
+                &[
+                    ("black", [0, 0, 0]),
+                    ("gray1", [36, 36, 36]),
+                    ("gray2", [73, 73, 73]),
+                    ("gray3", [109, 109, 109]),
+                    ("gray4", [146, 146, 146]),
+                    ("gray5", [182, 182, 182]),
+                    ("gray6", [219, 219, 219]),
+                    ("white", [255, 255, 255]),
+                ],
+            ),
         ];
 
         for (scheme, expected) in cases {
@@ -385,7 +431,8 @@ mod tests {
         assert_eq!(ColorScheme::try_from(4), Ok(ColorScheme::Bwgbry));
         assert_eq!(ColorScheme::try_from(7), Ok(ColorScheme::SevenColor));
         assert_eq!(ColorScheme::try_from(8), Ok(ColorScheme::BwgbrySplit));
-        assert_eq!(ColorScheme::try_from(9), Err(DitherError::UnknownColorScheme(9)));
+        assert_eq!(ColorScheme::try_from(9), Ok(ColorScheme::Grayscale8));
+        assert_eq!(ColorScheme::try_from(10), Err(DitherError::UnknownColorScheme(10)));
         assert_eq!(ColorScheme::try_from(99), Err(DitherError::UnknownColorScheme(99)));
     }
 
@@ -395,6 +442,7 @@ mod tests {
         assert_eq!(ColorScheme::Bwgbry.palette().colors.len(), 6);
         assert_eq!(ColorScheme::Grayscale16.palette().colors.len(), 16);
         assert_eq!(ColorScheme::SevenColor.palette().colors.len(), 7);
+        assert_eq!(ColorScheme::Grayscale8.palette().colors.len(), 8);
     }
 
     #[test]
