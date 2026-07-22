@@ -76,6 +76,10 @@ fn dispatch(
             algorithms::ordered_dither_with_canonical(img.data, img.width, p, canonical)
         }
         DitherMode::Ordered => algorithms::ordered_dither(img.data, img.width, p),
+        DitherMode::Dizzy if pin_exact_pixels => {
+            dizzy::dizzy_dither_with_canonical(img.data, img.width, img.height, p, canonical)
+        }
+        DitherMode::Dizzy => dizzy::dizzy_dither(img.data, img.width, img.height, p),
         DitherMode::FloydSteinberg
         | DitherMode::Burkes
         | DitherMode::Atkinson
@@ -217,6 +221,24 @@ mod tests {
         let config = DitherConfig::default();
         assert_eq!(ToneCompression::default(), config.tone);
         assert_eq!(GamutCompression::default(), config.gamut);
+    }
+
+    /// Proves `DitherMode::Dizzy` is actually wired to the dizzy algorithm and not
+    /// accidentally aliased to another dispatch arm: on identical non-uniform input,
+    /// its output must differ from Burkes error diffusion.
+    #[test]
+    fn dizzy_output_differs_from_burkes() {
+        let pixels: Vec<u8> = (0u8..=255)
+            .flat_map(|v| [v, v / 2, 255 - v])
+            .cycle()
+            .take(16 * 16 * 3)
+            .collect();
+        let img = ImageBuffer::new(&pixels, 16);
+
+        let burkes = dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig { mode: DitherMode::Burkes, ..Default::default() });
+        let dizzy = dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig { mode: DitherMode::Dizzy, ..Default::default() });
+
+        assert_ne!(dizzy, burkes, "dizzy dithering should differ from Burkes on non-uniform input");
     }
 
     #[test]
