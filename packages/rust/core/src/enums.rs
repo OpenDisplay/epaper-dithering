@@ -24,6 +24,10 @@ pub enum DitherMode {
     Sierra         = 6,
     SierraLite     = 7,
     JarvisJudiceNinke = 8,
+    /// Error diffusion with pseudo-random traversal instead of a raster scan,
+    /// diffusing error only to not-yet-quantized neighbours. Produces no
+    /// directional structure. `serpentine` is ignored: there is no scan direction.
+    Dizzy          = 9,
 }
 
 /// Dynamic range compression applied before dithering.
@@ -94,6 +98,7 @@ impl TryFrom<u8> for DitherMode {
             6 => Ok(DitherMode::Sierra),
             7 => Ok(DitherMode::SierraLite),
             8 => Ok(DitherMode::JarvisJudiceNinke),
+            9 => Ok(DitherMode::Dizzy),
             _ => Err(DitherError::UnknownDitherMode(v)),
         }
     }
@@ -102,7 +107,7 @@ impl TryFrom<u8> for DitherMode {
 impl DitherMode {
     pub fn kernel(self) -> Option<&'static Kernel> {
         match self {
-            DitherMode::None | DitherMode::Ordered => None,
+            DitherMode::None | DitherMode::Ordered | DitherMode::Dizzy => None,
             DitherMode::FloydSteinberg => Some(&FLOYD_STEINBERG),
             DitherMode::Burkes => Some(&BURKES),
             DitherMode::Atkinson => Some(&ATKINSON),
@@ -111,5 +116,17 @@ impl DitherMode {
             DitherMode::SierraLite => Some(&SIERRA_LITE),
             DitherMode::JarvisJudiceNinke => Some(&JARVIS_JUDICE_NINKE),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dizzy_is_mode_nine_and_has_no_kernel() {
+        assert_eq!(DitherMode::Dizzy as u8, 9);
+        assert_eq!(DitherMode::try_from(9u8), Ok(DitherMode::Dizzy));
+        assert!(DitherMode::Dizzy.kernel().is_none(), "dizzy has no fixed kernel");
     }
 }

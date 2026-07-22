@@ -157,3 +157,35 @@ fn ordered_spectra6_auto() {
         );
     }
 }
+
+/// Dizzy + 6-color measured palette + auto preprocessing.
+/// Random-traversal family — pins the permutation walk against accidental change.
+#[test]
+fn dizzy_spectra6_auto() {
+    for img in discover_images() {
+        assert_regression(
+            &img,
+            "dizzy_spectra6_auto",
+            DitherMode::Dizzy,
+            &SPECTRA_7_3_6COLOR,
+            ToneCompression::Auto,
+            GamutCompression::Auto,
+        );
+    }
+}
+
+/// Dizzy + monochrome + no preprocessing.
+/// Two-color palette makes any traversal-order change highly visible in the diff.
+#[test]
+fn dizzy_mono_raw() {
+    for img in discover_images() {
+        assert_regression(
+            &img,
+            "dizzy_mono_raw",
+            DitherMode::Dizzy,
+            ColorScheme::Mono,
+            ToneCompression::Fixed(0.0),
+            GamutCompression::None,
+        );
+    }
+}

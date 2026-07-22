@@ -7,6 +7,7 @@ use epaper_dithering_core::{
     color_space::srgb_channel_to_linear,
     color_space_lab::{PaletteLab, WAB, match_pixel_oklab, rgb_to_oklab},
     dither, DitherConfig,
+    dizzy::dizzy_dither,
     enums::{DitherMode, GamutCompression, ToneCompression},
     measured_palettes::SPECTRA_7_3_6COLOR,
     palettes::ColorScheme,
@@ -82,6 +83,15 @@ fn bench_error_diffusion(c: &mut Criterion) {
                 |b, _| b.iter(|| error_diffusion_dither(&pixels, w, h, palette, kernel, false)),
             );
         }
+
+        // Dizzy has no fixed kernel (pseudo-random traversal instead of raster
+        // scan), so it doesn't fit the (name, kernel) loop above and calls its
+        // own entry point directly.
+        group.bench_with_input(
+            BenchmarkId::new("dizzy", format!("{w}x{h}")),
+            &(),
+            |b, _| b.iter(|| dizzy_dither(&pixels, w, h, palette)),
+        );
     }
 
     group.finish();

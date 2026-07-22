@@ -1,6 +1,6 @@
 /**
  * Dithering algorithm modes
- * Values match firmware conventions (0-8)
+ * Values match firmware conventions (0-9)
  */
 export enum DitherMode {
   /**
@@ -19,4 +19,10 @@ export enum DitherMode {
   SIERRA = 6,
   SIERRA_LITE = 7,
   JARVIS_JUDICE_NINKE = 8,
+  /**
+   * Error diffusion with pseudo-random traversal instead of a raster scan,
+   * diffusing error only to not-yet-quantized neighbours. Produces no
+   * directional structure. `serpentine` is ignored: there is no scan direction.
+   */
+  DIZZY = 9,
 }

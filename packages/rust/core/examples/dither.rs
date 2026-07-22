@@ -10,7 +10,7 @@
 //
 // Schemes: mono, bwr, bwy, bwry, bwgbry, grayscale4, grayscale16, seven_color, bwgbry_split
 //          spectra, spectra_v2, mono_4_26, bwry_4_2, bwry_3_97, solum_bwr, hanshow_bwr, hanshow_bwy
-// Modes:   none, ordered, floyd_steinberg, burkes, atkinson, stucki, sierra, sierra_lite, jjn
+// Modes:   none, ordered, floyd_steinberg, burkes, atkinson, stucki, sierra, sierra_lite, jjn, dizzy
 // Tone:    auto, none, 0.0-1.0  (default: none)
 // Gamut:   none, auto, 0.0-1.0  (default: none)
 
@@ -70,6 +70,7 @@ fn main() {
         "sierra"            => DitherMode::Sierra,
         "sierra_lite"       => DitherMode::SierraLite,
         "jjn"               => DitherMode::JarvisJudiceNinke,
+        "dizzy"             => DitherMode::Dizzy,
         other => { eprintln!("Unknown mode: {other}"); std::process::exit(1); }
     };
 

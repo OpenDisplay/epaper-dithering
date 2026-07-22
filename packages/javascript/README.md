@@ -7,7 +7,7 @@ High-quality dithering algorithms for e-paper/e-ink displays, powered by a Rust/
 ## Features
 
 - **Rust/WASM Core**: Compiled Rust logic bundled inline — no async init, no external files, works everywhere
-- **9 Dithering Algorithms**: From fast ordered dithering to high-quality error diffusion
+- **10 Dithering Algorithms**: From fast ordered dithering to high-quality error diffusion
 - **9 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE\_4, GRAYSCALE\_16, SEVEN\_COLOR (Spectra/ACeP 7), BWGBRY\_SPLIT
 - **Measured Palettes**: Use real display-calibrated colors for accurate dithering (SPECTRA\_7\_3\_6COLOR\_V2, BWRY\_3\_97, and more)
 - **OKLab Color Matching**: Weighted Cartesian OKLab — preserves hue without the achromatic-attractor bug that plagues LCH-weighted approaches
@@ -162,6 +162,7 @@ enum ColorScheme {
 | `SIERRA` | High | Medium | — |
 | `STUCKI` | Very high | Slow | — |
 | `JARVIS_JUDICE_NINKE` | Highest | Slowest | — |
+| `DIZZY` | Good | Medium | Error diffusion with pseudo-random traversal — no directional structure. Ignores `serpentine`. Algorithm by [Liam Appelbe](https://liamappelbe.medium.com/dizzy-dithering-2ae76dbceba1) |
 
 ### Types
 
