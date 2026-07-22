@@ -74,127 +74,39 @@ fn dispatch(
             algorithms::ordered_dither_with_canonical(img.data, img.width, p, canonical)
         }
         DitherMode::Ordered => algorithms::ordered_dither(img.data, img.width, p),
-        DitherMode::FloydSteinberg if pin_exact_pixels => algorithms::error_diffusion_dither_with_canonical(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            canonical,
-            &algorithms::FLOYD_STEINBERG,
-            serpentine,
-        ),
-        DitherMode::Burkes if pin_exact_pixels => algorithms::error_diffusion_dither_with_canonical(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            canonical,
-            &algorithms::BURKES,
-            serpentine,
-        ),
-        DitherMode::Atkinson if pin_exact_pixels => algorithms::error_diffusion_dither_with_canonical(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            canonical,
-            &algorithms::ATKINSON,
-            serpentine,
-        ),
-        DitherMode::Stucki if pin_exact_pixels => algorithms::error_diffusion_dither_with_canonical(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            canonical,
-            &algorithms::STUCKI,
-            serpentine,
-        ),
-        DitherMode::Sierra if pin_exact_pixels => algorithms::error_diffusion_dither_with_canonical(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            canonical,
-            &algorithms::SIERRA,
-            serpentine,
-        ),
-        DitherMode::SierraLite if pin_exact_pixels => algorithms::error_diffusion_dither_with_canonical(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            canonical,
-            &algorithms::SIERRA_LITE,
-            serpentine,
-        ),
-        DitherMode::JarvisJudiceNinke if pin_exact_pixels => {
-            algorithms::error_diffusion_dither_with_canonical(
-                img.data,
-                img.width,
-                img.height,
-                p,
-                canonical,
-                &algorithms::JARVIS_JUDICE_NINKE,
-                serpentine,
-            )
+        DitherMode::FloydSteinberg
+        | DitherMode::Burkes
+        | DitherMode::Atkinson
+        | DitherMode::Stucki
+        | DitherMode::Sierra
+        | DitherMode::SierraLite
+        | DitherMode::JarvisJudiceNinke => {
+            // Every arm in this group has `kernel() == Some(_)` by construction
+            // (see `DitherMode::kernel` in enums.rs); `None`/`Ordered` are handled above.
+            let kernel = mode
+                .kernel()
+                .expect("kernel-based DitherMode variants always return Some from kernel()");
+            if pin_exact_pixels {
+                algorithms::error_diffusion_dither_with_canonical(
+                    img.data,
+                    img.width,
+                    img.height,
+                    p,
+                    canonical,
+                    kernel,
+                    serpentine,
+                )
+            } else {
+                algorithms::error_diffusion_dither(
+                    img.data,
+                    img.width,
+                    img.height,
+                    p,
+                    kernel,
+                    serpentine,
+                )
+            }
         }
-        DitherMode::FloydSteinberg => algorithms::error_diffusion_dither(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            &algorithms::FLOYD_STEINBERG,
-            serpentine,
-        ),
-        DitherMode::Burkes => algorithms::error_diffusion_dither(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            &algorithms::BURKES,
-            serpentine,
-        ),
-        DitherMode::Atkinson => algorithms::error_diffusion_dither(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            &algorithms::ATKINSON,
-            serpentine,
-        ),
-        DitherMode::Stucki => algorithms::error_diffusion_dither(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            &algorithms::STUCKI,
-            serpentine,
-        ),
-        DitherMode::Sierra => algorithms::error_diffusion_dither(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            &algorithms::SIERRA,
-            serpentine,
-        ),
-        DitherMode::SierraLite => algorithms::error_diffusion_dither(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            &algorithms::SIERRA_LITE,
-            serpentine,
-        ),
-        DitherMode::JarvisJudiceNinke => algorithms::error_diffusion_dither(
-            img.data,
-            img.width,
-            img.height,
-            p,
-            &algorithms::JARVIS_JUDICE_NINKE,
-            serpentine,
-        ),
     }
 }
 
