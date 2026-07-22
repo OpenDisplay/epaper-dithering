@@ -295,6 +295,16 @@ mod tests {
         assert!(!needs_preprocess(&config));
     }
 
+    /// Pins `ToneCompression::default()` and `GamutCompression::default()` to the values
+    /// `DitherConfig::default()` actually uses for those fields, so the two defaults can
+    /// never silently drift apart again (see audit finding L3).
+    #[test]
+    fn enum_defaults_match_dither_config_default() {
+        let config = DitherConfig::default();
+        assert_eq!(ToneCompression::default(), config.tone);
+        assert_eq!(GamutCompression::default(), config.gamut);
+    }
+
     #[test]
     fn none_uses_canonical_exact_colors_with_measured_palette() {
         let image = pixels([255, 0, 0], 4);
