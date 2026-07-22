@@ -200,11 +200,79 @@ mod tests {
                 "{}: palette length must match color_names length",
                 entry.id
             );
+            assert_eq!(
+                entry.palette.accent_idx,
+                entry.scheme.palette().accent_idx,
+                "{}: accent_idx must match the canonical accent of {:?}",
+                entry.id,
+                entry.scheme
+            );
             assert!(
                 entry.palette.accent_idx < entry.color_names.len(),
                 "{}: accent_idx out of range",
                 entry.id
             );
+        }
+    }
+
+    /// Every measured RGB triple must actually look like the color it is named.
+    ///
+    /// `measured_palettes_follow_canonical_color_order` compares *names* against the
+    /// canonical order and never reads `palette.colors`, so swapping two RGB rows within
+    /// an entry (e.g. yellow and red in `BWRY_3_97`) passes it — and then propagates to
+    /// Python (which derives from `CATALOG` via FFI) and to the generated TypeScript,
+    /// putting the wrong ink on real hardware. This ties the values to their names.
+    ///
+    /// These are photographed/measured values, not pure sRGB — measured "yellow" can be
+    /// (172, 128, 0) and measured "white" (168, 180, 182) — so the thresholds are
+    /// deliberately loose. They are swap detectors, not calibration pins: nothing here
+    /// should need updating when a display is re-measured, only when a row is misplaced.
+    #[test]
+    fn measured_colors_match_their_names() {
+        for entry in CATALOG {
+            for (name, rgb) in entry.color_names.iter().zip(entry.palette.colors.iter()) {
+                let [r, g, b] = *rgb;
+                let (r, g, b) = (i32::from(r), i32::from(g), i32::from(b));
+                let ctx = format!("{}: {name} = [{r}, {g}, {b}]", entry.id);
+
+                match *name {
+                    "black" => {
+                        assert!(r < 80 && g < 80 && b < 80, "{ctx}: black must be dark on all channels");
+                    }
+                    "white" => {
+                        assert!(
+                            r > 140 && g > 140 && b > 140,
+                            "{ctx}: white must be light on all channels"
+                        );
+                    }
+                    "red" => {
+                        assert!(r > g && r > b, "{ctx}: red must have R dominant");
+                        assert!(r >= 60, "{ctx}: red must have a substantial R channel");
+                    }
+                    "green" => {
+                        assert!(g > r && g > b, "{ctx}: green must have G dominant");
+                    }
+                    "blue" => {
+                        assert!(b > r && b > g, "{ctx}: blue must have B dominant");
+                    }
+                    "yellow" => {
+                        assert!(r >= 120 && g >= 100, "{ctx}: yellow must have R and G high");
+                        assert!(b < 100 && b < g / 2, "{ctx}: yellow must have B low");
+                    }
+                    "orange" => {
+                        assert!(r >= 120, "{ctx}: orange must have R high");
+                        assert!(g > b, "{ctx}: orange must have G above B");
+                        assert!(b < 100, "{ctx}: orange must have B low");
+                    }
+                    // Grayscale ramp steps: no hue expectation, only neutrality.
+                    other if other.starts_with("gray") => {
+                        let max = r.max(g).max(b);
+                        let min = r.min(g).min(b);
+                        assert!(max - min <= 30, "{ctx}: gray steps must be near-neutral");
+                    }
+                    other => panic!("{}: unhandled color name {other:?} — add a hue assertion for it", entry.id),
+                }
+            }
         }
     }
 }
