@@ -28,13 +28,19 @@ pub enum DitherMode {
 
 /// Dynamic range compression applied before dithering.
 /// Only meaningful for measured palettes (ignored for `ColorScheme`).
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ToneCompression {
     /// Reinhard 2004 skewness-based auto strength. Best for photos.
-    #[default]
     Auto,
     /// Fixed blend strength in [0.0, 1.0]. 0.0 disables.
     Fixed(f64),
+}
+
+impl Default for ToneCompression {
+    /// Matches `DitherConfig::default().tone` (tone compression off).
+    fn default() -> Self {
+        ToneCompression::Fixed(0.0)
+    }
 }
 
 impl ToneCompression {

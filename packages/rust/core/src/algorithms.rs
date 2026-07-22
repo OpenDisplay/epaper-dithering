@@ -271,7 +271,7 @@ pub fn jarvis_judice_ninke(pixels: &[u8], w: usize, h: usize, palette: &Palette,
 
 // ── Direct palette map (no dithering) ────────────────────────────────────────
 
-/// Nearest-color mapping with no dithering. Each pixel maps independently.
+/// Returns the palette index if the RGB pixel exactly matches a palette color, or None.
 fn exact_palette_index(rgb: &[u8], palette: &Palette) -> Option<u8> {
     palette
         .colors
@@ -287,6 +287,7 @@ pub fn try_exact_palette_map(pixels: &[u8], canonical_palette: &Palette) -> Opti
         .collect()
 }
 
+/// Nearest-color mapping with no dithering. Each pixel maps independently.
 pub fn direct_map(pixels: &[u8], palette: &Palette, canonical_palette: &Palette) -> Vec<u8> {
     let (_, palette_lab) = build_palette_lab(palette);
     pixels
