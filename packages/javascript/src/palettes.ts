@@ -165,112 +165,25 @@ export function fromValue(value: number): ColorScheme {
 //   import { ditherImage, SPECTRA_7_3_6COLOR } from '@opendisplay/epaper-dithering';
 //   const result = ditherImage(imageBuffer, SPECTRA_7_3_6COLOR);
 //
-// NOTE: RGB values are defined in packages/rust/core/src/measured_palettes.rs
-// (single source of truth). The Python package derives its constants from Rust
-// via FFI at import time. TypeScript cannot do the same (WASM init order), so
-// values here must be kept in sync manually with the Rust source.
-// The WASM `measured_palettes()` function is exposed for future tooling.
+// RGB values are defined once in packages/rust/core/src/measured_palettes.rs (single
+// source of truth) and generated into ./palettes.generated.ts by
+// packages/rust/core/examples/gen_ts_palettes.rs; CI runs that generator in `--check`
+// mode to catch drift. This mirrors how the Python package derives its constants from
+// the same Rust CATALOG via FFI at import time -- TypeScript can't do that at import
+// time (WASM init order), so it does the equivalent at build time instead.
 //
-// TO ADD A NEW DISPLAY: update measured_palettes.rs + add the constant below.
+// TO ADD A NEW DISPLAY: add the palette + CATALOG entry in measured_palettes.rs, then
+// regenerate (`cargo run --manifest-path packages/rust/core/Cargo.toml --example
+// gen_ts_palettes -- --write`) and commit the updated palettes.generated.ts.
 // =============================================================================
 
-// 7.3" Spectra™ 6-color (BWGBRY scheme)
-// Measured: 2026-02-03, iPhone 15 Pro Max RAW + Hue Play bars @ 6500K
-// Paper reference RGB(215,217,218); normalization: value × (255/paper_channel)
-export const SPECTRA_7_3_6COLOR: ColorPalette = {
-  scheme: ColorScheme.BWGBRY,
-  colors: {
-    black:  { r: 26,  g: 13,  b: 35  },
-    white:  { r: 185, g: 202, b: 205 },
-    yellow: { r: 202, g: 184, b: 0   },
-    red:    { r: 121, g: 9,   b: 0   },
-    blue:   { r: 0,   g: 69,  b: 139 },
-    green:  { r: 40,  g: 82,  b: 57  },
-  },
-  accent: 'red',
-};
-
-// 4.26" Monochrome (MONO scheme)
-export const MONO_4_26: ColorPalette = {
-  scheme: ColorScheme.MONO,
-  colors: {
-    black: { r: 5,   g: 5,   b: 5   },
-    white: { r: 220, g: 220, b: 220 },
-  },
-  accent: 'black',
-};
-
-// 4.2" BWRY (BWRY scheme)
-export const BWRY_4_2: ColorPalette = {
-  scheme: ColorScheme.BWRY,
-  colors: {
-    black:  { r: 5,   g: 5,   b: 5   },
-    white:  { r: 200, g: 200, b: 200 },
-    yellow: { r: 200, g: 180, b: 0   },
-    red:    { r: 120, g: 15,  b: 5   },
-  },
-  accent: 'red',
-};
-
-// Solum BWR (harvested display, BWR scheme)
-export const SOLUM_BWR: ColorPalette = {
-  scheme: ColorScheme.BWR,
-  colors: {
-    black: { r: 5,   g: 5,   b: 5   },
-    white: { r: 200, g: 200, b: 200 },
-    red:   { r: 120, g: 15,  b: 5   },
-  },
-  accent: 'red',
-};
-
-// Hanshow BWR (harvested display, BWR scheme)
-export const HANSHOW_BWR: ColorPalette = {
-  scheme: ColorScheme.BWR,
-  colors: {
-    black: { r: 5,   g: 5,   b: 5   },
-    white: { r: 200, g: 200, b: 200 },
-    red:   { r: 120, g: 15,  b: 5   },
-  },
-  accent: 'red',
-};
-
-// Hanshow BWY (harvested display, BWY scheme)
-export const HANSHOW_BWY: ColorPalette = {
-  scheme: ColorScheme.BWY,
-  colors: {
-    black:  { r: 5,   g: 5,   b: 5   },
-    white:  { r: 200, g: 200, b: 200 },
-    yellow: { r: 200, g: 180, b: 0   },
-  },
-  accent: 'yellow',
-};
-
-// 3.97" BWRY — EP397YR_800x480 (BWRY scheme)
-// 7.3" Spectra™ 6-color (BWGBRY scheme) — v2 measurement
-// Measured: 2026-03-15, iPhone 15 Pro Max RAW + Affinity (v3), A4 paper white reference
-// Method: DNG with linear tone curve, WB from A4 paper, uniform ×2.4 scale
-export const SPECTRA_7_3_6COLOR_V2: ColorPalette = {
-  scheme: ColorScheme.BWGBRY,
-  colors: {
-    black:  { r: 31,  g: 24,  b: 41  },
-    white:  { r: 168, g: 180, b: 182 },
-    yellow: { r: 180, g: 173, b: 0   },
-    red:    { r: 113, g: 24,  b: 19  },
-    blue:   { r: 36,  g: 70,  b: 139 },
-    green:  { r: 50,  g: 84,  b: 60  },
-  },
-  accent: 'red',
-};
-
-// Measured: 2026-03-06, iPhone RAW
-// Paper reference RGB(205,205,205); normalization: value × (255/205)
-export const BWRY_3_97: ColorPalette = {
-  scheme: ColorScheme.BWRY,
-  colors: {
-    black:  { r: 10,  g: 7,   b: 14  },
-    white:  { r: 173, g: 178, b: 174 },
-    yellow: { r: 172, g: 128, b: 0   },
-    red:    { r: 85,  g: 24,  b: 14  },
-  },
-  accent: 'red',
-};
+export {
+  SPECTRA_7_3_6COLOR,
+  SPECTRA_7_3_6COLOR_V2,
+  MONO_4_26,
+  BWRY_4_2,
+  BWRY_3_97,
+  SOLUM_BWR,
+  HANSHOW_BWR,
+  HANSHOW_BWY,
+} from './palettes.generated';
