@@ -21,13 +21,24 @@ fn fixtures_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/images")
 }
 
-/// Load a fixture image as flat RGB bytes. Panics if the file is missing.
-fn load_fixture(filename: &str) -> (Vec<u8>, usize, usize) {
-    let img = image::open(fixtures_dir().join(filename))
-        .unwrap_or_else(|e| panic!("failed to load {filename}: {e}"))
-        .to_rgb8();
-    let (w, h) = img.dimensions();
-    (img.into_raw(), w as usize, h as usize)
+/// Load a fixture image as flat RGB bytes, or `None` if it is missing.
+///
+/// Criterion builds every benchmark group before running any of them, so a
+/// panicking loader takes down the whole `cargo bench` run — including groups
+/// that need no fixtures at all. Skipping with a warning keeps the rest usable
+/// when the fixture set drifts.
+fn try_load_fixture(filename: &str) -> Option<(Vec<u8>, usize, usize)> {
+    match image::open(fixtures_dir().join(filename)) {
+        Ok(img) => {
+            let img = img.to_rgb8();
+            let (w, h) = img.dimensions();
+            Some((img.into_raw(), w as usize, h as usize))
+        }
+        Err(e) => {
+            eprintln!("warning: skipping benchmark fixture {filename}: {e}");
+            None
+        }
+    }
 }
 
 /// A non-trivial RGB gradient image (no external files needed).
@@ -246,15 +257,19 @@ fn bench_real_images(c: &mut Criterion) {
     const FIXTURES: &[(&str, &str)] = &[
         ("frankfurt_nacht.png", "night"),     // dark, low contrast
         ("unicorn.png",         "vivid"),     // saturated colors
-        ("katzi.png",           "detail"),    // fine detail, varied tones
-        ("marienplatz.png",     "daylight"),  // normal outdoor scene
+        ("cat.png",             "detail"),    // fine detail, varied tones
+        ("olympiapark.png",     "daylight"),  // normal outdoor scene
     ];
 
     let mut group = c.benchmark_group("real_images");
+    // Every fixture in `tests/fixtures/images/` is 800×480; keep it that way or
+    // this hardcoded throughput becomes a lie.
     group.throughput(Throughput::Elements((800 * 480) as u64));
 
     for (filename, label) in FIXTURES {
-        let (pixels, w, _h) = load_fixture(filename);
+        let Some((pixels, w, _h)) = try_load_fixture(filename) else {
+            continue;
+        };
         let img = ImageBuffer::new(&pixels, w);
 
         group.bench_with_input(
@@ -280,10 +295,12 @@ fn bench_real_images(c: &mut Criterion) {
     group.finish();
 }
 
-/// Full pipeline on a single full-resolution camera image (6240×4160).
-/// Shows realistic throughput for large inputs.
+/// Full pipeline on a single larger image (1280×960) from `benchmark_only/`.
+/// Shows realistic throughput for inputs bigger than a panel-sized frame.
 fn bench_full_res(c: &mut Criterion) {
-    let (pixels, w, h) = load_fixture("benchmark_only/test7.jpeg");
+    let Some((pixels, w, h)) = try_load_fixture("benchmark_only/marienplatz.png") else {
+        return;
+    };
     let img = ImageBuffer::new(&pixels, w);
 
     let mut group = c.benchmark_group("full_res");
