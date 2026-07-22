@@ -8,7 +8,7 @@ High-quality dithering algorithms for e-paper/e-ink displays, powered by a Rust/
 
 - **Rust/WASM Core**: Compiled Rust logic bundled inline — no async init, no external files, works everywhere
 - **9 Dithering Algorithms**: From fast ordered dithering to high-quality error diffusion
-- **8 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE\_4/8/16
+- **9 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE\_4, GRAYSCALE\_16, SEVEN\_COLOR (Spectra/ACeP 7), BWGBRY\_SPLIT
 - **Measured Palettes**: Use real display-calibrated colors for accurate dithering (SPECTRA\_7\_3\_6COLOR\_V2, BWRY\_3\_97, and more)
 - **OKLab Color Matching**: Weighted Cartesian OKLab — preserves hue without the achromatic-attractor bug that plagues LCH-weighted approaches
 - **Pre-dither Adjustments**: Per-image exposure, saturation, shadows, highlights, dynamic-range compression, and gamut compression — all orthogonal knobs
@@ -140,7 +140,7 @@ enum ColorScheme {
   MONO         = 0,  // Black & White (2 colors)
   BWR          = 1,  // Black, White, Red (3 colors)
   BWY          = 2,  // Black, White, Yellow (3 colors)
-  BWRY         = 3,  // Black, White, Red, Yellow (4 colors)
+  BWRY         = 3,  // Black, White, Yellow, Red (4 colors)
   BWGBRY       = 4,  // Black, White, Yellow, Red, Blue, Green (6 colors)
   GRAYSCALE_4  = 5,  // 4-level grayscale
   GRAYSCALE_16 = 6,  // 16-level grayscale

@@ -68,7 +68,7 @@ dither_image(
 - **MONO** - Black and white (1-bit)
 - **BWR** - Black, white, red (3-color)
 - **BWY** - Black, white, yellow (3-color)
-- **BWRY** - Black, white, red, yellow (4-color)
+- **BWRY** - Black, white, yellow, red (4-color)
 - **BWGBRY** - Black, white, yellow, red, blue, green (6-color Spectra)
 - **GRAYSCALE_4** - 4-level grayscale (2-bit)
 - **SEVEN_COLOR** - 7-color Spectra/ACeP (BWGBRY + orange)
