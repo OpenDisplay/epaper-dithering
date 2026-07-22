@@ -12,7 +12,7 @@ pub use crate::kernels::{
 
 // ── Palette setup helper ─────────────────────────────────────────────────────
 
-fn build_palette_lab(palette: &Palette) -> (Vec<[f64; 3]>, PaletteLab) {
+pub(crate) fn build_palette_lab(palette: &Palette) -> (Vec<[f64; 3]>, PaletteLab) {
     let palette_linear: Vec<[f64; 3]> = palette
         .colors
         .iter()
@@ -173,7 +173,7 @@ pub fn jarvis_judice_ninke(pixels: &[u8], w: usize, h: usize, palette: &Palette,
 // ── Direct palette map (no dithering) ────────────────────────────────────────
 
 /// Returns the palette index if the RGB pixel exactly matches a palette color, or None.
-fn exact_palette_index(rgb: &[u8], palette: &Palette) -> Option<u8> {
+pub(crate) fn exact_palette_index(rgb: &[u8], palette: &Palette) -> Option<u8> {
     palette
         .colors
         .iter()
