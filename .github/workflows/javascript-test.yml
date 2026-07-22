@@ -41,6 +41,10 @@ jobs:
         with:
           workspaces: packages/rust
 
+      - name: Measured-palette codegen drift check
+        working-directory: packages/rust
+        run: cargo run --example gen_ts_palettes -- --check
+
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
