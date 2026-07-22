@@ -88,7 +88,7 @@ dither_image(
 | ATKINSON | Good | Medium | High contrast, artistic |
 | STUCKI | Very High | Slow | Maximum quality |
 | JARVIS_JUDICE_NINKE | Highest | Slowest | Smooth gradients |
-| DIZZY | Good | Medium | Error diffusion with pseudo-random traversal — no directional structure. Ignores `serpentine` |
+| DIZZY | Good | Medium | Error diffusion with pseudo-random traversal — no directional structure. Ignores `serpentine`. Algorithm by [Liam Appelbe](https://liamappelbe.medium.com/dizzy-dithering-2ae76dbceba1) |
 
 ## Usage Examples
 

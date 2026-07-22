@@ -1,4 +1,13 @@
 //! Dizzy dithering: error diffusion with pseudo-random traversal.
+//!
+//! Algorithm devised and described by **Liam Appelbe** in "Dizzy Dithering":
+//! <https://liamappelbe.medium.com/dizzy-dithering-2ae76dbceba1>
+//!
+//! Implemented here from that written description — the article contains no code
+//! listing, so this is an independent implementation, not a port. The two design
+//! choices taken directly from the article are the stateless multiply-and-xor
+//! permutation used for the traversal, and the 10:1 orthogonal-to-diagonal ratio
+//! when spreading error over the unvisited neighbours.
 
 use crate::algorithms::{build_palette_lab, exact_palette_index};
 use crate::color_space::srgb_channel_to_linear;

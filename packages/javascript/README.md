@@ -162,7 +162,7 @@ enum ColorScheme {
 | `SIERRA` | High | Medium | — |
 | `STUCKI` | Very high | Slow | — |
 | `JARVIS_JUDICE_NINKE` | Highest | Slowest | — |
-| `DIZZY` | Good | Medium | Error diffusion with pseudo-random traversal — no directional structure. Ignores `serpentine` |
+| `DIZZY` | Good | Medium | Error diffusion with pseudo-random traversal — no directional structure. Ignores `serpentine`. Algorithm by [Liam Appelbe](https://liamappelbe.medium.com/dizzy-dithering-2ae76dbceba1) |
 
 ### Types
 
