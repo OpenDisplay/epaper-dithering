@@ -59,6 +59,7 @@ const SCHEMES: &[ColorScheme] = &[
     ColorScheme::Grayscale16,
     ColorScheme::SevenColor,
     ColorScheme::BwgbrySplit,
+    ColorScheme::Grayscale8,
 ];
 
 /// Map a Rust `ColorScheme` variant to the matching member name of the TypeScript
@@ -77,6 +78,7 @@ fn ts_scheme_member(scheme: ColorScheme) -> &'static str {
         ColorScheme::Grayscale16 => "GRAYSCALE_16",
         ColorScheme::SevenColor => "SEVEN_COLOR",
         ColorScheme::BwgbrySplit => "BWGBRY_SPLIT",
+        ColorScheme::Grayscale8 => "GRAYSCALE_8",
     }
 }
 

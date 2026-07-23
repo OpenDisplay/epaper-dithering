@@ -72,6 +72,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -96,6 +97,26 @@ EnumMembers = Dict[str, int]
 # is no mirror value to compare these header-only members against, so a dict
 # would misleadingly imply the 100/101/102 values are pinned by this script.
 HEADER_ONLY_MEMBERS = frozenset({"RGB565", "RGB888", "RGB16BPC"})
+
+# Mirror members with no counterpart in the header, by design: GRAYSCALE_8 is
+# a library-local dithering target (e.g. the Inkplate 10, issue #19) at value
+# 9, which is NOT a firmware wire value -- the header defines ColorScheme
+# values 0-8 and 100-102 only, with no 9.
+#
+# NAME-ONLY EXEMPTION -- READ BEFORE TOUCHING:
+# This must exempt GRAYSCALE_8 from the "missing from header" check ONLY. It
+# must NOT suppress a "mirror value not in header" / "header defines this
+# value under another name" conflict. If the protocol ever assigns value 9 to
+# something else, that is a real collision with this library's squatted
+# GRAYSCALE_8=9 and the gate MUST fail loudly, not go quiet because the name
+# "GRAYSCALE_8" happens to appear in an exemption list. See
+# `check_colorscheme_against_header` -- GRAYSCALE_8 is looked up by name in
+# `header`, not skipped by value, so a header member at value 9 under a
+# different name still fails as an ordinary mirror-only divergence (that
+# other name is missing from the mirror, and/or GRAYSCALE_8=9 is "not in the
+# header" under ITS name -- either way `ok` goes False). Proven by
+# `_run_self_test`'s `value_nine_collision_still_fails` case.
+MIRROR_ONLY_MEMBERS = frozenset({"GRAYSCALE_8"})
 
 # The header spells the grayscale schemes GRAY4/GRAY16 where the mirrors spell
 # them GRAYSCALE_4/GRAYSCALE_16. That is a naming difference only -- the values
@@ -182,6 +203,61 @@ _NORMALIZE_NAME_COLLISION_GROUPS: Tuple[Tuple[str, ...], ...] = (
 )
 
 
+def _run_value_nine_collision_self_test() -> None:
+    """Prove that exempting GRAYSCALE_8 by NAME from the "missing from header"
+    check does NOT also swallow a real value-9 collision.
+
+    `GRAYSCALE_8` squats library-local value 9, which the canonical header
+    currently has no opinion on (it defines 0-8 and 100-102). If the protocol
+    ever assigns 9 to something else, this library's GRAYSCALE_8=9 collides
+    with it, and `check_colorscheme_against_header` MUST fail -- silently
+    tolerating that would mean the gate stopped meaning anything for the one
+    value this library invented.
+
+    This builds a synthetic header identical to the real `enum ColorScheme`
+    body but with one extra member, `OD_COLOR_SCHEME_EXPERIMENTAL = 9`, i.e.
+    value 9 claimed under a name that is NOT "GRAYSCALE_8". `MIRROR_ONLY_MEMBERS`
+    only ever exempts by name, so this must NOT be absorbed by the
+    `GRAYSCALE_8` exemption -- it must surface as an ordinary "header member
+    missing from the mirror" divergence (`EXPERIMENTAL` has no mirror
+    counterpart under any name), and the check must return False.
+    """
+    synthetic_header = """
+enum ColorScheme {
+    OD_COLOR_SCHEME_MONO         = 0,
+    OD_COLOR_SCHEME_BWR          = 1,
+    OD_COLOR_SCHEME_BWY          = 2,
+    OD_COLOR_SCHEME_BWRY         = 3,
+    OD_COLOR_SCHEME_BWGBRY       = 4,
+    OD_COLOR_SCHEME_GRAY4        = 5,
+    OD_COLOR_SCHEME_GRAY16       = 6,
+    OD_COLOR_SCHEME_SEVEN_COLOR  = 7,
+    OD_COLOR_SCHEME_BWGBRY_SPLIT = 8,
+    OD_COLOR_SCHEME_EXPERIMENTAL = 9,
+    OD_COLOR_SCHEME_RGB565       = 100,
+    OD_COLOR_SCHEME_RGB888       = 101,
+    OD_COLOR_SCHEME_RGB16BPC     = 102
+};
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".h", delete=False) as f:
+        f.write(synthetic_header)
+        temp_path = Path(f.name)
+    try:
+        result = check_colorscheme_against_header(temp_path)
+    finally:
+        temp_path.unlink()
+
+    assert result is False, (
+        "[self-test] value_nine_collision_still_fails: expected "
+        "check_colorscheme_against_header to return False when the header "
+        "claims value 9 under a name other than GRAYSCALE_8, but it returned "
+        "True -- the GRAYSCALE_8 name-exemption is silently swallowing a real "
+        "value-9 collision"
+    )
+    print("[self-test] value_nine_collision_still_fails: OK (header value 9 under "
+          "a different name still fails the gate)")
+
+
 def _run_self_test() -> None:
     for raw, expected in _NORMALIZE_NAME_EXAMPLES:
         actual = normalize_name(raw)
@@ -206,6 +282,8 @@ def _run_self_test() -> None:
     total = sum(len(g) for g in _NORMALIZE_NAME_COLLISION_GROUPS)
     print(f"[self-test] normalize_name injectivity: {total} names -> "
           f"{len(seen)} distinct keys, no collisions")
+
+    _run_value_nine_collision_self_test()
 
 
 # --- six independent parsers -------------------------------------------------
@@ -456,8 +534,9 @@ def check_colorscheme_against_header(header_path: Path) -> bool:
             print(f"  DIVERGENCE [ColorScheme vs header] '{name}'={header[name]} is in the "
                   f"canonical header but MISSING from rust:{RUST_PALETTES.name}")
 
+    mirror_exempt = {normalize_name(n) for n in MIRROR_ONLY_MEMBERS}
     for name in sorted(mirror):
-        if name not in header:
+        if name not in header and name not in mirror_exempt:
             ok = False
             print(f"  DIVERGENCE [ColorScheme vs header] '{name}'={mirror[name]} exists in "
                   f"rust:{RUST_PALETTES.name} but NOT in the canonical header "

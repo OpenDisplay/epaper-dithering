@@ -122,6 +122,19 @@ export const SCHEME_PALETTES: Record<number, ColorPalette> = {
     },
     accent: 'red',
   },
+  9: { // ColorScheme.GRAYSCALE_8
+    colors: {
+      black: { r: 0, g: 0, b: 0 },
+      gray1: { r: 36, g: 36, b: 36 },
+      gray2: { r: 73, g: 73, b: 73 },
+      gray3: { r: 109, g: 109, b: 109 },
+      gray4: { r: 146, g: 146, b: 146 },
+      gray5: { r: 182, g: 182, b: 182 },
+      gray6: { r: 219, g: 219, b: 219 },
+      white: { r: 255, g: 255, b: 255 },
+    },
+    accent: 'black',
+  },
 };
 
 export const SPECTRA_7_3_6COLOR: ColorPalette = {

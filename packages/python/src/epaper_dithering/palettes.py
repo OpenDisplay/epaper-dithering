@@ -130,8 +130,8 @@ class ColorScheme(Enum):
         ),
     )
 
-    # Value 7: SEVEN_COLOR (protocol v2). The former GRAYSCALE_8 = 7 was a
-    # mistake (gray8 is not a real panel scheme) and was removed, not renumbered.
+    # Value 7: SEVEN_COLOR (protocol v2). A former GRAYSCALE_8 = 7 was reassigned
+    # to SEVEN_COLOR; GRAYSCALE_8 now lives at library-local value 9 (below).
     # Ink order is BWGBRY plus orange, matching the bb_epaper logical ink indices.
     SEVEN_COLOR = (
         7,
@@ -166,6 +166,29 @@ class ColorScheme(Enum):
         ),
     )
 
+    # Value 9 is LIBRARY-LOCAL, NOT a firmware wire value. The canonical
+    # `enum ColorScheme` in opendisplay_structs.h defines values 0-8 and
+    # 100-102 only -- it has no value 9 and none is expected to be assigned
+    # here. This exists purely to serve 8-level-gray panels outside the
+    # OpenDisplay ecosystem (e.g. the Inkplate 10, issue #19). NEVER send this
+    # value to a device as a `color_scheme` field.
+    GRAYSCALE_8 = (
+        9,
+        ColorPalette(
+            colors={
+                "black": (0, 0, 0),
+                "gray1": (36, 36, 36),
+                "gray2": (73, 73, 73),
+                "gray3": (109, 109, 109),
+                "gray4": (146, 146, 146),
+                "gray5": (182, 182, 182),
+                "gray6": (219, 219, 219),
+                "white": (255, 255, 255),
+            },
+            accent="black",
+        ),
+    )
+
     def __init__(self, value: int, palette: ColorPalette):
         self._value_ = value  # type: ignore[assignment]
         self.palette = palette
@@ -185,7 +208,8 @@ class ColorScheme(Enum):
         """Get ColorScheme from firmware int value.
 
         Args:
-            value: Firmware color scheme value (0-8)
+            value: Firmware color scheme value (0-8), or the library-local
+                GRAYSCALE_8 value (9, not a firmware wire value)
 
         Returns:
             Matching ColorScheme
