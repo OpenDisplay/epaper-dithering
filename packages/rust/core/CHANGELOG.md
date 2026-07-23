@@ -1,5 +1,25 @@
 # Changelog
 
+## [5.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v4.0.1...epaper-dithering-core-v5.0.0) (2026-07-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* `ColorScheme` values 7 and 8 were realigned with protocol v2. **Value 7 now decodes as `SEVEN_COLOR` (Spectra/ACeP 7-color), not `GRAYSCALE_8`** — code or devices that hardcoded numeric value 7 to mean 8-level gray will now get 7-color inks. **Value 8 (`BWGBRY_SPLIT`)** is newly accepted where it previously raised. `GRAYSCALE_8` itself is **not removed** — it was renumbered to library-local value 9 and is fully supported (see issue [#19](https://github.com/OpenDisplay/epaper-dithering/issues/19)); code using the name `ColorScheme.GRAYSCALE_8` / `ColorScheme::Grayscale8` keeps working, but its numeric value changed from 7 to 9. Value 9 is a library-local dithering target (e.g. Inkplate 10), not an OpenDisplay firmware wire value, and must never be sent to a device as a `color_scheme`.
+
+### Features
+
+* add dizzy dithering (DitherMode 9) ([#68](https://github.com/OpenDisplay/epaper-dithering/issues/68)) ([4192900](https://github.com/OpenDisplay/epaper-dithering/commit/41929006ad4d319b3744b719331f2fbafb872ab8))
+* realign ColorScheme with protocol v2 (SEVEN_COLOR, BWGBRY_SPLIT) ([#60](https://github.com/OpenDisplay/epaper-dithering/issues/60)) ([14adc2a](https://github.com/OpenDisplay/epaper-dithering/commit/14adc2ad57549e112ade50c3c3997f30688f0b49))
+
+
+### Bug Fixes
+
+* align ToneCompression::default() with DitherConfig::default() and fix misplaced doc comment ([#64](https://github.com/OpenDisplay/epaper-dithering/issues/64)) ([6970ecc](https://github.com/OpenDisplay/epaper-dithering/commit/6970ecc396da0fcc098823afbb13fab50f4a5d8e))
+* **bench:** repair three dead fixture references ([#69](https://github.com/OpenDisplay/epaper-dithering/issues/69)) ([082b627](https://github.com/OpenDisplay/epaper-dithering/commit/082b6278f1c74d62270067119e8b9117542db355))
+* close the ungated idealized-palette hole and the remaining audit findings ([#65](https://github.com/OpenDisplay/epaper-dithering/issues/65)) ([496858d](https://github.com/OpenDisplay/epaper-dithering/commit/496858d2f495748cd45c1da46fe448660df8c2a3))
+* restore GRAYSCALE_8 at library-local value 9 (issue [#19](https://github.com/OpenDisplay/epaper-dithering/issues/19)) ([#70](https://github.com/OpenDisplay/epaper-dithering/issues/70)) ([f826ce4](https://github.com/OpenDisplay/epaper-dithering/commit/f826ce4586d6c2309ae9c3c03e98c4fdbf7c0527))
+
 ## [4.0.1](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v4.0.0...epaper-dithering-core-v4.0.1) (2026-07-05)
 
 
