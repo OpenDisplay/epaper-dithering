@@ -1,6 +1,6 @@
 [package]
 name = "epaper-dithering-core"
-version = "4.0.1"
+version = "5.0.0"
 edition = "2024"
 description = "High-quality dithering algorithms for e-paper / e-ink displays — OKLab color matching, error diffusion, ordered dithering, measured palettes"
 license = "MIT"

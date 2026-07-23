@@ -1,5 +1,25 @@
 # Changelog
 
+## [5.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v4.0.1...epaper-dithering-core-v5.0.0) (2026-07-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* `GRAYSCALE_8` is removed from all three language surfaces. It occupied wire value 7, which protocol v2 reassigned to `SEVEN_COLOR` — gray8 was never a real panel scheme, and the header records it as removed rather than renumbered. Code referencing `ColorScheme.GRAYSCALE_8` / `ColorScheme::Grayscale8` must be deleted; there is no replacement. Value 7 now decodes as 7-color Spectra/ACeP, and value 8 (`BWGBRY_SPLIT`) is newly accepted where it previously raised.
+
+### Features
+
+* add dizzy dithering (DitherMode 9) ([#68](https://github.com/OpenDisplay/epaper-dithering/issues/68)) ([4192900](https://github.com/OpenDisplay/epaper-dithering/commit/41929006ad4d319b3744b719331f2fbafb872ab8))
+* realign ColorScheme with protocol v2 (SEVEN_COLOR, BWGBRY_SPLIT) ([#60](https://github.com/OpenDisplay/epaper-dithering/issues/60)) ([14adc2a](https://github.com/OpenDisplay/epaper-dithering/commit/14adc2ad57549e112ade50c3c3997f30688f0b49))
+
+
+### Bug Fixes
+
+* align ToneCompression::default() with DitherConfig::default() and fix misplaced doc comment ([#64](https://github.com/OpenDisplay/epaper-dithering/issues/64)) ([6970ecc](https://github.com/OpenDisplay/epaper-dithering/commit/6970ecc396da0fcc098823afbb13fab50f4a5d8e))
+* **bench:** repair three dead fixture references ([#69](https://github.com/OpenDisplay/epaper-dithering/issues/69)) ([082b627](https://github.com/OpenDisplay/epaper-dithering/commit/082b6278f1c74d62270067119e8b9117542db355))
+* close the ungated idealized-palette hole and the remaining audit findings ([#65](https://github.com/OpenDisplay/epaper-dithering/issues/65)) ([496858d](https://github.com/OpenDisplay/epaper-dithering/commit/496858d2f495748cd45c1da46fe448660df8c2a3))
+* restore GRAYSCALE_8 at library-local value 9 (issue [#19](https://github.com/OpenDisplay/epaper-dithering/issues/19)) ([#70](https://github.com/OpenDisplay/epaper-dithering/issues/70)) ([f826ce4](https://github.com/OpenDisplay/epaper-dithering/commit/f826ce4586d6c2309ae9c3c03e98c4fdbf7c0527))
+
 ## [4.0.1](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v4.0.0...epaper-dithering-core-v4.0.1) (2026-07-05)
 
 
