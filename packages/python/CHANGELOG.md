@@ -5,7 +5,7 @@
 
 ### ⚠ BREAKING CHANGES
 
-* `GRAYSCALE_8` is removed from all three language surfaces. It occupied wire value 7, which protocol v2 reassigned to `SEVEN_COLOR` — gray8 was never a real panel scheme, and the header records it as removed rather than renumbered. Code referencing `ColorScheme.GRAYSCALE_8` / `ColorScheme::Grayscale8` must be deleted; there is no replacement. Value 7 now decodes as 7-color Spectra/ACeP, and value 8 (`BWGBRY_SPLIT`) is newly accepted where it previously raised.
+* `ColorScheme` values 7 and 8 were realigned with protocol v2. **Value 7 now decodes as `SEVEN_COLOR` (Spectra/ACeP 7-color), not `GRAYSCALE_8`** — code or devices that hardcoded numeric value 7 to mean 8-level gray will now get 7-color inks. **Value 8 (`BWGBRY_SPLIT`)** is newly accepted where it previously raised. `GRAYSCALE_8` itself is **not removed** — it was renumbered to library-local value 9 and is fully supported (see issue [#19](https://github.com/OpenDisplay/epaper-dithering/issues/19)); code using the name `ColorScheme.GRAYSCALE_8` / `ColorScheme::Grayscale8` keeps working, but its numeric value changed from 7 to 9. Value 9 is a library-local dithering target (e.g. Inkplate 10), not an OpenDisplay firmware wire value, and must never be sent to a device as a `color_scheme`.
 
 ### Features
 
