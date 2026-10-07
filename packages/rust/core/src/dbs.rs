@@ -1,3 +1,26 @@
+// Portions of this file are derived from OpenDithering's `src/dithering/dbs.ts`
+// (https://github.com/guysie/opendithering), used under the MIT License:
+//
+// Copyright (c) 2026 Guy Sie
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 //! Colour Direct Binary Search (DBS): iterative refinement of an already-dithered image.
 //!
 //! Minimises perceived error `E = Σ_ch Σ_m ((p_ch ∗ e_ch)(m))²`, where `e = halftone − target`
@@ -8,16 +31,17 @@
 //!
 //! Each pass visits every pixel (raster order within tiles; tiles run in parallel, see
 //! `dbs_refine`) and tries changing it to every other ink and swapping it with each differing
-//! 8-neighbour, applying the move with the largest decrease in `E`. Trial cost is O(1) via the cached correlation `c_pe = c_pp ⋆ e`, where
-//! `c_pp = p ⋆ p` is the blur's autocorrelation; an accepted move updates `c_pe` over the
-//! footprint of `c_pp` only.
+//! 8-neighbour, applying the move with the largest decrease in `E`. Trial cost is O(1) via
+//! the cached correlation `c_pe = c_pp ⋆ e`, where `c_pp = p ⋆ p` is the blur's
+//! autocorrelation; an accepted move updates `c_pe` over the footprint of `c_pp` only.
 //!
 //! Eye-model blurs are stored as full 2-D tables and `c_pp` is derived from them generically,
 //! so a non-separable model (e.g. the exponential CSF's spatial kernel) can be swapped in.
 //!
 //! References: Analoui & Allebach (1992); Lieberman & Allebach (1997); Agar & Allebach (2005);
 //! Flohr, Kolpatzik et al. (1993, YyCxCz); Kolpatzik & Bouman (1992, CSF constants);
-//! Mullen (1985). Ported from OpenDithering's `dbs.ts` (MIT, © Guy Sie).
+//! Mullen (1985). Ported from OpenDithering's `dbs.ts` by Guy Sie (MIT; see the notice above
+//! and `THIRD_PARTY_NOTICES.md`).
 
 use rayon::prelude::*;
 
