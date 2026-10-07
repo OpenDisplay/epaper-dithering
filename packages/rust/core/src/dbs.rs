@@ -104,8 +104,11 @@ fn eye_sigma_px(alpha: f64, params: &DbsParams) -> f64 {
     alpha / (2.0 * std::f64::consts::PI) / pixel_deg
 }
 
-/// Per-channel eye-model blur: index 0 = luminance (Yy), 1–2 = chrominance (Cx, Cz).
-fn eye_blurs(params: &DbsParams) -> [Kernel2D; 3] {
+/// Which eye-model blur each YyCxCz channel uses: Yy → luminance (0), Cx and Cz → chrominance (1).
+const CHANNEL_BLUR: [usize; 3] = [0, 1, 1];
+
+/// Eye-model blurs `[luminance, chrominance]`; index with `CHANNEL_BLUR`.
+fn eye_blurs(params: &DbsParams) -> [Kernel2D; 2] {
     assert!(
         params.ppi.is_finite() && params.ppi > 0.0,
         "DBS ppi must be positive, got {}",
@@ -118,7 +121,7 @@ fn eye_blurs(params: &DbsParams) -> [Kernel2D; 3] {
     );
     let lum = gaussian_blur(eye_sigma_px(ALPHA_LUM, params));
     let chroma = gaussian_blur(eye_sigma_px(ALPHA_CHROMA, params));
-    [lum, chroma.clone(), chroma]
+    [lum, chroma]
 }
 
 /// Palette inks and target pixels in YyCxCz.
@@ -193,6 +196,26 @@ pub struct DbsStats {
     pub final_error: f64,
 }
 
+/// Calls `f(c_pe(x, y), k(x − mx, y − my))` over the footprint of `k` centred on `(mx, my)`,
+/// clipped to the image.
+fn sweep(
+    cpe: &mut [[f64; 3]],
+    width: usize,
+    height: usize,
+    k: &Kernel2D,
+    (mx, my): (usize, usize),
+    mut f: impl FnMut(&mut [f64; 3], f64),
+) {
+    let r = k.radius;
+    for y in my.saturating_sub(r)..=(my + r).min(height - 1) {
+        let row = y * width;
+        let dy = y as isize - my as isize;
+        for x in mx.saturating_sub(r)..=(mx + r).min(width - 1) {
+            f(&mut cpe[row + x], k.at(x as isize - mx as isize, dy));
+        }
+    }
+}
+
 /// Refine palette `indices` in place to minimise perceived error against `pixels` (sRGB,
 /// `width × height × 3`), as seen through `palette` (pass the measured palette).
 ///
@@ -225,32 +248,33 @@ pub fn dbs_refine(
         }
     }
 
-    let cpp = eye_blurs(params).map(|p| autocorrelate(&p));
-    let cpp0 = [cpp[0].at(0, 0), cpp[1].at(0, 0), cpp[2].at(0, 0)];
+    let [cpp_lum, cpp_chroma] = eye_blurs(params).map(|p| autocorrelate(&p));
+    let cpp = [&cpp_lum, &cpp_chroma, &cpp_chroma];
+    let cpp0 = cpp.map(|k| k.at(0, 0));
 
-    let mut cpe: [Vec<f64>; 3] = std::array::from_fn(|ch| {
+    // c_pe per pixel, channels interleaved so one footprint sweep touches each cache line once.
+    let per_channel: [Vec<f64>; 3] = std::array::from_fn(|ch| {
         let e: Vec<f64> = (0..n_px).map(|i| inks[indices[i] as usize][ch] - target[i][ch]).collect();
-        correlate(&e, width, height, &cpp[ch])
+        correlate(&e, width, height, cpp[ch])
     });
+    let mut cpe: Vec<[f64; 3]> = (0..n_px).map(|i| per_channel.each_ref().map(|c| c[i])).collect();
     let mut err: f64 = (0..3)
         .map(|ch| {
             (0..n_px)
-                .map(|i| (inks[indices[i] as usize][ch] - target[i][ch]) * cpe[ch][i])
+                .map(|i| (inks[indices[i] as usize][ch] - target[i][ch]) * cpe[i][ch])
                 .sum::<f64>()
         })
         .sum();
     let initial_error = err;
 
-    // c_pe += a·c_pp(· − (mx, my)), clipped to the image.
-    let add_kernel = |c: &mut [f64], k: &Kernel2D, mx: usize, my: usize, a: f64| {
-        let r = k.radius;
-        for y in my.saturating_sub(r)..=(my + r).min(height - 1) {
-            let row = y * width;
-            let dy = y as isize - my as isize;
-            for x in mx.saturating_sub(r)..=(mx + r).min(width - 1) {
-                c[row + x] += a * k.at(x as isize - mx as isize, dy);
-            }
-        }
+    // c_pe += a_ch·c_pp_ch(· − m) for every channel. Cx and Cz share the chrominance kernel,
+    // so they are updated in a single sweep.
+    let add_kernels = |cpe: &mut [[f64; 3]], m: (usize, usize), a: [f64; 3]| {
+        sweep(cpe, width, height, &cpp_lum, m, |c, k| c[0] += a[0] * k);
+        sweep(cpe, width, height, &cpp_chroma, m, |c, k| {
+            c[1] += a[1] * k;
+            c[2] += a[2] * k;
+        });
     };
 
     const EPS: f64 = 1e-9;
@@ -266,7 +290,7 @@ pub fn dbs_refine(
                     continue;
                 }
                 let k = indices[m] as usize;
-                let c = [cpe[0][m], cpe[1][m], cpe[2][m]];
+                let c = cpe[m];
 
                 enum Move { Toggle(usize), Swap { n: usize, nx: usize, ny: usize } }
                 let mut best_de = -EPS;
@@ -296,7 +320,7 @@ pub fn dbs_refine(
                     let de: f64 = (0..3)
                         .map(|ch| {
                             let a = inks[kn][ch] - inks[k][ch];
-                            2.0 * a * a * (cpp0[ch] - cpp[ch].at(dx, dy)) + 2.0 * a * (c[ch] - cpe[ch][n])
+                            2.0 * a * a * (cpp0[ch] - cpp[ch].at(dx, dy)) + 2.0 * a * (c[ch] - cpe[n][ch])
                         })
                         .sum();
                     if de < best_de {
@@ -310,18 +334,14 @@ pub fn dbs_refine(
                 err += best_de;
                 match mv {
                     Move::Toggle(j) => {
-                        for ch in 0..3 {
-                            add_kernel(&mut cpe[ch], &cpp[ch], x, y, inks[j][ch] - inks[k][ch]);
-                        }
+                        add_kernels(&mut cpe, (x, y), std::array::from_fn(|ch| inks[j][ch] - inks[k][ch]));
                         indices[m] = j as u8;
                     }
                     Move::Swap { n, nx, ny } => {
                         let kn = indices[n] as usize;
-                        for ch in 0..3 {
-                            let a = inks[kn][ch] - inks[k][ch];
-                            add_kernel(&mut cpe[ch], &cpp[ch], x, y, a);
-                            add_kernel(&mut cpe[ch], &cpp[ch], nx, ny, -a);
-                        }
+                        let a: [f64; 3] = std::array::from_fn(|ch| inks[kn][ch] - inks[k][ch]);
+                        add_kernels(&mut cpe, (x, y), a);
+                        add_kernels(&mut cpe, (nx, ny), a.map(|v| -v));
                         indices.swap(m, n);
                     }
                 }
@@ -359,7 +379,7 @@ pub fn perceived_error(
 
     (0..3)
         .map(|ch| {
-            let p = &blurs[ch];
+            let p = &blurs[CHANNEL_BLUR[ch]];
             let r = p.radius as isize;
             let e: Vec<f64> = (0..indices.len()).map(|i| inks[indices[i] as usize][ch] - target[i][ch]).collect();
             // The blurred error is non-zero up to r pixels outside the image.
