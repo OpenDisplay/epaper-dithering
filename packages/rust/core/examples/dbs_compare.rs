@@ -16,6 +16,8 @@
 //!   --palette spectra6|mono   [spectra6]   --passes N        [10]
 //!   --size WxH                [800x480]    --distance CM     [40]
 //!   --ppi P                   [127]        --out DIR         [target/dbs_compare]
+//!   --variants a,b,…          [all]        --baseline DIR    compare renders against an
+//!                                                             earlier --out (% pixels differing)
 //!
 //! Without image arguments, every image in tests/fixtures/images is used.
 
@@ -45,6 +47,8 @@ struct Args {
     height: u32,
     params: DbsParams,
     out: PathBuf,
+    variants: Vec<String>,
+    baseline: Option<PathBuf>,
     images: Vec<PathBuf>,
 }
 
@@ -55,6 +59,8 @@ fn parse_args() -> Args {
         height: 480,
         params: DbsParams::default(),
         out: Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/dbs_compare"),
+        variants: Vec::new(),
+        baseline: None,
         images: Vec::new(),
     };
     let mut it = std::env::args().skip(1);
@@ -75,6 +81,8 @@ fn parse_args() -> Args {
             "--distance" => a.params.viewing_distance_cm = val().parse().expect("--distance CM"),
             "--ppi" => a.params.ppi = val().parse().expect("--ppi P"),
             "--out" => a.out = val().into(),
+            "--variants" => a.variants = val().split(',').map(str::to_owned).collect(),
+            "--baseline" => a.baseline = Some(val().into()),
             _ if arg.starts_with("--") => panic!("unknown option {arg}"),
             _ => a.images.push(arg.into()),
         }
@@ -167,7 +175,18 @@ fn main() {
         w, h, args.params.viewing_distance_cm, args.params.ppi, args.params.max_passes,
         args.out.display()
     );
-    println!("{:<22} {:<12} {:>10} {:>14} {:>10}", "image", "variant", "block dE", "perceived E", "time");
+    let variants: Vec<&Variant> = VARIANTS
+        .iter()
+        .filter(|v| args.variants.is_empty() || args.variants.iter().any(|n| n == v.name))
+        .collect();
+    assert!(!variants.is_empty(), "no variant matches {:?}", args.variants);
+    // Per variant: (sum block dE, sum perceived E, total seconds, differing px, compared px).
+    let mut totals = vec![(0.0, 0.0, 0.0, 0usize, 0usize); variants.len()];
+
+    println!(
+        "{:<22} {:<12} {:>10} {:>14} {:>10} {:>9}",
+        "image", "variant", "block dE", "perceived E", "time", "Δpx %"
+    );
 
     let mut html = String::from(
         "<!doctype html><meta charset=utf-8><title>DBS comparison</title>\
@@ -178,7 +197,7 @@ fn main() {
         "<h1>DBS comparison</h1><p>{}, {w}×{h}, {} cm, {} ppi, ≤{} passes. Order: source, {}.</p>",
         if args.measured { "Spectra 6 measured" } else { "Mono" },
         args.params.viewing_distance_cm, args.params.ppi, args.params.max_passes,
-        VARIANTS.iter().map(|v| v.name).collect::<Vec<_>>().join(", ")
+        variants.iter().map(|v| v.name).collect::<Vec<_>>().join(", ")
     );
 
     for path in &args.images {
@@ -195,7 +214,7 @@ fn main() {
         let mut renders = vec![src.clone()];
         let mut rows = String::new();
 
-        for v in &VARIANTS {
+        for (vi, v) in variants.iter().enumerate() {
             let cfg = DitherConfig {
                 mode: v.mode,
                 dbs: v.dbs.then_some(args.params),
@@ -213,7 +232,22 @@ fn main() {
             let img = render(&indices, palette, args.width, args.height);
             let de = block_delta_e(src.as_raw(), img.as_raw(), w, h);
             let pe = perceived_error(src.as_raw(), w, h, palette, &indices, &args.params);
-            println!("{stem:<22} {:<12} {de:>10.4} {pe:>14.4e} {:>9.2}s", v.name, elapsed.as_secs_f64());
+            let diff = args.baseline.as_ref().and_then(|b| {
+                let base = image::open(b.join(stem).join(format!("{}.png", v.name))).ok()?.to_rgb8();
+                (base.dimensions() == img.dimensions())
+                    .then(|| base.pixels().zip(img.pixels()).filter(|(a, b)| a != b).count())
+            });
+            let t = &mut totals[vi];
+            (t.0, t.1, t.2) = (t.0 + de, t.1 + pe, t.2 + elapsed.as_secs_f64());
+            if let Some(d) = diff {
+                (t.3, t.4) = (t.3 + d, t.4 + w * h);
+            }
+            let diff_col = diff.map_or("-".into(), |d| format!("{:.3}", 100.0 * d as f64 / (w * h) as f64));
+            println!(
+                "{stem:<22} {:<12} {de:>10.4} {pe:>14.4e} {:>9.2}s {diff_col:>9}",
+                v.name,
+                elapsed.as_secs_f64()
+            );
             rows += &format!("<tr><td>{}<td>{de:.4}<td>{pe:.4e}<td>{:.2}s", v.name, elapsed.as_secs_f64());
 
             img.save(dir.join(format!("{}.png", v.name))).expect("save variant");
@@ -229,6 +263,13 @@ fn main() {
             "<h2>{stem}</h2><table><tr><th>variant<th>block dE<th>perceived E<th>time{rows}</table>\
              <p><img src=\"{stem}/strip.png\"></p><p><img src=\"{stem}/zoom.png\"></p>"
         );
+    }
+
+    println!("\n{:<22} {:<12} {:>10} {:>14} {:>10} {:>9}", "TOTAL", "variant", "mean dE", "mean E", "time", "Δpx %");
+    let n = args.images.len() as f64;
+    for (v, t) in variants.iter().zip(&totals) {
+        let diff_col = if t.4 > 0 { format!("{:.3}", 100.0 * t.3 as f64 / t.4 as f64) } else { "-".into() };
+        println!("{:<22} {:<12} {:>10.4} {:>14.4e} {:>9.2}s {diff_col:>9}", "", v.name, t.0 / n, t.1 / n, t.2);
     }
 
     std::fs::write(args.out.join("index.html"), html).expect("write index.html");
