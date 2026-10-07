@@ -222,8 +222,7 @@ result = dither_image(img, SPECTRA_7_3_6COLOR, shadows=0.5)
 result = dither_image(img, SPECTRA_7_3_6COLOR, highlights=0.7)
 
 # Combine for a "vivid photo" look
-result = dither_image(img, SPECTRA_7_3_6COLOR,
-                      exposure=1.1, saturation=1.3, shadows=0.3, highlights=0.5)
+result = dither_image(img, SPECTRA_7_3_6COLOR, exposure=1.1, saturation=1.3, shadows=0.3, highlights=0.5)
 ```
 
 Pipeline order: `exposure → saturation → shadows/highlights → tone → gamut → dither`.
@@ -284,11 +283,11 @@ from epaper_dithering import dither_image, ColorPalette, DitherMode
 # Your measured RGB values
 my_display = ColorPalette(
     colors={
-        'black': (5, 5, 5),           # Measured from your display
-        'white': (185, 190, 180),     # Much darker than (255,255,255)
-        'red': (120, 15, 5),          # Much darker than (255,0,0)
+        "black": (5, 5, 5),  # Measured from your display
+        "white": (185, 190, 180),  # Much darker than (255,255,255)
+        "red": (120, 15, 5),  # Much darker than (255,0,0)
     },
-    accent='red'
+    accent="red",
 )
 
 # Use it directly

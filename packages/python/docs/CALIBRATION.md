@@ -141,14 +141,14 @@ from epaper_dithering import ColorPalette
 
 my_display = ColorPalette(
     colors={
-        'black':  (26, 13, 35),
-        'white':  (185, 202, 205),
-        'yellow': (202, 184, 0),
-        'red':    (121, 9, 0),
-        'blue':   (0, 69, 139),
-        'green':  (40, 82, 57),
+        "black": (26, 13, 35),
+        "white": (185, 202, 205),
+        "yellow": (202, 184, 0),
+        "red": (121, 9, 0),
+        "blue": (0, 69, 139),
+        "green": (40, 82, 57),
     },
-    accent='red'
+    accent="red",
 )
 ```
 
@@ -186,11 +186,11 @@ To contribute your measurements:
    ```python
    MY_DISPLAY_BWR = ColorPalette(
        colors={
-           'black': (5, 5, 5),
-           'white': (185, 190, 180),
-           'red': (120, 15, 5),
+           "black": (5, 5, 5),
+           "white": (185, 190, 180),
+           "red": (120, 15, 5),
        },
-       accent='red'
+       accent="red",
    )
    ```
 
