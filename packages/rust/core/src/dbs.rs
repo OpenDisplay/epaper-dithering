@@ -63,9 +63,13 @@ impl Kernel2D {
     }
 }
 
-/// Normalised (unit-sum) sampled Gaussian, truncated at `ceil(3σ)`.
+/// Blur truncation in standard deviations. Update cost grows with the square of the
+/// autocorrelation radius (2× the blur radius), so this is the main speed/accuracy knob.
+const BLUR_TRUNCATION_SIGMAS: f64 = 2.5;
+
+/// Normalised (unit-sum) sampled Gaussian, truncated at `ceil(BLUR_TRUNCATION_SIGMAS·σ)`.
 fn gaussian_blur(sigma: f64) -> Kernel2D {
-    let r = (3.0 * sigma).ceil().max(1.0) as usize;
+    let r = (BLUR_TRUNCATION_SIGMAS * sigma).ceil().max(1.0) as usize;
     let size = 2 * r + 1;
     let g: Vec<f64> = (0..size)
         .map(|i| {
