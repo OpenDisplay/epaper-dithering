@@ -1,0 +1,59 @@
+# Weekly dependency updates. Minor/patch updates are grouped into one PR per
+# ecosystem; major updates get individual PRs so breaking changes are
+# reviewed on their own. Security updates are opened regardless of schedule.
+#
+# Commit messages use `chore(deps)` so release-please does not cut a release
+# for them; retitle to `fix(deps)` when an update must ship to users (e.g. a
+# security fix in a crate compiled into the wheels).
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directories:
+      - /packages/rust          # core workspace (published to crates.io)
+      - /packages/python        # PyO3 extension (compiled into the wheels)
+      - /packages/rust/wasm     # wasm-bindgen bindings (compiled into the npm package)
+      - /packages/rust/ios      # iOS XCFramework wrapper
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /packages/javascript
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  # pip rather than uv: packages/python/uv.lock is git-ignored, and
+  # Dependabot's uv support requires a committed lockfile.
+  - package-ecosystem: pip
+    directory: /packages/python
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      pip-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
