@@ -1,5 +1,30 @@
 # Changelog
 
+## [6.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v5.0.0...epaper-dithering-core-v6.0.0) (2026-10-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **core:** `DitherConfig` has a new public field `dbs` (DBS refinement, added in #71). Code that constructs `DitherConfig` with an exhaustive struct literal must add `dbs: None`, or switch to `..Default::default()`.
+
+### Features
+
+* **core:** add DbsParams::validate ([33a4b89](https://github.com/OpenDisplay/epaper-dithering/commit/33a4b89034572869cf1dfe7fe58211e4d8a3b719))
+* **core:** add Direct Binary Search (DBS) refinement ([d1da1eb](https://github.com/OpenDisplay/epaper-dithering/commit/d1da1ebb6b7907364cf9800046e996acf000af5d))
+
+
+### Performance Improvements
+
+* **core:** interleave DBS correlation channels and fuse chroma update ([6d8735f](https://github.com/OpenDisplay/epaper-dithering/commit/6d8735fd23a374a08974fe397e81083d7eee89e8))
+* **core:** run DBS on parallel tiles ([1af7db6](https://github.com/OpenDisplay/epaper-dithering/commit/1af7db6d9238718cd376c4a90749da861da5c094))
+* **core:** sweep DBS update footprint over row slices ([beddd43](https://github.com/OpenDisplay/epaper-dithering/commit/beddd43ccfd2131d3e24063d5cf234fdb2b891f7))
+* **core:** truncate DBS eye-model blur at 2.5 sigma ([3ae0706](https://github.com/OpenDisplay/epaper-dithering/commit/3ae070609e4ea1be8d108dffb8dffe494d7a88dd))
+
+
+### Documentation
+
+* **core:** note that DitherConfig gained the dbs field ([4ba1956](https://github.com/OpenDisplay/epaper-dithering/commit/4ba19561a4fd8ea60a7ce3b349ad5d60abfc8082))
+
 ## [5.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v4.0.1...epaper-dithering-core-v5.0.0) (2026-07-23)
 
 

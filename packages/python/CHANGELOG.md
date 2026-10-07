@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.1.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-v6.0.0...epaper-dithering-v6.1.0) (2026-10-07)
+
+
+### Features
+
+* **core:** add Direct Binary Search (DBS) refinement ([d1da1eb](https://github.com/OpenDisplay/epaper-dithering/commit/d1da1ebb6b7907364cf9800046e996acf000af5d))
+
 ## [6.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-v5.0.9...epaper-dithering-v6.0.0) (2026-07-23)
 
 
