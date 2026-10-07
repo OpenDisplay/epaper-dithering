@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.1.1](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-v6.1.0...epaper-dithering-v6.1.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **python:** bump pyo3 to 0.29 for security advisories ([119682e](https://github.com/OpenDisplay/epaper-dithering/commit/119682edfb73a3f0f91315061c6c9cd055468eb8))
+
 ## [6.1.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-v6.0.0...epaper-dithering-v6.1.0) (2026-10-07)
 
 
