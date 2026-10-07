@@ -29,6 +29,32 @@ def label(img: Image.Image, text: str, size: int = 20) -> Image.Image:
     return out
 
 
+def hstack(images: list[Image.Image], gap: int = 4) -> Image.Image:
+    """Place images side by side with a dark gutter."""
+    out = Image.new("RGB", (sum(i.width for i in images) + gap * (len(images) - 1), max(i.height for i in images)), (15, 15, 15))
+    x = 0
+    for im in images:
+        out.paste(im, (x, 0))
+        x += im.width + gap
+    return out
+
+
+def vstack(images: list[Image.Image], gap: int = 4) -> Image.Image:
+    """Stack images vertically with a dark gutter."""
+    out = Image.new("RGB", (max(i.width for i in images), sum(i.height for i in images) + gap * (len(images) - 1)), (15, 15, 15))
+    y = 0
+    for im in images:
+        out.paste(im, (0, y))
+        y += im.height + gap
+    return out
+
+
+def zoom(img: Image.Image, box: tuple[int, int, int, int], factor: int = 4) -> Image.Image:
+    """Crop and upscale with nearest-neighbour so individual pixels stay visible."""
+    crop = img.crop(box)
+    return crop.resize((crop.width * factor, crop.height * factor), Image.Resampling.NEAREST)
+
+
 def grid(cells: list[list[Image.Image]]) -> Image.Image:
     rows = len(cells)
     cols = max(len(r) for r in cells)
@@ -48,17 +74,13 @@ frankfurt_orig = Image.open(FIXTURES / "frankfurt_nacht.png").convert("RGB")
 frankfurt_no_pre = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
                                 mode=DitherMode.BURKES, tone=0.0, gamut=0.0).convert("RGB")
 frankfurt_auto   = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
-                                mode=DitherMode.BURKES).convert("RGB")
+                                mode=DitherMode.BURKES, tone="auto", gamut="auto").convert("RGB")
 
 p1 = label(frankfurt_orig,   "Original")
 p2 = label(frankfurt_no_pre, "Spectra 6-color · Burkes · no preprocessing")
 p3 = label(frankfurt_auto,   "Spectra 6-color · Burkes · auto tone + gamut")
 
-ba = Image.new("RGB", (p1.width + p2.width + p3.width + 8, p1.height), (15, 15, 15))
-ba.paste(p1, (0, 0))
-ba.paste(p2, (p1.width + 4, 0))
-ba.paste(p3, (p1.width + p2.width + 8, 0))
-ba.save(OUT / "frankfurt_before_after.png")
+hstack([p1, p2, p3]).save(OUT / "frankfurt_before_after.png")
 
 # ── 2. All algorithms grid ────────────────────────────────────────────────────
 
@@ -75,12 +97,14 @@ ALGOS = [
     (DitherMode.SIERRA,             "Sierra"),
     (DitherMode.STUCKI,             "Stucki"),
     (DitherMode.JARVIS_JUDICE_NINKE,"Jarvis-Judice-Ninke"),
+    (DitherMode.DIZZY,              "Dizzy"),
 ]
 
+# Two columns keep each cell large enough to judge once GitHub scales the image down.
 algo_cells = []
-for i in range(0, len(ALGOS), 3):
+for i in range(0, len(ALGOS), 2):
     row = []
-    for mode, name in ALGOS[i:i+3]:
+    for mode, name in ALGOS[i:i+2]:
         cell = dithered_rgb(src, SPECTRA_7_3_6COLOR_V2, mode)
         row.append(label(cell, name))
     algo_cells.append(row)
@@ -112,5 +136,22 @@ for i in range(0, len(SCHEMES), 4):
     scheme_cells.append(row)
 
 grid(scheme_cells).save(OUT / "color_schemes_grid.png")
+
+# ── 4. DBS refinement ─────────────────────────────────────────────────────────
+
+print("Generating DBS comparison...")
+src3 = load("river.png")
+dbs_kwargs = {"mode": DitherMode.BURKES, "tone": "auto", "gamut": "auto"}
+burkes = dither_image(src3, SPECTRA_7_3_6COLOR_V2, **dbs_kwargs).convert("RGB")
+refined = dither_image(src3, SPECTRA_7_3_6COLOR_V2, dbs=True, **dbs_kwargs).convert("RGB")
+
+# Sky, clouds and treeline: smooth gradients plus edges.
+CROP = (230, 60, 430, 180)
+dbs_rows = [
+    [label(src3, "Original"), label(burkes, "Burkes"), label(refined, "Burkes + DBS")],
+    [label(zoom(im, CROP), f"{name} · 4× crop") for im, name in
+     [(src3, "Original"), (burkes, "Burkes"), (refined, "Burkes + DBS")]],
+]
+vstack([hstack(row) for row in dbs_rows]).save(OUT / "dbs_comparison.png")
 
 print("Done. Output in", OUT)
