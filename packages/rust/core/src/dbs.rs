@@ -6,9 +6,9 @@
 //! averages light the way the eye does — unlike OKLab, which `color_space_lab` uses for
 //! per-pixel matching.
 //!
-//! Each pass visits every pixel in raster order and tries changing it to every other ink and
-//! swapping it with each differing 8-neighbour, applying the move with the largest decrease
-//! in `E`. Trial cost is O(1) via the cached correlation `c_pe = c_pp ⋆ e`, where
+//! Each pass visits every pixel (raster order within tiles; tiles run in parallel, see
+//! `dbs_refine`) and tries changing it to every other ink and swapping it with each differing
+//! 8-neighbour, applying the move with the largest decrease in `E`. Trial cost is O(1) via the cached correlation `c_pe = c_pp ⋆ e`, where
 //! `c_pp = p ⋆ p` is the blur's autocorrelation; an accepted move updates `c_pe` over the
 //! footprint of `c_pp` only.
 //!
@@ -224,11 +224,172 @@ fn sweep(
     }
 }
 
+/// Read-only state shared by every tile.
+struct Shared<'a> {
+    width: usize,
+    height: usize,
+    inks: &'a [[f64; 3]],
+    cpp_lum: &'a Kernel2D,
+    cpp_chroma: &'a Kernel2D,
+    pinned: Option<&'a [bool]>,
+}
+
+impl Shared<'_> {
+    fn is_pinned(&self, i: usize) -> bool {
+        self.pinned.is_some_and(|p| p[i])
+    }
+}
+
+/// Inclusive-exclusive rectangle `[x0, x1) × [y0, y1)` in image coordinates.
+#[derive(Clone, Copy)]
+struct Rect {
+    x0: usize,
+    y0: usize,
+    x1: usize,
+    y1: usize,
+}
+
+impl Rect {
+    fn width(&self) -> usize {
+        self.x1 - self.x0
+    }
+}
+
+/// A tile's private working copy of `c_pe` and `indices` over `rect` (the tile plus a margin
+/// wide enough to hold every read and write its moves make).
+struct Region {
+    rect: Rect,
+    cpe: Vec<[f64; 3]>,
+    indices: Vec<u8>,
+}
+
+impl Region {
+    fn copy_from(rect: Rect, cpe: &[[f64; 3]], indices: &[u8], width: usize) -> Self {
+        let rows = rect.y0..rect.y1;
+        let span = |y: usize| y * width + rect.x0..y * width + rect.x1;
+        Self {
+            rect,
+            cpe: rows.clone().flat_map(|y| cpe[span(y)].iter().copied()).collect(),
+            indices: rows.flat_map(|y| indices[span(y)].iter().copied()).collect(),
+        }
+    }
+
+    fn copy_into(&self, cpe: &mut [[f64; 3]], indices: &mut [u8], width: usize) {
+        let w = self.rect.width();
+        for (ry, y) in (self.rect.y0..self.rect.y1).enumerate() {
+            let span = y * width + self.rect.x0..y * width + self.rect.x1;
+            cpe[span.clone()].copy_from_slice(&self.cpe[ry * w..(ry + 1) * w]);
+            indices[span].copy_from_slice(&self.indices[ry * w..(ry + 1) * w]);
+        }
+    }
+}
+
+/// One raster pass of DBS over the pixels of `tile`, working in `region`. Returns the number
+/// of accepted moves and the summed change in perceived error.
+fn refine_tile(sh: &Shared, region: &mut Region, tile: Rect) -> (usize, f64) {
+    const EPS: f64 = 1e-9;
+    let Region { rect, cpe, indices } = region;
+    let (rw, rh) = (rect.width(), rect.y1 - rect.y0);
+    let local = |x: usize, y: usize| (y - rect.y0) * rw + (x - rect.x0);
+    let cpp = [sh.cpp_lum, sh.cpp_chroma, sh.cpp_chroma];
+    let cpp0 = cpp.map(|k| k.at(0, 0));
+    let inks = sh.inks;
+
+    // c_pe += a_ch·c_pp_ch(· − m) for every channel. Cx and Cz share the chrominance kernel,
+    // so they are updated in a single sweep. The region margin covers the whole footprint, so
+    // clipping to the region only ever clips at true image edges.
+    let add_kernels = |cpe: &mut [[f64; 3]], (x, y): (usize, usize), a: [f64; 3]| {
+        let m = (x - rect.x0, y - rect.y0);
+        sweep(cpe, rw, rh, sh.cpp_lum, m, |c, k| c[0] += a[0] * k);
+        sweep(cpe, rw, rh, sh.cpp_chroma, m, |c, k| {
+            c[1] += a[1] * k;
+            c[2] += a[2] * k;
+        });
+    };
+
+    let (mut accepted, mut delta) = (0, 0.0);
+    for y in tile.y0..tile.y1 {
+        for x in tile.x0..tile.x1 {
+            if sh.is_pinned(y * sh.width + x) {
+                continue;
+            }
+            let m = local(x, y);
+            let k = indices[m] as usize;
+            let c = cpe[m];
+
+            enum Move { Toggle(usize), Swap { n: usize, nx: usize, ny: usize } }
+            let mut best_de = -EPS;
+            let mut best = None;
+
+            for j in (0..inks.len()).filter(|&j| j != k) {
+                let de: f64 = (0..3)
+                    .map(|ch| {
+                        let a = inks[j][ch] - inks[k][ch];
+                        cpp0[ch] * a * a + 2.0 * a * c[ch]
+                    })
+                    .sum();
+                if de < best_de {
+                    best_de = de;
+                    best = Some(Move::Toggle(j));
+                }
+            }
+
+            for (dx, dy) in NEIGHBOURS {
+                let Some((nx, ny)) = neighbour(x, y, dx, dy, sh.width, sh.height) else { continue };
+                let n = local(nx, ny);
+                let kn = indices[n] as usize;
+                if kn == k || sh.is_pinned(ny * sh.width + nx) {
+                    continue;
+                }
+                // m takes kn (Δ = a), n takes k (Δ = −a).
+                let de: f64 = (0..3)
+                    .map(|ch| {
+                        let a = inks[kn][ch] - inks[k][ch];
+                        2.0 * a * a * (cpp0[ch] - cpp[ch].at(dx, dy)) + 2.0 * a * (c[ch] - cpe[n][ch])
+                    })
+                    .sum();
+                if de < best_de {
+                    best_de = de;
+                    best = Some(Move::Swap { n, nx, ny });
+                }
+            }
+
+            let Some(mv) = best else { continue };
+            accepted += 1;
+            delta += best_de;
+            match mv {
+                Move::Toggle(j) => {
+                    add_kernels(cpe, (x, y), std::array::from_fn(|ch| inks[j][ch] - inks[k][ch]));
+                    indices[m] = j as u8;
+                }
+                Move::Swap { n, nx, ny } => {
+                    let kn = indices[n] as usize;
+                    let a: [f64; 3] = std::array::from_fn(|ch| inks[kn][ch] - inks[k][ch]);
+                    add_kernels(cpe, (x, y), a);
+                    add_kernels(cpe, (nx, ny), a.map(|v| -v));
+                    indices.swap(m, n);
+                }
+            }
+        }
+    }
+    (accepted, delta)
+}
+
+/// Smallest tile side. Larger tiles amortise the region copies; smaller ones expose more
+/// parallelism. The correctness bound (`2·margin + 1`) is enforced separately.
+const MIN_TILE: usize = 64;
+
 /// Refine palette `indices` in place to minimise perceived error against `pixels` (sRGB,
 /// `width × height × 3`), as seen through `palette` (pass the measured palette).
 ///
 /// `pinned` pixels are never changed or swapped, and their target is taken to be their own
 /// ink, so they neither carry error nor pull neighbours to compensate for it.
+///
+/// Each pass runs in four phases over a 2×2 checkerboard of tiles. A move inside a tile reads
+/// within 1 px of it and writes within `margin = R + 1` of it (R = autocorrelation radius), so
+/// tiles of one phase — at least one tile side (≥ 2·margin + 1) apart — never touch each
+/// other's data and run in parallel on private copies. The result depends only on the fixed
+/// tile order, not on thread count or scheduling.
 ///
 /// # Panics
 /// Panics if buffer lengths disagree with `width × height`, or on a non-positive `ppi` or
@@ -247,18 +408,16 @@ pub fn dbs_refine(
     if let Some(p) = pinned {
         assert_eq!(p.len(), n_px, "pinned mask size mismatch");
     }
-    let is_pinned = |i: usize| pinned.is_some_and(|p| p[i]);
 
     let (inks, mut target) = to_yycxcz(pixels, width, height, palette);
     for (i, t) in target.iter_mut().enumerate() {
-        if is_pinned(i) {
+        if pinned.is_some_and(|p| p[i]) {
             *t = inks[indices[i] as usize];
         }
     }
 
     let [cpp_lum, cpp_chroma] = eye_blurs(params).map(|p| autocorrelate(&p));
     let cpp = [&cpp_lum, &cpp_chroma, &cpp_chroma];
-    let cpp0 = cpp.map(|k| k.at(0, 0));
 
     // c_pe per pixel, channels interleaved so one footprint sweep touches each cache line once.
     let per_channel: [Vec<f64>; 3] = std::array::from_fn(|ch| {
@@ -275,84 +434,46 @@ pub fn dbs_refine(
         .sum();
     let initial_error = err;
 
-    // c_pe += a_ch·c_pp_ch(· − m) for every channel. Cx and Cz share the chrominance kernel,
-    // so they are updated in a single sweep.
-    let add_kernels = |cpe: &mut [[f64; 3]], m: (usize, usize), a: [f64; 3]| {
-        sweep(cpe, width, height, &cpp_lum, m, |c, k| c[0] += a[0] * k);
-        sweep(cpe, width, height, &cpp_chroma, m, |c, k| {
-            c[1] += a[1] * k;
-            c[2] += a[2] * k;
-        });
+    let sh = Shared { width, height, inks: &inks, cpp_lum: &cpp_lum, cpp_chroma: &cpp_chroma, pinned };
+    let margin = cpp_lum.radius.max(cpp_chroma.radius) + 1;
+    let side = MIN_TILE.max(2 * margin + 1);
+    let tiles = |phase_x: usize, phase_y: usize| {
+        let (cols, rows) = (width.div_ceil(side), height.div_ceil(side));
+        (0..rows)
+            .filter(move |ty| ty % 2 == phase_y)
+            .flat_map(move |ty| (0..cols).filter(move |tx| tx % 2 == phase_x).map(move |tx| (tx, ty)))
+            .map(|(tx, ty)| Rect {
+                x0: tx * side,
+                y0: ty * side,
+                x1: ((tx + 1) * side).min(width),
+                y1: ((ty + 1) * side).min(height),
+            })
+            .collect::<Vec<_>>()
+    };
+    let with_margin = |t: Rect| Rect {
+        x0: t.x0.saturating_sub(margin),
+        y0: t.y0.saturating_sub(margin),
+        x1: (t.x1 + margin).min(width),
+        y1: (t.y1 + margin).min(height),
     };
 
-    const EPS: f64 = 1e-9;
-    let n_inks = inks.len();
     let mut accepted_per_pass = Vec::new();
-
     for _ in 0..params.max_passes {
         let mut accepted = 0;
-        for y in 0..height {
-            for x in 0..width {
-                let m = y * width + x;
-                if is_pinned(m) {
-                    continue;
-                }
-                let k = indices[m] as usize;
-                let c = cpe[m];
-
-                enum Move { Toggle(usize), Swap { n: usize, nx: usize, ny: usize } }
-                let mut best_de = -EPS;
-                let mut best = None;
-
-                for j in (0..n_inks).filter(|&j| j != k) {
-                    let de: f64 = (0..3)
-                        .map(|ch| {
-                            let a = inks[j][ch] - inks[k][ch];
-                            cpp0[ch] * a * a + 2.0 * a * c[ch]
-                        })
-                        .sum();
-                    if de < best_de {
-                        best_de = de;
-                        best = Some(Move::Toggle(j));
-                    }
-                }
-
-                for (dx, dy) in NEIGHBOURS {
-                    let Some((nx, ny)) = neighbour(x, y, dx, dy, width, height) else { continue };
-                    let n = ny * width + nx;
-                    let kn = indices[n] as usize;
-                    if kn == k || is_pinned(n) {
-                        continue;
-                    }
-                    // m takes kn (Δ = a), n takes k (Δ = −a).
-                    let de: f64 = (0..3)
-                        .map(|ch| {
-                            let a = inks[kn][ch] - inks[k][ch];
-                            2.0 * a * a * (cpp0[ch] - cpp[ch].at(dx, dy)) + 2.0 * a * (c[ch] - cpe[n][ch])
-                        })
-                        .sum();
-                    if de < best_de {
-                        best_de = de;
-                        best = Some(Move::Swap { n, nx, ny });
-                    }
-                }
-
-                let Some(mv) = best else { continue };
-                accepted += 1;
-                err += best_de;
-                match mv {
-                    Move::Toggle(j) => {
-                        add_kernels(&mut cpe, (x, y), std::array::from_fn(|ch| inks[j][ch] - inks[k][ch]));
-                        indices[m] = j as u8;
-                    }
-                    Move::Swap { n, nx, ny } => {
-                        let kn = indices[n] as usize;
-                        let a: [f64; 3] = std::array::from_fn(|ch| inks[kn][ch] - inks[k][ch]);
-                        add_kernels(&mut cpe, (x, y), a);
-                        add_kernels(&mut cpe, (nx, ny), a.map(|v| -v));
-                        indices.swap(m, n);
-                    }
-                }
+        for (phase_x, phase_y) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+            let results: Vec<_> = tiles(phase_x, phase_y)
+                .into_par_iter()
+                .map(|tile| {
+                    let mut region = Region::copy_from(with_margin(tile), &cpe, indices, width);
+                    let (n, delta) = refine_tile(&sh, &mut region, tile);
+                    (region, n, delta)
+                })
+                .collect();
+            // Regions of one phase are disjoint; fold in tile order for a deterministic sum.
+            for (region, n, delta) in results {
+                region.copy_into(&mut cpe, indices, width);
+                accepted += n;
+                err += delta;
             }
         }
         accepted_per_pass.push(accepted);
@@ -470,20 +591,24 @@ mod tests {
 
     /// The incremental bookkeeping (ΔE formulas, correlation updates) must agree with a
     /// from-scratch blur-and-square of the final halftone. Catches wrong toggle/swap deltas.
+    ///
+    /// The 200×150 case spans several tiles, so it also checks that tile margins are wide
+    /// enough: an update clipped at a margin would silently leave `c_pe` wrong.
     #[test]
     fn reported_errors_match_direct_computation() {
-        let (w, h) = (32, 24);
-        let px = gradient(w, h);
-        let palette = &SPECTRA_7_3_6COLOR;
-        let params = DbsParams::default();
-        let mut idx = burkes(&px, w, h, palette);
-        let before = perceived_error(&px, w, h, palette, &idx, &params);
+        for (w, h) in [(32, 24), (200, 150)] {
+            let px = gradient(w, h);
+            let palette = &SPECTRA_7_3_6COLOR;
+            let params = DbsParams::default();
+            let mut idx = burkes(&px, w, h, palette);
+            let before = perceived_error(&px, w, h, palette, &idx, &params);
 
-        let stats = dbs_refine(&px, w, h, palette, &mut idx, None, &params);
+            let stats = dbs_refine(&px, w, h, palette, &mut idx, None, &params);
 
-        let after = perceived_error(&px, w, h, palette, &idx, &params);
-        assert_relative_eq!(stats.initial_error, before, max_relative = 1e-9);
-        assert_relative_eq!(stats.final_error, after, max_relative = 1e-9);
+            let after = perceived_error(&px, w, h, palette, &idx, &params);
+            assert_relative_eq!(stats.initial_error, before, max_relative = 1e-9);
+            assert_relative_eq!(stats.final_error, after, max_relative = 1e-9);
+        }
     }
 
     /// After convergence no single toggle or 8-neighbour swap may lower the error, judged by
@@ -550,6 +675,26 @@ mod tests {
 
         let frac = idx.iter().filter(|&&i| i == white).count() as f64 / (w * h) as f64;
         assert!((0.46..=0.54).contains(&frac), "white coverage {frac:.3}, expected ≈ 0.50");
+    }
+
+    /// Tiles run in parallel; the result must depend only on the fixed tile order, never on
+    /// thread count or scheduling. The image spans several tiles in each direction.
+    #[test]
+    fn result_is_independent_of_thread_count() {
+        let (w, h) = (200, 150);
+        let px = gradient(w, h);
+        let palette = &SPECTRA_7_3_6COLOR;
+        let init = burkes(&px, w, h, palette);
+        let run = |threads: usize| {
+            let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
+            let mut idx = init.clone();
+            let stats = pool.install(|| dbs_refine(&px, w, h, palette, &mut idx, None, &DbsParams::default()));
+            (idx, stats)
+        };
+        let (one, s1) = run(1);
+        let (four, s4) = run(4);
+        assert_eq!(one, four);
+        assert_eq!(s1, s4);
     }
 
     #[test]
