@@ -70,6 +70,7 @@ pub fn dither_image(
         highlights,
         tone:  parse_tone(tone),
         gamut: parse_gamut(gamut),
+        dbs:   None,
     };
 
     if palette_bytes.is_empty() {

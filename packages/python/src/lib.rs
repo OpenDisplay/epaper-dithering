@@ -105,6 +105,7 @@ fn dither_image(
         highlights,
         tone:  parse_tone(tone),
         gamut: parse_gamut(gamut),
+        dbs:   None,
     };
 
     // Validation and `Palette` construction stay under the GIL; only the

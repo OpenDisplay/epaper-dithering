@@ -2,6 +2,7 @@ pub mod algorithms;
 pub mod color_space;
 pub mod color_space_lab;
 pub mod composite;
+pub mod dbs;
 pub mod dizzy;
 pub mod enums;
 pub mod error;
@@ -12,6 +13,7 @@ pub mod tone_map;
 pub mod types;
 
 use crate::color_space::{linear_channel_to_srgb, srgb_channel_to_linear};
+use crate::dbs::DbsParams;
 use crate::enums::{DitherMode, GamutCompression, ToneCompression};
 use crate::palettes::Palette;
 use crate::types::ImageBuffer;
@@ -24,7 +26,7 @@ use crate::types::ImageBuffer;
 /// ```
 ///
 /// Pre-processing pipeline (applied in order, each step is a no-op at its identity value):
-/// `exposure → saturation → shadows/highlights → tone → gamut → dither`.
+/// `exposure → saturation → shadows/highlights → tone → gamut → dither → dbs`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DitherConfig {
     /// Dithering algorithm.
@@ -45,6 +47,9 @@ pub struct DitherConfig {
     pub tone: ToneCompression,
     /// Gamut compression. Auto = full strength on out-of-gamut; Fixed(s) = manual.
     pub gamut: GamutCompression,
+    /// Optional Direct Binary Search refinement of the dithered output (see `dbs`). Slow:
+    /// seconds on a full panel, so `None` by default.
+    pub dbs: Option<DbsParams>,
 }
 
 impl Default for DitherConfig {
@@ -58,6 +63,7 @@ impl Default for DitherConfig {
             highlights: 0.0,
             tone:       ToneCompression::Fixed(0.0),
             gamut:      GamutCompression::None,
+            dbs:        None,
         }
     }
 }
@@ -162,7 +168,8 @@ fn dither_impl(
         {
             return indices;
         }
-        return dispatch(img, p, canonical, config.mode, config.serpentine, pin_exact_pixels);
+        let indices = dispatch(img, p, canonical, config.mode, config.serpentine, pin_exact_pixels);
+        return refine(img, p, canonical, indices, config.dbs, pin_exact_pixels);
     }
 
     // Convert sRGB bytes → linear, apply pre-processing pipeline, convert back.
@@ -192,7 +199,29 @@ fn dither_impl(
         .collect();
 
     let processed_img = ImageBuffer::new(&processed, img.width);
-    dispatch(&processed_img, p, canonical, config.mode, config.serpentine, pin_exact_pixels)
+    let indices = dispatch(&processed_img, p, canonical, config.mode, config.serpentine, pin_exact_pixels);
+    refine(&processed_img, p, canonical, indices, config.dbs, pin_exact_pixels)
+}
+
+/// Final pipeline step: optional DBS refinement against the (pre-processed) target image.
+/// Pixels the dispatch pinned to an exact canonical colour stay pinned.
+fn refine(
+    img: &ImageBuffer,
+    p: &Palette,
+    canonical: &Palette,
+    mut indices: Vec<u8>,
+    params: Option<DbsParams>,
+    pin_exact_pixels: bool,
+) -> Vec<u8> {
+    let Some(params) = params else { return indices };
+    let pinned: Option<Vec<bool>> = pin_exact_pixels.then(|| {
+        img.data
+            .chunks_exact(3)
+            .map(|rgb| algorithms::exact_palette_index(rgb, canonical).is_some())
+            .collect()
+    });
+    dbs::dbs_refine(img.data, img.width, img.height, p, &mut indices, pinned.as_deref(), &params);
+    indices
 }
 
 #[cfg(test)]
@@ -334,5 +363,37 @@ mod tests {
             },
         );
         assert_eq!(output.len(), 4);
+    }
+
+    #[test]
+    fn dbs_refinement_lowers_perceived_error() {
+        let pixels: Vec<u8> = (0..24 * 16)
+            .flat_map(|i| [(i % 24 * 10) as u8, (i / 24 * 16) as u8, 200 - (i % 24 * 8) as u8])
+            .collect();
+        let img = ImageBuffer::new(&pixels, 24);
+        let params = DbsParams::default();
+
+        let plain = dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig::default());
+        let refined = dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig { dbs: Some(params), ..Default::default() });
+
+        let err = |idx: &[u8]| dbs::perceived_error(&pixels, 24, 16, &SPECTRA_7_3_6COLOR, idx, &params);
+        assert!(err(&refined) < err(&plain), "{} !< {}", err(&refined), err(&plain));
+    }
+
+    #[test]
+    fn exact_canonical_pixels_stay_pinned_under_dbs() {
+        let mut image = pixels([128, 128, 128], 8);
+        image[0..3].copy_from_slice(&[0, 255, 0]);
+        image[9..12].copy_from_slice(&[0, 255, 0]);
+        let img = ImageBuffer::new(&image, 4);
+
+        let output = dither_with_canonical(
+            &img,
+            &SPECTRA_7_3_6COLOR,
+            ColorScheme::Bwgbry.palette(),
+            DitherConfig { dbs: Some(DbsParams::default()), ..Default::default() },
+        );
+        assert_eq!(output[0], 5);
+        assert_eq!(output[3], 5);
     }
 }
