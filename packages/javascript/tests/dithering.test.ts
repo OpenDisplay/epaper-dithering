@@ -8,6 +8,7 @@ import {
   fromValue,
   SPECTRA_7_3_6COLOR,
 } from '../src';
+import type { DbsParams, DitherOptions } from '../src';
 import { createTestImage, createGradient, createTransparentTestImage } from './fixtures';
 // Imported after '../src' so that core.ts has already run __wbg_set_wasm.
 import { composite_rgba as compositeRgba } from '../src/wasm-core/epaper_dithering_wasm_bg.js';
@@ -542,5 +543,48 @@ describe('Dizzy dithering', () => {
     const a = ditherImage(rampImage(), ColorScheme.BWR, { mode: DitherMode.DIZZY });
     const b = ditherImage(rampImage(), ColorScheme.BWR, { mode: DitherMode.DIZZY });
     expect(Array.from(a.indices)).toEqual(Array.from(b.indices));
+  });
+});
+
+describe('DBS refinement', () => {
+  // Grayscale gradient on BWR: enough structure that DBS changes the halftone.
+  const image = createGradient(40, 30);
+  const indices = (options: DitherOptions = {}) => Array.from(ditherImage(image, ColorScheme.BWR, options).indices);
+
+  it('changes the output for a color scheme', () => {
+    expect(indices({ dbs: true })).not.toEqual(indices());
+  });
+
+  it('changes the output for a measured palette', () => {
+    const plain = ditherImage(image, SPECTRA_7_3_6COLOR).indices;
+    const refined = ditherImage(image, SPECTRA_7_3_6COLOR, { dbs: true }).indices;
+    expect(Array.from(refined)).not.toEqual(Array.from(plain));
+  });
+
+  it('true means default parameters', () => {
+    expect(indices({ dbs: true })).toEqual(indices({ dbs: {} }));
+    expect(indices({ dbs: true })).toEqual(indices({ dbs: { viewingDistanceCm: 40, ppi: 127, maxPasses: 10 } }));
+  });
+
+  it('false and omitted match plain dithering', () => {
+    expect(indices({ dbs: false })).toEqual(indices());
+  });
+
+  it('passes viewing geometry through', () => {
+    expect(indices({ dbs: { viewingDistanceCm: 15 } })).not.toEqual(indices({ dbs: { viewingDistanceCm: 150 } }));
+  });
+
+  it('zero passes matches plain dithering', () => {
+    expect(indices({ dbs: { maxPasses: 0 } })).toEqual(indices());
+  });
+
+  it.each([
+    [{ ppi: 0 }, /ppi/],
+    [{ ppi: Number.NaN }, /ppi/],
+    [{ viewingDistanceCm: -1 }, /viewingDistanceCm/],
+    [{ maxPasses: -1 }, /maxPasses/],
+    [{ maxPasses: 1.5 }, /maxPasses/],
+  ] as [DbsParams, RegExp][])('rejects invalid parameters %o', (dbs, message) => {
+    expect(() => ditherImage(image, ColorScheme.BWR, { dbs })).toThrow(message);
   });
 });

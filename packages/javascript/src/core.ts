@@ -22,10 +22,24 @@ __wbg_set_wasm(wasmInstance.exports);
 (wasmInstance.exports as Record<string, () => void>).__wbindgen_start?.();
 
 /**
+ * Direct Binary Search refinement settings. DBS improves a dithered image by repeatedly
+ * changing pixels to other inks or swapping them with neighbours whenever that lowers the
+ * error as perceived through a model of the eye at the given viewing geometry.
+ */
+export interface DbsParams {
+  /** Distance between viewer and panel in cm. Larger values blur more. Default: `40`. */
+  viewingDistanceCm?: number;
+  /** Panel pixel density. A 7.3" 800×480 panel is about 127 ppi. Default: `127`. */
+  ppi?: number;
+  /** Upper bound on full-image passes; stops early once nothing improves. Default: `10`. */
+  maxPasses?: number;
+}
+
+/**
  * Options for `ditherImage`. All fields are optional — defaults are sensible.
  *
- * Pre-processing pipeline (each step is a no-op at its identity value):
- * `exposure → saturation → shadows/highlights → tone → gamut → dither`.
+ * Pipeline (each step is a no-op at its identity value):
+ * `exposure → saturation → shadows/highlights → tone → gamut → dither → dbs`.
  */
 export interface DitherOptions {
   /** Dithering algorithm. Default: `DitherMode.BURKES`. */
@@ -44,6 +58,12 @@ export interface DitherOptions {
   tone?: number | 'auto' | 'off';
   /** Gamut compression: `0.0`/`'off'` disables, `'auto'` opts in. Default: `0.0`. */
   gamut?: number | 'auto' | 'off';
+  /**
+   * Direct Binary Search refinement after dithering: `false` disables, `true` uses default
+   * {@link DbsParams}. Slow — seconds on a full panel, and it blocks the calling thread, so
+   * run it in a Web Worker in the browser. Default: `false`.
+   */
+  dbs?: boolean | DbsParams;
 }
 
 /**
@@ -68,7 +88,9 @@ export function ditherImage(
     highlights = 0.0,
     tone = 0.0,
     gamut = 0.0,
+    dbs = false,
   } = options;
+  const dbsArgs = parseDbs(dbs);
 
   const expectedLength = image.width * image.height * 4;
   if (image.data.length !== expectedLength) {
@@ -114,9 +136,29 @@ export function ditherImage(
     mode as number, serpentine,
     exposure, saturation, shadows, highlights,
     toneArg, gamutArg,
+    ...dbsArgs,
   );
 
   return { width: image.width, height: image.height, indices, palette: outputColors };
+}
+
+/**
+ * Map the `dbs` option onto the binding's `(dbs_passes, viewing_distance_cm, ppi)` arguments;
+ * `dbs_passes = undefined` disables DBS. Validated here because wasm-bindgen silently coerces
+ * numbers into `u32` (e.g. `-1` → 4294967295).
+ */
+function parseDbs(dbs: boolean | DbsParams): [number | undefined, number, number] {
+  if (dbs === false) return [undefined, 40, 127];
+  const { viewingDistanceCm = 40, ppi = 127, maxPasses = 10 } = dbs === true ? {} : dbs;
+  for (const [name, value] of [['viewingDistanceCm', viewingDistanceCm], ['ppi', ppi]] as const) {
+    if (!(Number.isFinite(value) && value > 0)) {
+      throw new Error(`dbs.${name} must be finite and greater than 0, got ${value}`);
+    }
+  }
+  if (!(Number.isInteger(maxPasses) && maxPasses >= 0 && maxPasses <= 0xffffffff)) {
+    throw new Error(`dbs.maxPasses must be a non-negative integer, got ${maxPasses}`);
+  }
+  return [maxPasses, viewingDistanceCm, ppi];
 }
 
 /** Map `'auto'` → `undefined` (Rust None = auto), `'off'` → 0.0, number → pass through. */

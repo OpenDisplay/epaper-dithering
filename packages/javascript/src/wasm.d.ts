@@ -18,6 +18,7 @@ declare module '*epaper_dithering_wasm_bg.js' {
     mode_id: number, serpentine: boolean,
     exposure: number, saturation: number, shadows: number, highlights: number,
     tone?: number | null, gamut?: number | null,
+    dbs_passes?: number | null, dbs_viewing_distance_cm?: number, dbs_ppi?: number,
   ): Uint8Array;
   export function measured_palettes(): string;
   export function __wbg_set_wasm(wasm: unknown): void;
