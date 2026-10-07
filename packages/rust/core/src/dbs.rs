@@ -113,16 +113,9 @@ const CHANNEL_BLUR: [usize; 3] = [0, 1, 1];
 
 /// Eye-model blurs `[luminance, chrominance]`; index with `CHANNEL_BLUR`.
 fn eye_blurs(params: &DbsParams) -> [Kernel2D; 2] {
-    assert!(
-        params.ppi.is_finite() && params.ppi > 0.0,
-        "DBS ppi must be positive, got {}",
-        params.ppi
-    );
-    assert!(
-        params.viewing_distance_cm.is_finite() && params.viewing_distance_cm > 0.0,
-        "DBS viewing distance must be positive, got {}",
-        params.viewing_distance_cm
-    );
+    if let Err(e) = params.validate() {
+        panic!("{e}");
+    }
     let lum = gaussian_blur(eye_sigma_px(ALPHA_LUM, params));
     let chroma = gaussian_blur(eye_sigma_px(ALPHA_CHROMA, params));
     [lum, chroma]
@@ -184,6 +177,34 @@ impl Default for DbsParams {
     /// 40 cm from a ~127 ppi panel (7.3" 800×480), at most 10 passes.
     fn default() -> Self {
         Self { viewing_distance_cm: 40.0, ppi: 127.0, max_passes: 10 }
+    }
+}
+
+/// A `DbsParams` field outside its valid range (finite and > 0).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InvalidDbsParams {
+    pub field: &'static str,
+    pub value: f64,
+}
+
+impl std::fmt::Display for InvalidDbsParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DBS {} must be finite and greater than 0, got {}", self.field, self.value)
+    }
+}
+
+impl std::error::Error for InvalidDbsParams {}
+
+impl DbsParams {
+    /// Check that the viewing geometry is usable. FFI boundaries call this to report a clean
+    /// error; `dbs_refine` panics on invalid parameters.
+    pub fn validate(&self) -> Result<(), InvalidDbsParams> {
+        for (field, value) in [("ppi", self.ppi), ("viewing_distance_cm", self.viewing_distance_cm)] {
+            if !(value.is_finite() && value > 0.0) {
+                return Err(InvalidDbsParams { field, value });
+            }
+        }
+        Ok(())
     }
 }
 
@@ -555,6 +576,25 @@ mod tests {
 
     fn burkes(px: &[u8], w: usize, h: usize, palette: &Palette) -> Vec<u8> {
         error_diffusion_dither(px, w, h, palette, &BURKES, true)
+    }
+
+    #[test]
+    fn validate_accepts_defaults() {
+        assert_eq!(DbsParams::default().validate(), Ok(()));
+    }
+
+    #[test]
+    fn validate_rejects_non_positive_or_non_finite_geometry() {
+        for (params, field) in [
+            (DbsParams { ppi: 0.0, ..Default::default() }, "ppi"),
+            (DbsParams { ppi: f64::NAN, ..Default::default() }, "ppi"),
+            (DbsParams { viewing_distance_cm: -1.0, ..Default::default() }, "viewing_distance_cm"),
+            (DbsParams { viewing_distance_cm: f64::INFINITY, ..Default::default() }, "viewing_distance_cm"),
+        ] {
+            let err = params.validate().unwrap_err();
+            assert_eq!(err.field, field);
+            assert!(err.to_string().contains(field), "message should name the field: {err}");
+        }
     }
 
     #[test]
