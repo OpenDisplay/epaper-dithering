@@ -2,24 +2,15 @@ import type { ImageBuffer, PaletteImageBuffer, ColorPalette } from './types';
 import { DitherMode } from './enums';
 import { ColorScheme, getPalette } from './palettes';
 import {
+  initSync,
   dither_image as wasmDitherImage,
   composite_rgba as wasmCompositeRgba,
-  __wbg_set_wasm,
-  __wbindgen_init_externref_table,
-  __wbindgen_cast_0000000000000001,
-} from './wasm-core/epaper_dithering_wasm_bg.js';
+} from './wasm-core/epaper_dithering_wasm.js';
 import wasmBytes from './wasm-core/epaper_dithering_wasm_bg.wasm';
 
-// Synchronous WASM initialization — runs once at module load time.
-const wasmModule = new WebAssembly.Module(wasmBytes as unknown as ArrayBuffer);
-const wasmInstance = new WebAssembly.Instance(wasmModule, {
-  './epaper_dithering_wasm_bg.js': {
-    __wbindgen_init_externref_table,
-    __wbindgen_cast_0000000000000001,
-  },
-});
-__wbg_set_wasm(wasmInstance.exports);
-(wasmInstance.exports as Record<string, () => void>).__wbindgen_start?.();
+// Synchronous WASM initialization from the inlined binary, once at module load time, via
+// wasm-bindgen's own `initSync` (built with `wasm-pack --target web`).
+initSync({ module: wasmBytes });
 
 /**
  * Direct Binary Search refinement settings. DBS improves a dithered image by repeatedly

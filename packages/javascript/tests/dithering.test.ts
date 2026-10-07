@@ -10,8 +10,8 @@ import {
 } from '../src';
 import type { DbsParams, DitherOptions } from '../src';
 import { createTestImage, createGradient, createTransparentTestImage } from './fixtures';
-// Imported after '../src' so that core.ts has already run __wbg_set_wasm.
-import { composite_rgba as compositeRgba } from '../src/wasm-core/epaper_dithering_wasm_bg.js';
+// Imported after '../src' so that core.ts has already run initSync.
+import { composite_rgba as compositeRgba } from '../src/wasm-core/epaper_dithering_wasm.js';
 
 describe('Dithering Algorithms', () => {
   it.each(Object.values(DitherMode).filter((v) => typeof v === 'number'))(

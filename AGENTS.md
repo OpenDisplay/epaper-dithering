@@ -34,11 +34,11 @@ uv run prek run --all-files --config .pre-commit-config.yaml   # lint (ruff, myp
 
 ### JavaScript (`packages/javascript/`)
 
-The WASM bundle must be built into `src/wasm-core/` before anything else works:
+The WASM bundle must be built into `src/wasm-core/` before anything else works. Use `--target web`: `core.ts` inlines the `.wasm` bytes (tsup binary loader) and initialises with the generated `initSync`, so it never touches wasm-bindgen's internal glue.
 
 ```bash
 # from repo root; requires wasm-pack and the wasm32-unknown-unknown target
-wasm-pack build packages/rust/wasm --target bundler --out-dir ../../javascript/src/wasm-core
+wasm-pack build packages/rust/wasm --target web --out-dir ../../javascript/src/wasm-core
 
 cd packages/javascript
 bun install

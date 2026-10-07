@@ -232,7 +232,7 @@ Features: drag & drop or paste from clipboard, live re-render on every setting c
 bun install
 
 # When Rust source changes, rebuild the WASM (from repo root):
-wasm-pack build packages/rust/wasm --target bundler --out-dir ../../javascript/src/wasm-core
+wasm-pack build packages/rust/wasm --target web --out-dir ../../javascript/src/wasm-core
 
 bun run test        # vitest
 bun run build       # tsup → dist/
