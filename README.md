@@ -20,6 +20,10 @@ Dithering algorithms for e-paper/e-ink displays. Rust core with Python and JavaS
 
 ![All color schemes compared](docs/examples/color_schemes_grid.png)
 
+**DBS refinement** (Spectra 6-color, auto tone + gamut). Direct Binary Search optimizes the dithered pixels against a model of the eye at a given viewing distance: here it recovers the blue sky that plain error diffusion washes out to grey. The zoomed crops show the trade-off up close, including a few colored specks where it mixes inks. It is opt-in and slower (about 0.3 s per 800×480 panel on a multi-core machine, vs. ~30 ms).
+
+![Original vs Burkes vs Burkes + DBS, full image and 4× crops](docs/examples/dbs_comparison.png)
+
 ## Packages
 
 ### Python (`packages/python/`)
@@ -44,6 +48,9 @@ dithered = dither_image(img, SPECTRA_7_3_6COLOR_V2)
 
 # Opt in to automatic tone + gamut compression for photos
 dithered = dither_image(img, SPECTRA_7_3_6COLOR_V2, tone="auto", gamut="auto")
+
+# Opt in to DBS refinement (slower; optimizes for how the image is perceived)
+dithered = dither_image(img, SPECTRA_7_3_6COLOR_V2, dbs=True)
 ```
 
 See [`packages/python/README.md`](packages/python/README.md) for full documentation.
@@ -67,6 +74,9 @@ const dithered = ditherImage(imageBuffer, SPECTRA_7_3_6COLOR_V2);
 
 // Opt in to automatic tone + gamut compression for photos
 const compressed = ditherImage(imageBuffer, SPECTRA_7_3_6COLOR_V2, { tone: 'auto', gamut: 'auto' });
+
+// Opt in to DBS refinement (slower; run it in a Web Worker in the browser)
+const refined = ditherImage(imageBuffer, SPECTRA_7_3_6COLOR_V2, { dbs: true });
 ```
 
 See [`packages/javascript/README.md`](packages/javascript/README.md) for full documentation.
@@ -78,7 +88,8 @@ See [`packages/javascript/README.md`](packages/javascript/README.md) for full do
 - **10 Color Schemes**: MONO, BWR, BWY, BWRY, BWGBRY (Spectra 6), GRAYSCALE_4, GRAYSCALE_16, SEVEN_COLOR (Spectra/ACeP 7), BWGBRY_SPLIT, GRAYSCALE_8 (library-local, e.g. Inkplate 10 — not a firmware wire value)
 - **Measured Palettes**: Calibrated RGB values for real displays, linked to their canonical firmware palette
 - **OKLab Color Matching**: Weighted Cartesian OKLab — preserves hue without the achromatic-attractor bug of LCH-weighted approaches
-- **Pre-dither Knobs**: Per-image exposure, saturation, shadows, highlights, and gamut compression — all orthogonal
+- **Pre-dither Knobs**: Per-image exposure, saturation, shadows, highlights, dynamic-range (tone) compression, and gamut compression — all orthogonal
+- **DBS Refinement**: Optional Direct Binary Search pass that optimizes the dithered pixels for how they are perceived at a given viewing distance and panel resolution — opt-in, slower
 
 ## Repository Structure
 
@@ -103,7 +114,8 @@ uv sync --all-extras
 uv run maturin develop --release
 uv run pytest tests/ -v
 
-# JavaScript
+# JavaScript (requires wasm-pack and the wasm32-unknown-unknown target)
+wasm-pack build packages/rust/wasm --target web --out-dir ../../javascript/src/wasm-core
 cd packages/javascript
 bun install
 bun run test
