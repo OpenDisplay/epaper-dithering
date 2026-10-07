@@ -175,7 +175,9 @@ fn dither_impl(
     // Convert sRGB bytes → linear, apply pre-processing pipeline, convert back.
     let mut linear: Vec<[f64; 3]> = img
         .data
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| [
             srgb_channel_to_linear(c[0]),
             srgb_channel_to_linear(c[1]),
@@ -216,7 +218,9 @@ fn refine(
     let Some(params) = params else { return indices };
     let pinned: Option<Vec<bool>> = pin_exact_pixels.then(|| {
         img.data
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|rgb| algorithms::exact_palette_index(rgb, canonical).is_some())
             .collect()
     });
