@@ -129,3 +129,4 @@ cargo test --workspace
 
 - **py-opendisplay**: [Python library for OpenDisplay BLE e-paper devices](https://github.com/OpenDisplay-org/py-opendisplay)
 - **hass-eink-dashboard**: [Home Assistant custom component that renders e-ink dashboard images for Kindle, TRMNL, and OpenDisplay devices.](https://github.com/cryptomilk/hass-eink-dashboard)
+- **OpenDithering**: [Browser tool by Guy Sie for previewing dithering on e-paper palettes and uploading images to OpenDisplay devices over Bluetooth](https://guysie.github.io/opendithering/) ([source](https://github.com/guysie/opendithering)). An independent implementation, so results differ from this library; our DBS refinement is ported from it.
