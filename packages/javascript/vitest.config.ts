@@ -21,6 +21,9 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.ts'],
+      // Generated wasm-bindgen output and type declarations: not code under test, and
+      // vitest ≥4's coverage cannot parse ambient declarations (`export const x: T;`).
+      exclude: ['src/wasm-core/**', 'src/**/*.d.ts'],
     },
   },
 });
