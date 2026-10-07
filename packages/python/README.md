@@ -28,6 +28,7 @@ pip install epaper-dithering
 - **10 Color Schemes**: Support for mono, 3-color, 4-color, 6-color, 7-color, and grayscale e-paper displays
 - **Pre-dither Adjustments**: Per-image exposure, saturation, shadows, highlights, dynamic-range compression, and gamut compression — all orthogonal knobs you can mix freely
 - **Serpentine Scanning**: Reduces directional artifacts in error diffusion (enabled by default)
+- **DBS Refinement**: Optional Direct Binary Search pass that optimizes the dithered pixels against a model of the eye (slower: ~0.3 s per 800×480 panel on a multi-core machine)
 - **RGBA Support**: Automatic compositing on white background for transparent images
 
 ## Quick Start
@@ -60,6 +61,7 @@ dither_image(
     highlights=0.0,            # highlight compression, S-curve upper half
     tone="auto",               # dynamic-range compression: "auto" | 0.0–1.0
     gamut="auto",              # gamut compression: "auto" | 0.0–1.0
+    dbs=None,                  # DBS refinement: None | True | DbsParams(...)
 )
 ```
 
@@ -184,6 +186,22 @@ result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.BURKES, gamut="of
 ```
 
 Note: `gamut` also has no effect for theoretical `ColorScheme` palettes.
+
+#### DBS Refinement
+
+Direct Binary Search (DBS) runs after dithering and improves the result directly: it repeatedly changes pixels to other inks, or swaps them with neighbours, whenever that lowers the error *as perceived* through a model of the eye — sharp for brightness, blurrier for colour, scaled to your viewing distance and panel resolution. It typically cuts visible tone and colour error noticeably, at the cost of runtime (about 0.3 s per 800×480 panel on a multi-core machine, versus ~30 ms for plain dithering). The dither call releases the GIL, so other threads keep running meanwhile.
+
+```python
+from epaper_dithering import DbsParams
+
+# Default viewing geometry: 40 cm from a ~127 ppi panel (7.3" 800×480)
+result = dither_image(img, SPECTRA_7_3_6COLOR, dbs=True)
+
+# Match your setup: a wall-mounted 13.3" panel viewed from 1.5 m
+result = dither_image(img, SPECTRA_7_3_6COLOR, dbs=DbsParams(viewing_distance_cm=150, ppi=150))
+```
+
+`max_passes` (default 10) caps the number of refinement passes; most of the improvement happens in the first few. Pixels pinned to exact display colors (see below) are never changed by DBS.
 
 `DitherMode.NONE` performs direct nearest-color mapping without error diffusion or ordered dithering. It is intended for already-quantized graphics, not continuous-tone photos: because there is no error diffusion, on limited palettes (especially BWR) a continuous-tone image or a large flat mid-tone area can map to an unexpected ink — for example, a solid mid-gray region can render as solid red. Use an error-diffusion mode (e.g. `FLOYD_STEINBERG`, `BURKES`) for photographic input. For built-in measured palettes, pure canonical display colors such as `(255, 0, 0)` map directly to the corresponding firmware palette index even though matching uses measured display RGB values.
 

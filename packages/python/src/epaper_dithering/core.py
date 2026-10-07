@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import math
+from dataclasses import dataclass
 from typing import cast
 
 from PIL import Image
@@ -13,6 +15,49 @@ from .enums import DitherMode
 from .palettes import ColorPalette, ColorScheme
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class DbsParams:
+    """Direct Binary Search refinement settings.
+
+    DBS improves a dithered image by repeatedly changing pixels to other inks or swapping
+    them with neighbours whenever that lowers the error as perceived through a model of the
+    eye at the given viewing geometry. It is slow (seconds on a full panel), so it is off
+    unless requested.
+
+    Attributes:
+        viewing_distance_cm: Distance between viewer and panel. Larger values blur more.
+        ppi: Panel pixel density. A 7.3" 800x480 panel is about 127 ppi.
+        max_passes: Upper bound on full-image passes; stops early once nothing improves.
+    """
+
+    viewing_distance_cm: float = 40.0
+    ppi: float = 127.0
+    max_passes: int = 10
+
+    def __post_init__(self) -> None:
+        for name in ("viewing_distance_cm", "ppi"):
+            value = getattr(self, name)
+            if not (math.isfinite(value) and value > 0):
+                raise ValueError(f"{name} must be finite and greater than 0, got {value}")
+        if self.max_passes < 0:
+            raise ValueError(f"max_passes must be >= 0, got {self.max_passes}")
+
+
+def _dbs_kwargs(dbs: DbsParams | bool | None) -> dict[str, object]:
+    """Map the `dbs` argument onto the binding's flat `dbs_*` keyword arguments."""
+    if dbs is None or dbs is False:
+        return {}
+    if dbs is True:
+        dbs = DbsParams()
+    if not isinstance(dbs, DbsParams):
+        raise TypeError(f"dbs must be DbsParams, bool, or None, got {type(dbs).__name__}")
+    return {
+        "dbs_passes": dbs.max_passes,
+        "dbs_viewing_distance_cm": dbs.viewing_distance_cm,
+        "dbs_ppi": dbs.ppi,
+    }
 
 
 def _to_rgb_bytes(image: Image.Image) -> tuple[bytes, int, int]:
@@ -48,6 +93,7 @@ def dither_image(  # pylint: disable=too-many-arguments
     highlights: float = 0.0,
     tone: float | str = 0.0,
     gamut: float | str = 0.0,
+    dbs: DbsParams | bool | None = None,
 ) -> Image.Image:
     """Apply dithering to an image for e-paper display.
 
@@ -69,6 +115,9 @@ def dither_image(  # pylint: disable=too-many-arguments
             to display range, 0.0–1.0 = fixed strength. Only meaningful for measured palettes.
         gamut: Gamut compression for out-of-gamut pixels. 0.0 = off, "auto" = full
             strength on out-of-gamut pixels (smoothstep), 0.0–1.0 = fixed strength.
+        dbs: Direct Binary Search refinement after dithering. `None`/`False` = off,
+            `True` = default `DbsParams()`, or a `DbsParams` for custom viewing geometry.
+            Slow: seconds on a full panel.
 
     Returns:
         Dithered palette-mode (`"P"`) PIL Image matching the color scheme.
@@ -92,6 +141,7 @@ def dither_image(  # pylint: disable=too-many-arguments
         "highlights": highlights,
         "tone": _compression(tone),
         "gamut": _compression(gamut),
+        **_dbs_kwargs(dbs),
     }
 
     if isinstance(color_scheme, ColorScheme):
