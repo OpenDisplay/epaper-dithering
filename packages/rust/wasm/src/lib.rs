@@ -1,5 +1,6 @@
 use epaper_dithering_core::{
     composite::composite_rgba_on_white,
+    dbs::DbsParams,
     dither, dither_with_canonical, DitherConfig,
     enums::{DitherMode, GamutCompression, ToneCompression},
     measured_palettes::CATALOG,
@@ -28,8 +29,19 @@ fn parse_gamut(v: Option<f64>) -> GamutCompression {
     }
 }
 
+/// `dbs_passes = None` disables DBS refinement; otherwise build and validate its parameters.
+fn parse_dbs(passes: Option<u32>, viewing_distance_cm: f64, ppi: f64) -> Result<Option<DbsParams>, JsValue> {
+    passes
+        .map(|max_passes| {
+            let params = DbsParams { viewing_distance_cm, ppi, max_passes };
+            params.validate().map(|()| params).map_err(|e| JsValue::from_str(&e.to_string()))
+        })
+        .transpose()
+}
+
 /// Dither a flat RGB image. Accepts either an idealized `scheme_id` or a measured
 /// `palette_bytes`/`accent_idx` pair; `palette_bytes` empty ⇒ use `scheme_id`.
+/// `dbs_passes` enables Direct Binary Search refinement with up to that many passes.
 ///
 /// Returns a `Uint8Array` of palette indices (one per pixel, length = width × height).
 #[wasm_bindgen]
@@ -48,6 +60,9 @@ pub fn dither_image(
     highlights: f64,
     tone: Option<f64>,
     gamut: Option<f64>,
+    dbs_passes: Option<u32>,
+    dbs_viewing_distance_cm: f64,
+    dbs_ppi: f64,
 ) -> Result<Vec<u8>, JsValue> {
     if width == 0 {
         return Err(JsValue::from_str("width must be greater than 0"));
@@ -70,6 +85,7 @@ pub fn dither_image(
         highlights,
         tone:  parse_tone(tone),
         gamut: parse_gamut(gamut),
+        dbs:   parse_dbs(dbs_passes, dbs_viewing_distance_cm, dbs_ppi)?,
     };
 
     if palette_bytes.is_empty() {

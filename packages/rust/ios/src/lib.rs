@@ -67,7 +67,7 @@ fn build_palette(ptr: *const u8, len: usize, accent_idx: usize) -> Result<Option
     }
     // SAFETY: caller guarantees `ptr` is valid for `len` bytes; checked non-null above.
     let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
-    let colors: Vec<[u8; 3]> = bytes.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let colors: Vec<[u8; 3]> = bytes.as_chunks::<3>().0.to_vec();
     if colors.len() < 2 || accent_idx >= colors.len() {
         return Err(ED_ERR_BAD_PALETTE);
     }

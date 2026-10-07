@@ -1,6 +1,7 @@
 use epaper_dithering_core::{
     color_space_lab::rgb_to_oklab,
     composite::composite_rgba_on_white,
+    dbs::DbsParams,
     dither, dither_with_canonical, DitherConfig,
     enums::{DitherMode, GamutCompression, ToneCompression},
     measured_palettes::CATALOG,
@@ -48,10 +49,21 @@ fn parse_gamut(v: Option<f64>) -> GamutCompression {
     }
 }
 
+/// `dbs_passes = None` disables DBS refinement; otherwise build and validate its parameters.
+fn parse_dbs(passes: Option<u32>, viewing_distance_cm: f64, ppi: f64) -> PyResult<Option<DbsParams>> {
+    passes
+        .map(|max_passes| {
+            let params = DbsParams { viewing_distance_cm, ppi, max_passes };
+            params.validate().map(|()| params).map_err(|e| PyValueError::new_err(e.to_string()))
+        })
+        .transpose()
+}
+
 /// Dither a flat RGB image.
 ///
 /// Pass either `scheme_id` (idealized color scheme) or `palette_bytes` + `accent_idx`
-/// (measured palette). If both are given, `palette_bytes` wins.
+/// (measured palette). If both are given, `palette_bytes` wins. `dbs_passes` enables
+/// Direct Binary Search refinement with up to that many passes.
 #[pyfunction]
 #[pyo3(signature = (
     pixels, width, height, *,
@@ -59,6 +71,7 @@ fn parse_gamut(v: Option<f64>) -> GamutCompression {
     mode_id=1, serpentine=true,
     exposure=1.0, saturation=1.0, shadows=0.0, highlights=0.0,
     tone=0.0, gamut=0.0,
+    dbs_passes=None, dbs_viewing_distance_cm=40.0, dbs_ppi=127.0,
 ))]
 #[allow(clippy::too_many_arguments)]
 fn dither_image(
@@ -77,6 +90,9 @@ fn dither_image(
     highlights: f64,
     tone: Option<f64>,
     gamut: Option<f64>,
+    dbs_passes: Option<u32>,
+    dbs_viewing_distance_cm: f64,
+    dbs_ppi: f64,
 ) -> PyResult<Vec<u8>> {
     validate_image(&pixels, width)?;
     // Additionally validate against the caller's height instead of silently
@@ -105,6 +121,7 @@ fn dither_image(
         highlights,
         tone:  parse_tone(tone),
         gamut: parse_gamut(gamut),
+        dbs:   parse_dbs(dbs_passes, dbs_viewing_distance_cm, dbs_ppi)?,
     };
 
     // Validation and `Palette` construction stay under the GIL; only the

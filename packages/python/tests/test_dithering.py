@@ -557,3 +557,89 @@ class TestDizzy:
         a = dither_image(img, ColorScheme.BWR, mode=DitherMode.DIZZY)
         b = dither_image(img, ColorScheme.BWR, mode=DitherMode.DIZZY)
         assert list(a.getdata()) == list(b.getdata())
+
+
+def _color_gradient(width: int = 40, height: int = 30) -> Image.Image:
+    """Smooth colour gradient: enough structure that DBS changes the halftone."""
+    img = Image.new("RGB", (width, height))
+    img.putdata(
+        [
+            (x * 255 // (width - 1), y * 255 // (height - 1), 255 - x * 255 // (width - 1))
+            for y in range(height)
+            for x in range(width)
+        ]
+    )
+    return img
+
+
+class TestDbs:
+    """Direct Binary Search refinement (`dbs=`)."""
+
+    def test_changes_output_for_measured_palette(self):
+        from epaper_dithering import SPECTRA_7_3_6COLOR
+
+        img = _color_gradient()
+        plain = dither_image(img, SPECTRA_7_3_6COLOR)
+        refined = dither_image(img, SPECTRA_7_3_6COLOR, dbs=True)
+
+        assert refined.mode == "P"
+        assert refined.size == plain.size
+        assert refined.tobytes() != plain.tobytes()
+
+    def test_changes_output_for_color_scheme(self):
+        img = _color_gradient()
+        plain = dither_image(img, ColorScheme.BWR)
+        refined = dither_image(img, ColorScheme.BWR, dbs=True)
+        assert refined.tobytes() != plain.tobytes()
+
+    def test_true_means_default_params(self):
+        from epaper_dithering import DbsParams
+
+        img = _color_gradient()
+        assert (
+            dither_image(img, ColorScheme.BWR, dbs=True).tobytes()
+            == dither_image(img, ColorScheme.BWR, dbs=DbsParams()).tobytes()
+        )
+
+    @pytest.mark.parametrize("off", [None, False])
+    def test_off_values_match_plain_dither(self, off):
+        img = _color_gradient()
+        assert dither_image(img, ColorScheme.BWR, dbs=off).tobytes() == dither_image(img, ColorScheme.BWR).tobytes()
+
+    def test_params_are_passed_through(self):
+        """Viewing geometry sets the eye-model blur width, so it must change the result."""
+        from epaper_dithering import DbsParams
+
+        img = _color_gradient()
+        near = dither_image(img, ColorScheme.BWR, dbs=DbsParams(viewing_distance_cm=15.0))
+        far = dither_image(img, ColorScheme.BWR, dbs=DbsParams(viewing_distance_cm=150.0))
+        assert near.tobytes() != far.tobytes()
+
+    def test_zero_passes_matches_plain_dither(self):
+        from epaper_dithering import DbsParams
+
+        img = _color_gradient()
+        assert (
+            dither_image(img, ColorScheme.BWR, dbs=DbsParams(max_passes=0)).tobytes()
+            == dither_image(img, ColorScheme.BWR).tobytes()
+        )
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [{"ppi": 0.0}, {"ppi": float("nan")}, {"viewing_distance_cm": -1.0}, {"max_passes": -1}],
+    )
+    def test_invalid_params_raise_value_error(self, kwargs):
+        from epaper_dithering import DbsParams
+
+        with pytest.raises(ValueError):
+            DbsParams(**kwargs)
+
+    def test_rejects_non_params_values(self):
+        with pytest.raises(TypeError):
+            dither_image(_color_gradient(), ColorScheme.BWR, dbs=10)  # type: ignore[arg-type]
+
+    def test_binding_validates_geometry(self):
+        """The Rust binding reports bad geometry as ValueError instead of panicking."""
+        pixels, width, height = _to_rgb_bytes(_color_gradient(8, 8))
+        with pytest.raises(ValueError, match="ppi"):
+            _rs.dither_image(pixels, width, height, scheme_id=1, dbs_passes=10, dbs_ppi=0.0)

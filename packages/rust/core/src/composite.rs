@@ -39,7 +39,7 @@ pub fn composite_rgba_on_white(rgba: &[u8]) -> Result<Vec<u8>, InvalidRgbaLength
         return Err(InvalidRgbaLength { len: rgba.len() });
     }
     let mut rgb = Vec::with_capacity(rgba.len() / 4 * 3);
-    for px in rgba.chunks_exact(4) {
+    for px in rgba.as_chunks::<4>().0 {
         let a = px[3] as f64 / 255.0;
         let inv = 1.0 - a;
         rgb.push((px[0] as f64 * a + 255.0 * inv).round() as u8);

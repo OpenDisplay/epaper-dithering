@@ -14,6 +14,9 @@ def dither_image(
     highlights: float = ...,
     tone: float | None = ...,
     gamut: float | None = ...,
+    dbs_passes: int | None = ...,
+    dbs_viewing_distance_cm: float = ...,
+    dbs_ppi: float = ...,
 ) -> bytes: ...
 def composite_rgba(rgba: bytes) -> bytes: ...
 def measured_palettes() -> list[tuple[str, list[int], list[str], int, int]]: ...

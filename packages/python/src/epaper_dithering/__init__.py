@@ -4,7 +4,7 @@ A standalone library providing multiple dithering algorithms optimized
 for limited-color e-paper/e-ink displays.
 """
 
-from .core import dither_image
+from .core import DbsParams, dither_image
 from .enums import DitherMode
 from .palettes import (
     BWRY_3_97,
@@ -23,6 +23,7 @@ __version__ = "6.0.0"
 
 __all__ = [
     "dither_image",
+    "DbsParams",
     "DitherMode",
     "ColorPalette",
     "ColorScheme",

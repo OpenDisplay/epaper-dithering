@@ -13,6 +13,7 @@ High-quality dithering algorithms for e-paper/e-ink displays, powered by a Rust/
 - **OKLab Color Matching**: Weighted Cartesian OKLab — preserves hue without the achromatic-attractor bug that plagues LCH-weighted approaches
 - **Pre-dither Adjustments**: Per-image exposure, saturation, shadows, highlights, dynamic-range compression, and gamut compression — all orthogonal knobs
 - **Serpentine Scanning**: Alternates row direction to eliminate directional artifacts
+- **DBS Refinement**: Optional Direct Binary Search pass that optimizes the dithered pixels against a model of the eye
 - **Universal**: Works in browser (Canvas API) and Node.js (≥18)
 - **Zero Dependencies**: WASM binary bundled inline, no image library required
 
@@ -124,8 +125,29 @@ ditherImage(image: ImageBuffer, palette: ColorScheme | ColorPalette, options?: D
 | `highlights` | `number` | `0.0` | Highlight compression strength (S-curve upper half). `0.0` = off, `1.0` = strong |
 | `tone` | `number \| 'auto' \| 'off'` | `0.0` | Dynamic range compression. `0.0`/`'off'` = disabled; `'auto'` = histogram-based; numeric = fixed strength. Ignored for `ColorScheme` |
 | `gamut` | `number \| 'auto' \| 'off'` | `0.0` | Pre-dither gamut compression. `0.0`/`'off'` = disabled; `'auto'` = activate when image exceeds palette gamut; numeric = fixed. Ignored for `ColorScheme` |
+| `dbs` | `boolean \| DbsParams` | `false` | Direct Binary Search refinement after dithering. `true` = default parameters. See below |
 
-Pre-processing pipeline: `exposure → saturation → shadows/highlights → tone → gamut → dither`. Each step is a no-op at its identity value.
+Pipeline: `exposure → saturation → shadows/highlights → tone → gamut → dither → dbs`. Each step is a no-op at its identity value.
+
+#### DBS refinement
+
+Direct Binary Search (DBS) improves the dithered result directly: it repeatedly changes pixels to other inks, or swaps them with neighbours, whenever that lowers the error *as perceived* through a model of the eye — sharp for brightness, blurrier for colour, scaled to viewing distance and panel resolution. It is much slower than plain dithering (seconds on a full panel in a single-threaded browser) and blocks the calling thread, so run it in a Web Worker.
+
+```typescript
+// Default geometry: 40 cm from a ~127 ppi panel (7.3" 800×480)
+ditherImage(imageBuffer, SPECTRA_7_3_6COLOR, { dbs: true });
+
+// Match your setup
+ditherImage(imageBuffer, SPECTRA_7_3_6COLOR, { dbs: { viewingDistanceCm: 150, ppi: 150, maxPasses: 10 } });
+```
+
+| `DbsParams` field | Default | Description |
+|---|---|---|
+| `viewingDistanceCm` | `40` | Distance between viewer and panel. Larger values blur more |
+| `ppi` | `127` | Panel pixel density |
+| `maxPasses` | `10` | Upper bound on refinement passes; stops early once nothing improves |
+
+Pixels pinned to exact display colors (see below) are never changed by DBS.
 
 `DitherMode.NONE` performs direct nearest-color mapping without error diffusion or ordered dithering. It is intended for already-quantized graphics, not continuous-tone photos: because there is no error diffusion, on limited palettes (especially BWR) a continuous-tone image or a large flat mid-tone area can map to an unexpected ink — for example, a solid mid-gray region can render as solid red. Use an error-diffusion mode (e.g. `FLOYD_STEINBERG`, `BURKES`) for photographic input. Built-in measured palettes carry their canonical firmware `scheme`, so pure display colors map to the corresponding firmware palette index even when measured RGB values are used for matching.
 
@@ -210,7 +232,7 @@ Features: drag & drop or paste from clipboard, live re-render on every setting c
 bun install
 
 # When Rust source changes, rebuild the WASM (from repo root):
-wasm-pack build packages/rust/wasm --target bundler --out-dir ../../javascript/src/wasm-core
+wasm-pack build packages/rust/wasm --target web --out-dir ../../javascript/src/wasm-core
 
 bun run test        # vitest
 bun run build       # tsup → dist/

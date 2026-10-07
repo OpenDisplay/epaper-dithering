@@ -50,7 +50,7 @@ jobs:
 
       - name: Build WASM
         working-directory: .
-        run: wasm-pack build packages/rust/wasm --target bundler --out-dir ../../javascript/src/wasm-core
+        run: wasm-pack build packages/rust/wasm --target web --out-dir ../../javascript/src/wasm-core
 
       - uses: oven-sh/setup-bun@v2
 
