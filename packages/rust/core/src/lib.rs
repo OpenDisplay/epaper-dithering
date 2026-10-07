@@ -25,6 +25,9 @@ use crate::types::ImageBuffer;
 /// dither(&img, palette, DitherConfig { mode: DitherMode::Burkes, ..Default::default() });
 /// ```
 ///
+/// Prefer `..Default::default()` over listing every field: new fields (e.g. `dbs` in 6.0.0)
+/// are breaking for exhaustive struct literals, but not for struct-update syntax.
+///
 /// Pre-processing pipeline (applied in order, each step is a no-op at its identity value):
 /// `exposure → saturation → shadows/highlights → tone → gamut → dither → dbs`.
 #[derive(Debug, Clone, PartialEq)]
