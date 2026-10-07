@@ -1,4 +1,4 @@
 {
-  "packages/python": "6.0.0",
-  "packages/rust/core": "5.0.0"
+  "packages/python": "6.1.0",
+  "packages/rust/core": "6.0.0"
 }

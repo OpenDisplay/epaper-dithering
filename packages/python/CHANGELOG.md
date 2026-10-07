@@ -1,5 +1,18 @@
 # Changelog
 
+## [6.1.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-v6.0.0...epaper-dithering-v6.1.0) (2026-10-07)
+
+
+### Features
+
+* **core:** add Direct Binary Search (DBS) refinement ([d1da1eb](https://github.com/OpenDisplay/epaper-dithering/commit/d1da1ebb6b7907364cf9800046e996acf000af5d))
+* **python:** expose DBS refinement: `dither_image(..., dbs=True | DbsParams(...))` ([dd47065](https://github.com/OpenDisplay/epaper-dithering/commit/dd47065672ea0ebdddf3dedf8dbb03148132de1c))
+* **js:** expose DBS refinement: `ditherImage(..., { dbs: true | DbsParams })` ([4a62334](https://github.com/OpenDisplay/epaper-dithering/commit/4a6233476d7537cb11e6431c1dcc79e4fb975d6f))
+
+### Bug Fixes
+
+* **js:** initialise WASM via wasm-bindgen's initSync (--target web) ([1613399](https://github.com/OpenDisplay/epaper-dithering/commit/16133992e7d5001910df16984b43fec971aa84ad))
+
 ## [6.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-v5.0.9...epaper-dithering-v6.0.0) (2026-07-23)
 
 
