@@ -9,4 +9,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 epaper-dithering-core = { path = "../rust/core" }
-pyo3 = { version = "0.28.2", features = ["extension-module"] }
+pyo3 = { version = "0.29", features = ["extension-module"] }
