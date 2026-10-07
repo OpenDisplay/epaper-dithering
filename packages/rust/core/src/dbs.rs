@@ -207,11 +207,15 @@ fn sweep(
     mut f: impl FnMut(&mut [f64; 3], f64),
 ) {
     let r = k.radius;
+    let (x0, x1) = (mx.saturating_sub(r), (mx + r).min(width - 1));
+    // Kernel column of x0 is x0 − mx + r.
+    let kx0 = x0 + r - mx;
     for y in my.saturating_sub(r)..=(my + r).min(height - 1) {
-        let row = y * width;
-        let dy = y as isize - my as isize;
-        for x in mx.saturating_sub(r)..=(mx + r).min(width - 1) {
-            f(&mut cpe[row + x], k.at(x as isize - mx as isize, dy));
+        let krow = (y + r - my) * k.size;
+        let kernel = &k.data[krow + kx0..=krow + kx0 + (x1 - x0)];
+        let row = &mut cpe[y * width + x0..=y * width + x1];
+        for (c, &kv) in row.iter_mut().zip(kernel) {
+            f(c, kv);
         }
     }
 }
