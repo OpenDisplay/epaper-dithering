@@ -40,18 +40,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out epaper-dithering
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # davelee98/opendisplay-protocol is public, so this needs no token and
       # no secret -- which is what lets the job be always-on for PRs from forks.
       - name: Check out canonical protocol repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: davelee98/opendisplay-protocol
           path: .protocol
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
