@@ -89,3 +89,12 @@ jobs:
           xcrun --sdk iphoneos clang -target arm64-apple-ios17.0 \
             -I EpaperDithering.xcframework/ios-arm64/Headers ci/link_check.c \
             EpaperDithering.xcframework/ios-arm64/libepaper_dithering_ios.a -o "$RUNNER_TEMP/link_check"
+
+  probe-xcode:  # TEMPORARY: list the Xcodes on candidate runner images
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-26, macos-26-xlarge, macos-27]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: sw_vers -productVersion; ls -d /Applications/Xcode*.app
