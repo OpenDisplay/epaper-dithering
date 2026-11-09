@@ -61,10 +61,11 @@ jobs:
         working-directory: packages/rust/ios
         run: ./build-xcframework.sh
 
-      - name: Check exported symbols
+      # Link (not nm): rustc's embedded LLVM bitcode can be newer than the runner's Xcode
+      # understands, which breaks nm but not the linker — and linking is what the app does.
+      - name: Link check against the device slice
         working-directory: packages/rust/ios
         run: |
-          for sym in _ed_dither _ed_dither_options_default _ed_dither_options_default_dbs_passes _ed_abi_version; do
-            nm -gU EpaperDithering.xcframework/ios-arm64/libepaper_dithering_ios.a | grep -q " T ${sym}$" \
-              || { echo "missing export ${sym}"; exit 1; }
-          done
+          xcrun --sdk iphoneos clang -target arm64-apple-ios17.0 \
+            -I EpaperDithering.xcframework/ios-arm64/Headers ci/link_check.c \
+            EpaperDithering.xcframework/ios-arm64/libepaper_dithering_ios.a -o "$RUNNER_TEMP/link_check"
