@@ -90,11 +90,8 @@ jobs:
             -I EpaperDithering.xcframework/ios-arm64/Headers ci/link_check.c \
             EpaperDithering.xcframework/ios-arm64/libepaper_dithering_ios.a -o "$RUNNER_TEMP/link_check"
 
-  probe-xcode:  # TEMPORARY: list the Xcodes on candidate runner images
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, macos-26, macos-26-xlarge, macos-27]
-    runs-on: ${{ matrix.os }}
+  probe-xcode:  # TEMPORARY: list the Xcodes on the runner image
+    runs-on: macos-latest
     steps:
-      - run: sw_vers -productVersion; ls -d /Applications/Xcode*.app
+      - working-directory: /
+        run: sw_vers -productVersion; ls -d /Applications/Xcode*.app; for x in /Applications/Xcode*.app; do echo "$x: $("$x/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang" --version | head -1)"; done
