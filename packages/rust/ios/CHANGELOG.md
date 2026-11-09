@@ -12,7 +12,3 @@
 * Add C-ABI iOS/Swift FFI wrapper crate (dithering only) ([64edb20](https://github.com/OpenDisplay/epaper-dithering/commit/64edb20d6363fe11c1f45360f3fd4f383b057adc))
 * **ios:** take an options struct in ed_dither and expose DBS ([63d8289](https://github.com/OpenDisplay/epaper-dithering/commit/63d8289ebff95b69bb6d334123bf69744a4d5945))
 
-
-### Bug Fixes
-
-* publish musllinux wheel for Alpine Linux compatibility ([9c14bc6](https://github.com/OpenDisplay/epaper-dithering/commit/9c14bc66c77be2b3fb7608b977bcafb1d932e372))
