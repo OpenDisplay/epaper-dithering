@@ -69,8 +69,28 @@ jobs:
         with:
           workspaces: packages/rust/ios
 
+      # The runner's default Xcode can be older than the LLVM that rustc emits; its `strip` then
+      # silently leaves most of the archive (std, compiler_builtins) unstripped (~14 MB instead
+      # of ~2.4 MB for the device slice). Use the newest stable Xcode on the image.
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          rustc --version
+
       - name: Build XCFramework
         run: packages/rust/ios/build-xcframework.sh
+
+      # Guard against an unstripped archive: see the setup-xcode comment above.
+      - name: Check device slice size
+        working-directory: packages/rust/ios
+        run: |
+          size=$(stat -f%z EpaperDithering.xcframework/ios-arm64/libepaper_dithering_ios.a)
+          echo "ios-arm64 static library: ${size} bytes"
+          [ "$size" -le 6000000 ] || { echo "::error::device slice is ${size} bytes; strip probably failed (expected ~2.4 MB)"; exit 1; }
 
       - name: Zip and checksum
         working-directory: packages/rust/ios

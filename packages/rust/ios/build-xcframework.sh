@@ -40,6 +40,17 @@ for t in "${DEVICE_TARGET}" "${SIM_TARGETS[@]}"; do
   strip -S -x "${CRATE_DIR}/target/${t}/release/${LIB_NAME}"
 done
 
+# Xcode's strip must understand the LLVM version rustc emits. An older Xcode (e.g. 26.x with
+# rustc 1.99 / LLVM 23) exits 0 but leaves std/compiler_builtins unstripped (~14 MB instead of
+# ~2.4 MB for the device slice). rust's own llvm-strip is no substitute: its output trips ld's
+# "LSDA in __eh_frame" assertion. So use a current Xcode, and say so loudly when it isn't.
+DEVICE_LIB="${CRATE_DIR}/target/${DEVICE_TARGET}/release/${LIB_NAME}"
+DEVICE_SIZE=$(stat -f%z "${DEVICE_LIB}")
+if [ "${DEVICE_SIZE}" -gt 6000000 ]; then
+  echo "warning: ${DEVICE_TARGET} archive is ${DEVICE_SIZE} bytes after strip (expected ~2.4 MB)." >&2
+  echo "warning: $(xcodebuild -version | head -1) may be too old for $(rustc --version); use a newer Xcode." >&2
+fi
+
 # The ios crate is workspace-excluded, so it is its own workspace root and cargo writes
 # its target dir local to the crate.
 TARGET_ROOT="${CRATE_DIR}/target"
