@@ -58,6 +58,16 @@ packages/rust/ios/build-xcframework.sh
 The resulting `EpaperDithering.xcframework` (device arm64 + simulator arm64/x86_64) is vendored
 into the app repo, not committed here.
 
+## Releases
+
+The crate is versioned by release-please as `epaper-dithering-ios` (tags
+`epaper-dithering-ios-vX.Y.Z`, changelog in `CHANGELOG.md`). It is not published to crates.io;
+instead `release.yml` builds the XCFramework on macOS and attaches it to the GitHub release as
+`EpaperDithering.xcframework.zip`, with its SwiftPM checksum in
+`EpaperDithering.xcframework.zip.checksum`. Use conventional commits scoped `ios`
+(`feat(ios): …`, `fix(ios)!: …`); a change to `ed_dither`'s signature or `ed_dither_options` is
+breaking and must bump `ed_abi_version()`.
+
 ## Swift usage sketch
 
 ```swift

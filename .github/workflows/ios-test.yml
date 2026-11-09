@@ -2,8 +2,9 @@ name: iOS Wrapper Tests
 
 # The `ios` crate is workspace-excluded (so it never breaks the Linux `cargo test --workspace`
 # in rust-test.yml), so it needs its own job. These tests build the C-ABI FFI for the HOST
-# target and exercise it — no Xcode and no Apple iOS targets required. The actual XCFramework
-# build (build-xcframework.sh) is macOS/Xcode-only and is not run in CI.
+# target and exercise it — no Xcode and no Apple iOS targets required. The `xcframework` job
+# runs the real macOS/Xcode build (build-xcframework.sh) so a broken build shows up here, not
+# only when release.yml builds the release artifact.
 
 on:
   push:
@@ -41,3 +42,29 @@ jobs:
 
       - name: Clippy
         run: cargo clippy -- -D warnings
+
+  xcframework:
+    name: Build XCFramework
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/rust/ios
+
+      - name: Build
+        working-directory: packages/rust/ios
+        run: ./build-xcframework.sh
+
+      - name: Check exported symbols
+        working-directory: packages/rust/ios
+        run: |
+          for sym in _ed_dither _ed_dither_options_default _ed_dither_options_default_dbs_passes _ed_abi_version; do
+            nm -gU EpaperDithering.xcframework/ios-arm64/libepaper_dithering_ios.a | grep -q " T ${sym}$" \
+              || { echo "missing export ${sym}"; exit 1; }
+          done
