@@ -19,6 +19,8 @@ jobs:
       python-tag: ${{ steps.release.outputs['packages/python--tag_name'] }}
       rust-release-created: ${{ steps.release.outputs['packages/rust/core--release_created'] }}
       rust-tag: ${{ steps.release.outputs['packages/rust/core--tag_name'] }}
+      ios-release-created: ${{ steps.release.outputs['packages/rust/ios--release_created'] }}
+      ios-tag: ${{ steps.release.outputs['packages/rust/ios--tag_name'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -45,6 +47,44 @@ jobs:
         run: cargo publish --manifest-path packages/rust/Cargo.toml -p epaper-dithering-core
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # ── iOS: build EpaperDithering.xcframework and attach it to the release ─────
+  # The crate is publish = false; its release artifact is the XCFramework that the
+  # OpenDisplay iOS app vendors. The zip + checksum also work as a SwiftPM binaryTarget.
+
+  publish-ios:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.ios-release-created }}
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/rust/ios
+
+      - name: Build XCFramework
+        run: packages/rust/ios/build-xcframework.sh
+
+      - name: Zip and checksum
+        working-directory: packages/rust/ios
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent EpaperDithering.xcframework EpaperDithering.xcframework.zip
+          swift package compute-checksum EpaperDithering.xcframework.zip > EpaperDithering.xcframework.zip.checksum
+          cat EpaperDithering.xcframework.zip.checksum
+
+      - name: Upload to the GitHub release
+        working-directory: packages/rust/ios
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.ios-tag }}
+        run: gh release upload "$TAG" EpaperDithering.xcframework.zip EpaperDithering.xcframework.zip.checksum --clobber
 
   # ── Python: build wheels for each platform ──────────────────────────────────
 
