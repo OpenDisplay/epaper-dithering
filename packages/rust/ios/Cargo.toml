@@ -1,6 +1,6 @@
 [package]
 name = "epaper-dithering-ios"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 description = "C-ABI FFI wrapper around epaper-dithering-core for iOS/Swift (dithering only; matching + error diffusion)"
 license = "MIT"
