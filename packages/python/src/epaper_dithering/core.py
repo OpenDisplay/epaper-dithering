@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing import cast
 
 from PIL import Image
 
@@ -58,6 +57,21 @@ def _dbs_kwargs(dbs: DbsParams | bool | None) -> dict[str, object]:
         "dbs_viewing_distance_cm": dbs.viewing_distance_cm,
         "dbs_ppi": dbs.ppi,
     }
+
+
+def _canonical_bytes(palette: ColorPalette) -> bytes | None:
+    """The scheme's ideal colors, in the palette's own color order.
+
+    Pixels exactly matching one of them keep that ink. Matching by name rather
+    than position keeps each index the palette's, whatever order it lists its
+    colors in.
+    """
+    if palette.scheme is None:
+        return None
+    ideal = palette.scheme.palette.colors
+    if unknown := [name for name in palette.colors if name not in ideal]:
+        raise ValueError(f"palette colors {unknown} are not in {palette.scheme.name}, which has {list(ideal)}")
+    return bytes(c for name in palette.colors for c in ideal[name])
 
 
 def _to_rgb_bytes(image: Image.Image) -> tuple[bytes, int, int]:
@@ -120,7 +134,11 @@ def dither_image(  # pylint: disable=too-many-arguments
             Slow: seconds on a full panel.
 
     Returns:
-        Dithered palette-mode (`"P"`) PIL Image matching the color scheme.
+        Dithered palette-mode (`"P"`) PIL Image matching the color scheme. Its
+        indices follow the order of the colors in `color_scheme`.
+
+    Raises:
+        ValueError: If a `ColorPalette` names a color its `scheme` does not have.
     """
     if not isinstance(tone, (float, int, str)):
         raise TypeError(f"tone must be float, 'auto', or 'off', got {type(tone).__name__}")
@@ -160,13 +178,12 @@ def dither_image(  # pylint: disable=too-many-arguments
         palette_colors = list(color_scheme.colors.values())
         palette_bytes = bytes(c for rgb in palette_colors for c in rgb)
         accent_idx = list(color_scheme.colors.keys()).index(color_scheme.accent)
-        scheme_id = cast(int, color_scheme.scheme.value) if color_scheme.scheme is not None else None
         indices = _rs.dither_image(
             pixels,
             width,
             height,
-            scheme_id=scheme_id,
             palette_bytes=palette_bytes,
+            canonical_bytes=_canonical_bytes(color_scheme),
             accent_idx=accent_idx,
             **common_kwargs,  # type: ignore[arg-type]
         )

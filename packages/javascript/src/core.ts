@@ -101,6 +101,7 @@ export function ditherImage(
 
   let schemeId: number | undefined = undefined;
   let paletteBytes: Uint8Array;
+  let canonicalBytes: Uint8Array = new Uint8Array(0);
   let accentIdx = 0;
   let outputColors: { r: number; g: number; b: number }[];
 
@@ -109,9 +110,9 @@ export function ditherImage(
     paletteBytes = new Uint8Array(0);
     outputColors = Object.values(getPalette(palette).colors);
   } else {
-    schemeId = palette.scheme ?? undefined;
     const colors = Object.values(palette.colors);
     paletteBytes = new Uint8Array(colors.flatMap(c => [c.r, c.g, c.b]));
+    canonicalBytes = canonicalBytesFor(palette);
     accentIdx = Object.keys(palette.colors).indexOf(palette.accent);
     if (accentIdx < 0) {
       throw new Error(
@@ -123,7 +124,7 @@ export function ditherImage(
 
   const indices = wasmDitherImage(
     pixels, image.width,
-    schemeId, paletteBytes, accentIdx,
+    schemeId, paletteBytes, canonicalBytes, accentIdx,
     mode as number, serpentine,
     exposure, saturation, shadows, highlights,
     toneArg, gamutArg,
@@ -131,6 +132,29 @@ export function ditherImage(
   );
 
   return { width: image.width, height: image.height, indices, palette: outputColors };
+}
+
+/**
+ * The ideal colors of the palette's scheme, in the palette's own color order.
+ *
+ * Pixels exactly matching one of them keep that ink. Matching by name rather than
+ * position keeps each index the palette's, whatever order it lists its colors in.
+ * Empty when the palette has no scheme.
+ */
+function canonicalBytesFor(palette: ColorPalette): Uint8Array {
+  if (palette.scheme === undefined || palette.scheme === null) {
+    return new Uint8Array(0);
+  }
+  const ideal = getPalette(palette.scheme).colors;
+  const names = Object.keys(palette.colors);
+  const unknown = names.filter((name) => !(name in ideal));
+  if (unknown.length > 0) {
+    throw new Error(
+      `palette colors [${unknown.join(', ')}] are not in scheme ${palette.scheme}, ` +
+        `which has [${Object.keys(ideal).join(', ')}]`,
+    );
+  }
+  return new Uint8Array(names.flatMap((name) => [ideal[name].r, ideal[name].g, ideal[name].b]));
 }
 
 /**

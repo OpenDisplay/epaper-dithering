@@ -5,6 +5,7 @@ def dither_image(
     *,
     scheme_id: int | None = ...,
     palette_bytes: bytes | None = ...,
+    canonical_bytes: bytes | None = ...,
     accent_idx: int = ...,
     mode_id: int = ...,
     serpentine: bool = ...,

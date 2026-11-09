@@ -8,7 +8,7 @@ import {
   fromValue,
   SPECTRA_7_3_6COLOR,
 } from '../src';
-import type { DbsParams, DitherOptions } from '../src';
+import type { ColorPalette, DbsParams, DitherOptions } from '../src';
 import { createTestImage, createGradient, createTransparentTestImage } from './fixtures';
 // Imported after '../src' so that core.ts has already run initSync.
 import { composite_rgba as compositeRgba } from '../src/wasm-core/epaper_dithering_wasm.js';
@@ -586,5 +586,89 @@ describe('DBS refinement', () => {
     [{ maxPasses: 1.5 }, /maxPasses/],
   ] as [DbsParams, RegExp][])('rejects invalid parameters %o', (dbs, message) => {
     expect(() => ditherImage(image, ColorScheme.BWR, { dbs })).toThrow(message);
+  });
+});
+
+describe('Palette order', () => {
+  // Ideal inks, listed white first as e.g. OpenEPaperLink tag types do; BWR's own
+  // order is black, white, red.
+  const whiteFirst: ColorPalette = {
+    colors: {
+      white: { r: 255, g: 255, b: 255 },
+      black: { r: 0, g: 0, b: 0 },
+      red: { r: 255, g: 0, b: 0 },
+    },
+    accent: 'red',
+    scheme: ColorScheme.BWR,
+  };
+
+  function paint(image: { width: number; data: Uint8ClampedArray }, x0: number, x1: number, y0: number, y1: number, c: { r: number; g: number; b: number }) {
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const i = (y * image.width + x) * 4;
+        image.data[i] = c.r; image.data[i + 1] = c.g; image.data[i + 2] = c.b; image.data[i + 3] = 255;
+      }
+    }
+  }
+
+  const modes = Object.values(DitherMode).filter((v) => typeof v === 'number');
+
+  it.each(modes)('exact inks get the palette\'s own indices for mode %s', (mode) => {
+    const image = createTestImage(24, 8, { r: 128, g: 128, b: 128 });
+    paint(image, 0, 4, 0, 4, { r: 255, g: 255, b: 255 });
+    paint(image, 4, 8, 0, 4, { r: 0, g: 0, b: 0 });
+    paint(image, 8, 12, 0, 4, { r: 255, g: 0, b: 0 });
+
+    const { indices } = ditherImage(image, whiteFirst, { mode: mode as DitherMode });
+
+    expect(indices[1 * 24 + 1]).toBe(0);
+    expect(indices[1 * 24 + 5]).toBe(1);
+    expect(indices[1 * 24 + 9]).toBe(2);
+  });
+
+  it.each(modes)('an image of only exact inks keeps them for mode %s', (mode) => {
+    // Black text on white, the case that skips dithering altogether.
+    const image = createTestImage(16, 8, { r: 255, g: 255, b: 255 });
+    paint(image, 0, 4, 0, 4, { r: 0, g: 0, b: 0 });
+
+    const { indices, palette } = ditherImage(image, whiteFirst, { mode: mode as DitherMode });
+
+    expect(palette[indices[6 * 16 + 10]]).toEqual({ r: 255, g: 255, b: 255 });
+    expect(palette[indices[1 * 16 + 1]]).toEqual({ r: 0, g: 0, b: 0 });
+  });
+
+  it('a measured palette in its own order pins ideal inks', () => {
+    // Measured colors, red before yellow: pure yellow still lands on yellow.
+    const palette: ColorPalette = {
+      colors: {
+        white: { r: 230, g: 230, b: 225 },
+        black: { r: 20, g: 20, b: 25 },
+        red: { r: 150, g: 30, b: 30 },
+        yellow: { r: 200, g: 200, b: 0 },
+      },
+      accent: 'red',
+      scheme: ColorScheme.BWRY,
+    };
+    const image = createTestImage(8, 4, { r: 255, g: 255, b: 0 });
+    paint(image, 0, 4, 0, 4, { r: 255, g: 0, b: 0 });
+
+    const { indices } = ditherImage(image, palette, { mode: DitherMode.FLOYD_STEINBERG });
+
+    expect(indices[1 * 8 + 1]).toBe(2);
+    expect(indices[1 * 8 + 6]).toBe(3);
+  });
+
+  it('an ink the scheme lacks is refused', () => {
+    const palette: ColorPalette = {
+      colors: {
+        white: { r: 255, g: 255, b: 255 },
+        black: { r: 0, g: 0, b: 0 },
+        orange: { r: 255, g: 128, b: 0 },
+      },
+      accent: 'orange',
+      scheme: ColorScheme.BWR,
+    };
+
+    expect(() => ditherImage(createTestImage(2, 2, { r: 0, g: 0, b: 0 }), palette)).toThrow(/orange/);
   });
 });

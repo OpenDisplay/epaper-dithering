@@ -1,7 +1,7 @@
 """Tests for palette definitions and firmware conventions."""
 
 import pytest
-from epaper_dithering import ColorScheme, DitherMode, dither_image
+from epaper_dithering import ColorPalette, ColorScheme, DitherMode, dither_image
 from PIL import Image
 
 
@@ -219,3 +219,71 @@ class TestSpectraNormalization:
             expected = tuple(round(raw[c] * 255 / paper[c]) for c in range(3))
             actual = SPECTRA_7_3_6COLOR.colors[name]
             assert actual == expected, f"{name}: expected {expected} from normalization, got {actual}"
+
+
+class TestPaletteOrder:
+    """Indices follow the palette's own color order, whatever order the scheme uses."""
+
+    # Ideal inks, listed white first as e.g. OpenEPaperLink tag types do; BWR's own
+    # order is black, white, red.
+    WHITE_FIRST = ColorPalette(
+        colors={"white": (255, 255, 255), "black": (0, 0, 0), "red": (255, 0, 0)},
+        accent="red",
+        scheme=ColorScheme.BWR,
+    )
+
+    @pytest.mark.parametrize("mode", list(DitherMode))
+    def test_exact_inks_get_the_palettes_own_indices(self, mode):
+        """Exact white, black and red pixels inside a gradient keep their own ink."""
+        img = Image.new("RGB", (24, 8), (128, 128, 128))
+        img.paste((255, 255, 255), (0, 0, 4, 4))
+        img.paste((0, 0, 0), (4, 0, 8, 4))
+        img.paste((255, 0, 0), (8, 0, 12, 4))
+
+        result = dither_image(img, self.WHITE_FIRST, mode=mode)
+
+        assert result.getpixel((1, 1)) == 0
+        assert result.getpixel((5, 1)) == 1
+        assert result.getpixel((9, 1)) == 2
+
+    @pytest.mark.parametrize("mode", list(DitherMode))
+    def test_an_image_of_only_exact_inks_keeps_them(self, mode):
+        """Black text on white, the case that skips dithering altogether."""
+        img = Image.new("RGB", (16, 8), (255, 255, 255))
+        img.paste((0, 0, 0), (0, 0, 4, 4))
+
+        rgb = dither_image(img, self.WHITE_FIRST, mode=mode).convert("RGB")
+
+        assert rgb.getpixel((10, 6)) == (255, 255, 255)
+        assert rgb.getpixel((1, 1)) == (0, 0, 0)
+
+    def test_a_measured_palette_in_its_own_order_pins_ideal_inks(self):
+        """Measured colors, red before yellow: pure yellow still lands on yellow."""
+        palette = ColorPalette(
+            colors={
+                "white": (230, 230, 225),
+                "black": (20, 20, 25),
+                "red": (150, 30, 30),
+                "yellow": (200, 200, 0),
+            },
+            accent="red",
+            scheme=ColorScheme.BWRY,
+        )
+        img = Image.new("RGB", (8, 4), (255, 255, 0))
+        img.paste((255, 0, 0), (0, 0, 4, 4))
+
+        result = dither_image(img, palette, mode=DitherMode.FLOYD_STEINBERG)
+
+        assert result.getpixel((1, 1)) == 2
+        assert result.getpixel((6, 1)) == 3
+
+    def test_an_ink_the_scheme_lacks_is_refused(self):
+        """A palette cannot claim a scheme whose inks do not include its colors."""
+        palette = ColorPalette(
+            colors={"white": (255, 255, 255), "black": (0, 0, 0), "orange": (255, 128, 0)},
+            accent="orange",
+            scheme=ColorScheme.BWR,
+        )
+
+        with pytest.raises(ValueError, match="orange"):
+            dither_image(Image.new("RGB", (2, 2)), palette)

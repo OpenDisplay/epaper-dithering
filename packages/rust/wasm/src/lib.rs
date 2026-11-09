@@ -41,6 +41,8 @@ fn parse_dbs(passes: Option<u32>, viewing_distance_cm: f64, ppi: f64) -> Result<
 
 /// Dither a flat RGB image. Accepts either an idealized `scheme_id` or a measured
 /// `palette_bytes`/`accent_idx` pair; `palette_bytes` empty ⇒ use `scheme_id`.
+/// `canonical_bytes`, with `palette_bytes`, are the ideal colors of the same inks in
+/// the same order: pixels exactly matching one keep that ink. Empty ⇒ no pinning.
 /// `dbs_passes` enables Direct Binary Search refinement with up to that many passes.
 ///
 /// Returns a `Uint8Array` of palette indices (one per pixel, length = width × height).
@@ -51,6 +53,7 @@ pub fn dither_image(
     width: usize,
     scheme_id: Option<u8>,
     palette_bytes: &[u8],
+    canonical_bytes: &[u8],
     accent_idx: usize,
     mode_id: u8,
     serpentine: bool,
@@ -110,14 +113,21 @@ pub fn dither_image(
             )));
         }
         let palette = Palette::new(colors, accent_idx);
-        match scheme_id {
-            Some(id) => {
-                let scheme = ColorScheme::try_from(id)
-                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
-                Ok(dither_with_canonical(&img, &palette, scheme.palette(), config))
-            }
-            None => Ok(dither(&img, palette, config)),
+        if canonical_bytes.is_empty() {
+            return Ok(dither(&img, palette, config));
         }
+        if canonical_bytes.len() != palette_bytes.len() {
+            return Err(JsValue::from_str(&format!(
+                "canonical_bytes length ({}) must match palette_bytes length ({})",
+                canonical_bytes.len(),
+                palette_bytes.len()
+            )));
+        }
+        let canonical = Palette::new(
+            canonical_bytes.as_chunks::<3>().0.to_vec(),
+            accent_idx,
+        );
+        Ok(dither_with_canonical(&img, &palette, &canonical, config))
     }
 }
 

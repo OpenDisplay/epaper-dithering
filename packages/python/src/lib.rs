@@ -62,12 +62,14 @@ fn parse_dbs(passes: Option<u32>, viewing_distance_cm: f64, ppi: f64) -> PyResul
 /// Dither a flat RGB image.
 ///
 /// Pass either `scheme_id` (idealized color scheme) or `palette_bytes` + `accent_idx`
-/// (measured palette). If both are given, `palette_bytes` wins. `dbs_passes` enables
-/// Direct Binary Search refinement with up to that many passes.
+/// (measured palette). If both are given, `palette_bytes` wins. `canonical_bytes`, with
+/// `palette_bytes`, are the ideal colors of the same inks in the same order: pixels
+/// exactly matching one keep that ink. `dbs_passes` enables Direct Binary Search
+/// refinement with up to that many passes.
 #[pyfunction]
 #[pyo3(signature = (
     pixels, width, height, *,
-    scheme_id=None, palette_bytes=None, accent_idx=0,
+    scheme_id=None, palette_bytes=None, canonical_bytes=None, accent_idx=0,
     mode_id=1, serpentine=true,
     exposure=1.0, saturation=1.0, shadows=0.0, highlights=0.0,
     tone=0.0, gamut=0.0,
@@ -81,6 +83,7 @@ fn dither_image(
     height: usize,
     scheme_id: Option<u8>,
     palette_bytes: Option<PyBackedBytes>,
+    canonical_bytes: Option<PyBackedBytes>,
     accent_idx: usize,
     mode_id: u8,
     serpentine: bool,
@@ -129,7 +132,7 @@ fn dither_image(
     // from an executor thread (e.g. Home Assistant's `drawcustom` pipeline)
     // doesn't stall its event loop for the whole dither.
     match (palette_bytes, scheme_id) {
-        (Some(bytes), scheme_id) => {
+        (Some(bytes), _) => {
             if !bytes.len().is_multiple_of(3) {
                 return Err(PyValueError::new_err("palette_bytes length must be a multiple of 3"));
             }
@@ -143,13 +146,25 @@ fn dither_image(
                     colors.len()
                 )));
             }
+            if let Some(canonical) = &canonical_bytes
+                && canonical.len() != bytes.len()
+            {
+                return Err(PyValueError::new_err(format!(
+                    "canonical_bytes length ({}) must match palette_bytes length ({})",
+                    canonical.len(),
+                    bytes.len()
+                )));
+            }
             let palette = Palette::new(colors, accent_idx);
-            if let Some(id) = scheme_id {
-                let scheme = ColorScheme::try_from(id)
-                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
-                Ok(py.detach(|| dither_with_canonical(&img, &palette, scheme.palette(), config)))
-            } else {
-                Ok(py.detach(|| dither(&img, palette, config)))
+            match canonical_bytes {
+                Some(canonical) => {
+                    let canonical = Palette::new(
+                        canonical.as_chunks::<3>().0.to_vec(),
+                        accent_idx,
+                    );
+                    Ok(py.detach(|| dither_with_canonical(&img, &palette, &canonical, config)))
+                }
+                None => Ok(py.detach(|| dither(&img, palette, config))),
             }
         }
         (None, Some(id)) => {

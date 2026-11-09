@@ -296,6 +296,8 @@ result = dither_image(img, my_display, mode=DitherMode.FLOYD_STEINBERG)
 
 Built-in measured palettes store the canonical firmware `ColorScheme` they are based on. Custom measured palettes may omit it; in that case direct mapping and exact-color bypass use the custom measured RGB values.
 
+A custom palette that sets `scheme` may list its colors in any order: output indices follow the palette's own order, and a pixel exactly matching one of the scheme's ideal colors keeps the ink of the same name. Every color name must be one of the scheme's (`ValueError` otherwise).
+
 ### Measurement Quick Start
 
 1. **Display full-screen color patches** on your e-paper
