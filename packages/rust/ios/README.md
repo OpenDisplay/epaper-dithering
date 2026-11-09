@@ -6,7 +6,8 @@ ABI (plain C instead of `wasm-bindgen`).
 
 ## Scope (deliberately minimal)
 
-Exposes **only dithering** — OKLab palette matching + error diffusion. It does **not** surface
+Exposes **only dithering** — OKLab palette matching + error diffusion, plus the optional Direct
+Binary Search (DBS) refinement that runs after it. It does **not** surface
 the core's tone / gamut / exposure / saturation pre-processing: the iOS app keeps its own
 tone-compression pass in Swift for now and hands us already-pre-processed pixels, so we run
 pure matching + diffusion at `DitherConfig` defaults (all pre-processing off).
@@ -17,10 +18,16 @@ the iOS output match the reference implementation exactly.
 
 ## API
 
-Two functions (see [`include/epaper_dithering.h`](include/epaper_dithering.h)):
+See [`include/epaper_dithering.h`](include/epaper_dithering.h):
 
-- `ed_dither(...) -> int32_t` — dither a flat sRGB image to palette indices.
-- `ed_abi_version() -> uint32_t` — ABI version (currently `1`).
+- `ed_dither(..., const ed_dither_options *opts, ...) -> int32_t` — dither a flat sRGB image
+  to palette indices.
+- `ed_dither_options` — mode, serpentine, and DBS settings (`dbs_max_passes`, 0 = off;
+  `dbs_viewing_distance_cm`; `dbs_ppi`). Mirrors the core's `DitherConfig`.
+- `ed_dither_options_default()` / `ed_dither_options_default_dbs_passes()` — the core's
+  defaults, so callers never hard-code them.
+- `ed_abi_version() -> uint32_t` — ABI version (currently `2`; `1` took `mode_id, serpentine`
+  as arguments and had no DBS).
 
 Contract highlights:
 
@@ -57,6 +64,10 @@ into the app repo, not committed here.
 import EpaperDithering
 
 // pixels: [UInt8] flat RGB (w*h*3); palette: app palette bytes in app index order
+var opts = ed_dither_options_default()
+opts.mode_id = modeId
+opts.dbs_max_passes = ed_dither_options_default_dbs_passes()   // opt in to DBS (slower)
+opts.dbs_ppi = panelPPI                                         // e.g. from the panel's mm size
 var indices = [UInt8](repeating: 0, count: w * h)
 let status = pixels.withUnsafeBufferPointer { px in
     palette.withUnsafeBufferPointer { pal in
@@ -64,7 +75,7 @@ let status = pixels.withUnsafeBufferPointer { px in
             ed_dither(px.baseAddress, px.count, w,
                       pal.baseAddress, pal.count, accentIdx,
                       nil, 0, 0,           // no canonical palette
-                      modeId, true,
+                      &opts,
                       out.baseAddress, out.count)
         }
     }

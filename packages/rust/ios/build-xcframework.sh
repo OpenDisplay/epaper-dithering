@@ -34,7 +34,7 @@ for t in "${DEVICE_TARGET}" "${SIM_TARGETS[@]}"; do
 done
 
 # Strip debug (-S) and local (-x) symbols from each static archive. The exported globals
-# (ed_dither / ed_abi_version) are retained for linking; this ~cuts the vendored size by a third.
+# (ed_dither, ed_dither_options_default*, ed_abi_version) are retained for linking; this ~cuts the vendored size by a third.
 echo "==> Stripping static archives"
 for t in "${DEVICE_TARGET}" "${SIM_TARGETS[@]}"; do
   strip -S -x "${CRATE_DIR}/target/${t}/release/${LIB_NAME}"
