@@ -51,6 +51,7 @@ Produce the XCFramework (macOS + Xcode + Rust; the **only** Xcode-gated step in 
 
 ```sh
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+rustup component add llvm-tools
 packages/rust/ios/build-xcframework.sh
 # → packages/rust/ios/EpaperDithering.xcframework
 ```
