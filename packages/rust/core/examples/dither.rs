@@ -1,78 +1,63 @@
 // Quick visual test: dither a real image and save the result.
 //
 // Usage:
-//   cargo run --example dither <input> [output] [scheme] [mode] [tone] [gamut]
+//   cargo run --example dither <input> [output] [palette] [mode] [tone] [gamut]
 //
 // Examples:
 //   cargo run --example dither photo.jpg
-//   cargo run --example dither photo.jpg out.png spectra stucki auto none
-//   cargo run --example dither photo.jpg out.png spectra stucki 0.8 0.5
+//   cargo run --example dither photo.jpg out.png spectra_7_3_6color stucki auto none
+//   cargo run --example dither photo.jpg out.png my_panel.json stucki 0.8 0.5
 //
-// Schemes: mono, bwr, bwy, bwry, bwgbry, grayscale4, grayscale16, seven_color, bwgbry_split
-//          spectra, spectra_v2, mono_4_26, bwry_4_2, bwry_3_97, solum_bwr, hanshow_bwr, hanshow_bwy
-// Modes:   none, ordered, floyd_steinberg, burkes, atkinson, stucki, sierra, sierra_lite, jjn, dizzy
+// Palette: a path to an epaper-palette JSON file, or the name of a file in
+//          examples/palettes/ (without .json). Default: ideal_bwr.
+// Modes:   none, ordered, floyd_steinberg, burkes, atkinson, stucki, sierra, sierra_lite,
+//          jarvis_judice_ninke, dizzy
 // Tone:    auto, none, 0.0-1.0  (default: none)
 // Gamut:   none, auto, 0.0-1.0  (default: none)
 
 use epaper_dithering_core::enums::{DitherMode, GamutCompression, ToneCompression};
-use epaper_dithering_core::measured_palettes::{
-    BWRY_3_97, BWRY_4_2, HANSHOW_BWR, HANSHOW_BWY, MONO_4_26, SOLUM_BWR, SPECTRA_7_3_6COLOR,
-    SPECTRA_7_3_6COLOR_V2,
-};
-use epaper_dithering_core::palettes::{ColorScheme, Palette};
+use epaper_dithering_core::palette::Palette;
 use epaper_dithering_core::types::ImageBuffer;
-use epaper_dithering_core::{dither, DitherConfig};
+use epaper_dithering_core::{dither, DitherOptions};
 use image::{ImageReader, RgbImage};
 use std::env;
+use std::path::Path;
+
+fn load_palette(arg: &str) -> Palette {
+    let path = if arg.ends_with(".json") {
+        Path::new(arg).to_path_buf()
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../examples/palettes").join(format!("{arg}.json"))
+    };
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+        eprintln!("cannot read palette {}: {e}", path.display());
+        std::process::exit(1);
+    });
+    Palette::from_json(&text).unwrap_or_else(|e| {
+        eprintln!("{}: {e}", path.display());
+        std::process::exit(1);
+    })
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: dither <input> [output] [scheme] [mode]");
+        eprintln!("Usage: dither <input> [output] [palette] [mode] [tone] [gamut]");
         std::process::exit(1);
     }
 
     let input_path = &args[1];
     let output_path = args.get(2).map(String::as_str).unwrap_or("dithered.png");
-    let scheme_name = args.get(3).map(String::as_str).unwrap_or("bwr");
+    let palette_name = args.get(3).map(String::as_str).unwrap_or("ideal_bwr");
     let mode_name   = args.get(4).map(String::as_str).unwrap_or("burkes");
     let tone_name   = args.get(5).map(String::as_str).unwrap_or("none");
     let gamut_name  = args.get(6).map(String::as_str).unwrap_or("none");
 
-    let palette: &Palette = match scheme_name {
-        "mono"         => ColorScheme::Mono.palette(),
-        "bwr"          => ColorScheme::Bwr.palette(),
-        "bwy"          => ColorScheme::Bwy.palette(),
-        "bwry"         => ColorScheme::Bwry.palette(),
-        "bwgbry"       => ColorScheme::Bwgbry.palette(),
-        "grayscale4"   => ColorScheme::Grayscale4.palette(),
-        "grayscale16"  => ColorScheme::Grayscale16.palette(),
-        "seven_color"  => ColorScheme::SevenColor.palette(),
-        "bwgbry_split" => ColorScheme::BwgbrySplit.palette(),
-        "spectra"      => &SPECTRA_7_3_6COLOR,
-        "spectra_v2"   => &SPECTRA_7_3_6COLOR_V2,
-        "mono_4_26"    => &MONO_4_26,
-        "bwry_4_2"     => &BWRY_4_2,
-        "bwry_3_97"    => &BWRY_3_97,
-        "solum_bwr"    => &SOLUM_BWR,
-        "hanshow_bwr"  => &HANSHOW_BWR,
-        "hanshow_bwy"  => &HANSHOW_BWY,
-        other => { eprintln!("Unknown scheme: {other}"); std::process::exit(1); }
-    };
-
-    let mode = match mode_name {
-        "none"              => DitherMode::None,
-        "ordered"           => DitherMode::Ordered,
-        "floyd_steinberg"   => DitherMode::FloydSteinberg,
-        "burkes"            => DitherMode::Burkes,
-        "atkinson"          => DitherMode::Atkinson,
-        "stucki"            => DitherMode::Stucki,
-        "sierra"            => DitherMode::Sierra,
-        "sierra_lite"       => DitherMode::SierraLite,
-        "jjn"               => DitherMode::JarvisJudiceNinke,
-        "dizzy"             => DitherMode::Dizzy,
-        other => { eprintln!("Unknown mode: {other}"); std::process::exit(1); }
-    };
+    let palette = load_palette(palette_name);
+    let mode: DitherMode = mode_name.parse().unwrap_or_else(|e| {
+        eprintln!("{e}");
+        std::process::exit(1);
+    });
 
     // Load image
     let img = ImageReader::open(input_path)
@@ -82,7 +67,7 @@ fn main() {
         .into_rgb8();
 
     let (width, height) = img.dimensions();
-    let buf = ImageBuffer::new(img.as_raw(), width as usize);
+    let buf = ImageBuffer::new(img.as_raw(), width as usize).expect("decoded image is a whole RGB buffer");
 
     let tone = match tone_name {
         "auto"         => ToneCompression::Auto,
@@ -103,10 +88,10 @@ fn main() {
     };
 
     println!("Input:  {input_path} ({width}x{height})");
-    println!("Scheme: {scheme_name}  Mode: {mode_name}  Tone: {tone_name}  Gamut: {gamut_name}");
+    println!("Palette: {palette_name}  Mode: {mode_name}  Tone: {tone_name}  Gamut: {gamut_name}");
 
     let t0 = std::time::Instant::now();
-    let indices = dither(&buf, palette, DitherConfig {
+    let indices = dither(&buf, &palette, &DitherOptions {
         mode, tone, gamut, ..Default::default()
     });
     let elapsed = t0.elapsed();
@@ -119,7 +104,7 @@ fn main() {
     // Map indices back to RGB for a viewable output
     let mut out_pixels: Vec<u8> = Vec::with_capacity(width as usize * height as usize * 3);
     for idx in &indices {
-        out_pixels.extend_from_slice(&palette.colors[*idx as usize]);
+        out_pixels.extend_from_slice(&palette.preview_srgb()[*idx as usize]);
     }
 
     RgbImage::from_raw(width, height, out_pixels)

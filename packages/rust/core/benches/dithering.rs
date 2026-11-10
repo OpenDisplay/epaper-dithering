@@ -6,16 +6,29 @@ use epaper_dithering_core::{
     },
     color_space::srgb_channel_to_linear,
     color_space_lab::{PaletteLab, WAB, match_pixel_oklab, rgb_to_oklab},
-    dither, DitherConfig,
+    dither, DitherOptions,
     dizzy::dizzy_dither,
     enums::{DitherMode, GamutCompression, ToneCompression},
-    measured_palettes::SPECTRA_7_3_6COLOR,
-    palettes::ColorScheme,
+    palette::Palette,
+    srgb_palette::SrgbPalette,
     tone_map::{auto_compress_dynamic_range, compress_dynamic_range, gamut_compress},
     types::ImageBuffer,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+fn example_palette(name: &str) -> Palette {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../examples/palettes").join(name);
+    Palette::from_json(&std::fs::read_to_string(path).expect("read palette")).expect("valid palette")
+}
+
+fn spectra6() -> Palette {
+    example_palette("spectra_7_3_6color.json")
+}
+
+fn bwgbry_srgb() -> SrgbPalette {
+    SrgbPalette::from(&example_palette("ideal_bwgbry.json"))
+}
 
 fn fixtures_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/images")
@@ -77,7 +90,7 @@ const SIZES: &[(usize, usize)] = &[(100, 100), (400, 300)];
 
 fn bench_error_diffusion(c: &mut Criterion) {
     let mut group = c.benchmark_group("error_diffusion");
-    let palette = ColorScheme::Bwgbry.palette();
+    let palette = &bwgbry_srgb();
 
     for &(w, h) in SIZES {
         let pixels = synthetic_image(w, h);
@@ -112,7 +125,7 @@ fn bench_error_diffusion(c: &mut Criterion) {
 
 fn bench_ordered_dither(c: &mut Criterion) {
     let mut group = c.benchmark_group("ordered_dither");
-    let palette = ColorScheme::Bwgbry.palette();
+    let palette = &bwgbry_srgb();
 
     for &(w, h) in SIZES {
         let pixels = synthetic_image(w, h);
@@ -129,13 +142,13 @@ fn bench_ordered_dither(c: &mut Criterion) {
 
 fn bench_direct_map(c: &mut Criterion) {
     let mut group = c.benchmark_group("direct_map");
-    let palette = ColorScheme::Bwgbry.palette();
+    let palette = &bwgbry_srgb();
 
     for &(w, h) in SIZES {
         let pixels = synthetic_image(w, h);
         group.throughput(Throughput::Elements((w * h) as u64));
         group.bench_with_input(BenchmarkId::from_parameter(format!("{w}x{h}")), &(), |b, _| {
-            b.iter(|| direct_map(&pixels, palette, palette))
+            b.iter(|| direct_map(&pixels, palette, None))
         });
     }
 
@@ -146,8 +159,7 @@ fn bench_direct_map(c: &mut Criterion) {
 
 fn bench_color_matching(c: &mut Criterion) {
     const N: usize = 10_000;
-    let palette_linear: Vec<[f64; 3]> = ColorScheme::Bwgbry
-        .palette()
+    let palette_linear: Vec<[f64; 3]> = bwgbry_srgb()
         .colors
         .iter()
         .map(|&[r, g, b]| {
@@ -182,7 +194,7 @@ fn bench_color_matching(c: &mut Criterion) {
 
 fn bench_preprocessing(c: &mut Criterion) {
     let (w, h) = (400, 300);
-    let palette = &SPECTRA_7_3_6COLOR;
+    let palette = &SrgbPalette::from(&spectra6());
 
     let mut group = c.benchmark_group("preprocessing");
     group.throughput(Throughput::Elements((w * h) as u64));
@@ -219,14 +231,16 @@ fn bench_preprocessing(c: &mut Criterion) {
 fn bench_full_pipeline(c: &mut Criterion) {
     let (w, h) = (400, 300);
     let pixels = synthetic_image(w, h);
-    let img = ImageBuffer::new(&pixels, w);
+    let img = ImageBuffer::new(&pixels, w).expect("whole RGB buffer");
 
+    let spectra = spectra6();
+    let mono = example_palette("ideal_mono.json");
     let mut group = c.benchmark_group("full_pipeline");
     group.throughput(Throughput::Elements((w * h) as u64));
 
     group.bench_function("burkes_auto_tone_auto_gamut_6color", |b| {
         b.iter(|| {
-            dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig {
+            dither(&img, &spectra, &DitherOptions {
                 mode: DitherMode::Burkes,
                 tone: ToneCompression::Auto,
                 gamut: GamutCompression::Auto,
@@ -237,7 +251,7 @@ fn bench_full_pipeline(c: &mut Criterion) {
 
     group.bench_function("burkes_no_preprocessing_mono", |b| {
         b.iter(|| {
-            dither(&img, ColorScheme::Mono, DitherConfig {
+            dither(&img, &mono, &DitherOptions {
                 mode: DitherMode::Burkes,
                 tone: ToneCompression::Fixed(0.0),
                 gamut: GamutCompression::None,
@@ -261,6 +275,7 @@ fn bench_real_images(c: &mut Criterion) {
         ("olympiapark.png",     "daylight"),  // normal outdoor scene
     ];
 
+    let spectra = spectra6();
     let mut group = c.benchmark_group("real_images");
     // Every fixture in `tests/fixtures/images/` is 800×480; keep it that way or
     // this hardcoded throughput becomes a lie.
@@ -270,7 +285,7 @@ fn bench_real_images(c: &mut Criterion) {
         let Some((pixels, w, _h)) = try_load_fixture(filename) else {
             continue;
         };
-        let img = ImageBuffer::new(&pixels, w);
+        let img = ImageBuffer::new(&pixels, w).expect("whole RGB buffer");
 
         group.bench_with_input(
             BenchmarkId::new("burkes_spectra6_auto", label),
@@ -279,8 +294,8 @@ fn bench_real_images(c: &mut Criterion) {
                 b.iter(|| {
                     dither(
                         &img,
-                        &SPECTRA_7_3_6COLOR,
-                        DitherConfig {
+                        &spectra,
+                        &DitherOptions {
                             mode: DitherMode::Burkes,
                             tone: ToneCompression::Auto,
                             gamut: GamutCompression::Auto,
@@ -301,15 +316,16 @@ fn bench_full_res(c: &mut Criterion) {
     let Some((pixels, w, h)) = try_load_fixture("benchmark_only/marienplatz.png") else {
         return;
     };
-    let img = ImageBuffer::new(&pixels, w);
+    let img = ImageBuffer::new(&pixels, w).expect("whole RGB buffer");
 
+    let spectra = spectra6();
     let mut group = c.benchmark_group("full_res");
     group.throughput(Throughput::Elements((w * h) as u64));
     group.sample_size(20); // fewer samples — each iteration is slow
 
     group.bench_function("burkes_spectra6_auto", |b| {
         b.iter(|| {
-            dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig {
+            dither(&img, &spectra, &DitherOptions {
                 mode: DitherMode::Burkes,
                 tone: ToneCompression::Auto,
                 gamut: GamutCompression::Auto,

@@ -2,11 +2,10 @@ use crate::algorithms::{
     Kernel, ATKINSON, BURKES, FLOYD_STEINBERG, JARVIS_JUDICE_NINKE, SIERRA, SIERRA_LITE, STUCKI,
 };
 use crate::error::DitherError;
-use crate::palettes::Palette;
+use crate::srgb_palette::SrgbPalette;
 use crate::tone_map;
 
-/// Dithering algorithm. Integer values match OpenDisplay firmware conventions.
-#[repr(u8)]
+/// Dithering algorithm. Bindings name modes by their snake_case [`Display`] form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DitherMode {
     /// Direct nearest-color mapping with no error diffusion. Intended for
@@ -14,24 +13,24 @@ pub enum DitherMode {
     /// continuous-tone photos or large flat mid-tone areas can map to an
     /// unexpected ink (e.g. a mid-gray region rendered as solid red); use an
     /// error-diffusion mode (e.g. `FloydSteinberg`, `Burkes`) for photographic input.
-    None           = 0,
+    None,
     #[default]
-    Burkes         = 1,
-    Ordered        = 2,
-    FloydSteinberg = 3,
-    Atkinson       = 4,
-    Stucki         = 5,
-    Sierra         = 6,
-    SierraLite     = 7,
-    JarvisJudiceNinke = 8,
+    Burkes,
+    Ordered,
+    FloydSteinberg,
+    Atkinson,
+    Stucki,
+    Sierra,
+    SierraLite,
+    JarvisJudiceNinke,
     /// Error diffusion with pseudo-random traversal instead of a raster scan,
     /// diffusing error only to not-yet-quantized neighbours. Produces no
     /// directional structure. `serpentine` is ignored: there is no scan direction.
-    Dizzy          = 9,
+    Dizzy,
 }
 
 /// Dynamic range compression applied before dithering.
-/// Only meaningful for measured palettes (ignored for `ColorScheme`).
+/// Only meaningful for measured palettes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ToneCompression {
     /// Reinhard 2004 skewness-based auto strength. Best for photos.
@@ -48,7 +47,7 @@ impl Default for ToneCompression {
 }
 
 impl ToneCompression {
-    pub fn apply(self, pixels: &mut [[f64; 3]], palette: &Palette) {
+    pub fn apply(self, pixels: &mut [[f64; 3]], palette: &SrgbPalette) {
         match self {
             ToneCompression::Auto => tone_map::auto_compress_dynamic_range(pixels, palette),
             ToneCompression::Fixed(s) => if s > 0.0 {
@@ -71,7 +70,7 @@ pub enum GamutCompression {
 }
 
 impl GamutCompression {
-    pub fn apply(self, pixels: &mut [[f64; 3]], palette: &Palette) {
+    pub fn apply(self, pixels: &mut [[f64; 3]], palette: &SrgbPalette) {
         match self {
             GamutCompression::None => {}
             GamutCompression::Auto => tone_map::gamut_compress(pixels, palette, 1.0),
@@ -84,27 +83,54 @@ impl GamutCompression {
 
 }
 
-impl TryFrom<u8> for DitherMode {
-    type Error = DitherError;
+const NAMES: [(DitherMode, &str); 10] = [
+    (DitherMode::None, "none"),
+    (DitherMode::Burkes, "burkes"),
+    (DitherMode::Ordered, "ordered"),
+    (DitherMode::FloydSteinberg, "floyd_steinberg"),
+    (DitherMode::Atkinson, "atkinson"),
+    (DitherMode::Stucki, "stucki"),
+    (DitherMode::Sierra, "sierra"),
+    (DitherMode::SierraLite, "sierra_lite"),
+    (DitherMode::JarvisJudiceNinke, "jarvis_judice_ninke"),
+    (DitherMode::Dizzy, "dizzy"),
+];
 
-    fn try_from(v: u8) -> Result<Self, Self::Error> {
-        match v {
-            0 => Ok(DitherMode::None),
-            1 => Ok(DitherMode::Burkes),
-            2 => Ok(DitherMode::Ordered),
-            3 => Ok(DitherMode::FloydSteinberg),
-            4 => Ok(DitherMode::Atkinson),
-            5 => Ok(DitherMode::Stucki),
-            6 => Ok(DitherMode::Sierra),
-            7 => Ok(DitherMode::SierraLite),
-            8 => Ok(DitherMode::JarvisJudiceNinke),
-            9 => Ok(DitherMode::Dizzy),
-            _ => Err(DitherError::UnknownDitherMode(v)),
-        }
+impl std::str::FromStr for DitherMode {
+    type Err = DitherError;
+
+    /// Parse a snake_case mode name, e.g. `"floyd_steinberg"`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        NAMES
+            .iter()
+            .find(|(_, name)| *name == s)
+            .map(|&(mode, _)| mode)
+            .ok_or_else(|| DitherError::UnknownDitherMode(s.to_owned()))
+    }
+}
+
+impl std::fmt::Display for DitherMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = NAMES.iter().find(|(mode, _)| mode == self).map(|(_, name)| *name).unwrap_or("unknown");
+        f.write_str(name)
     }
 }
 
 impl DitherMode {
+    /// Every mode, in declaration order.
+    pub const ALL: [DitherMode; 10] = [
+        DitherMode::None,
+        DitherMode::Burkes,
+        DitherMode::Ordered,
+        DitherMode::FloydSteinberg,
+        DitherMode::Atkinson,
+        DitherMode::Stucki,
+        DitherMode::Sierra,
+        DitherMode::SierraLite,
+        DitherMode::JarvisJudiceNinke,
+        DitherMode::Dizzy,
+    ];
+
     pub fn kernel(self) -> Option<&'static Kernel> {
         match self {
             DitherMode::None | DitherMode::Ordered | DitherMode::Dizzy => None,
@@ -124,9 +150,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dizzy_is_mode_nine_and_has_no_kernel() {
-        assert_eq!(DitherMode::Dizzy as u8, 9);
-        assert_eq!(DitherMode::try_from(9u8), Ok(DitherMode::Dizzy));
+    fn dizzy_is_named_and_has_no_kernel() {
+        assert_eq!("dizzy".parse::<DitherMode>(), Ok(DitherMode::Dizzy));
         assert!(DitherMode::Dizzy.kernel().is_none(), "dizzy has no fixed kernel");
     }
 }

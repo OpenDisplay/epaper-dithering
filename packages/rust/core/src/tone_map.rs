@@ -7,7 +7,7 @@ use rayon::prelude::*;
 
 use crate::color_space::{linear_fraction_to_srgb, srgb_channel_to_linear, srgb_fraction_to_linear};
 use crate::color_space_lab::{oklab_to_rgb, rgb_to_oklab, OkLab};
-use crate::palettes::Palette;
+use crate::srgb_palette::SrgbPalette;
 
 // ITU-R BT.709 / sRGB luminance coefficients
 const LUM_R: f64 = 0.2126729;
@@ -18,7 +18,7 @@ fn luminance([r, g, b]: [f64; 3]) -> f64 {
     LUM_R * r + LUM_G * g + LUM_B * b
 }
 
-fn palette_to_linear(palette: &Palette) -> Vec<[f64; 3]> {
+fn palette_to_linear(palette: &SrgbPalette) -> Vec<[f64; 3]> {
     palette
         .colors
         .iter()
@@ -30,6 +30,15 @@ fn palette_to_linear(palette: &Palette) -> Vec<[f64; 3]> {
             ]
         })
         .collect()
+}
+
+/// Luminance of the palette's darkest and lightest entries: the display's black and
+/// white, whatever order the palette lists them in.
+fn display_luminance_range(palette: &SrgbPalette) -> (f64, f64) {
+    palette_to_linear(palette)
+        .into_iter()
+        .map(luminance)
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), y| (lo.min(y), hi.max(y)))
 }
 
 /// Scale a near-black pixel toward a target luminance while preserving its channel ratios
@@ -144,16 +153,14 @@ pub fn apply_shadows_highlights(pixels: &mut [[f64; 3]], shadows: f64, highlight
 
 /// Remap pixel luminance from [0, 1] to the display's [black_Y, white_Y] range.
 ///
-/// `palette.colors[0]` = black ink, `palette.colors[1]` = white/paper.
+/// Black and white are the palette's darkest and lightest entries.
 /// `strength` blends between no compression (0.0) and full remap (1.0).
-pub fn compress_dynamic_range(pixels: &mut [[f64; 3]], palette: &Palette, strength: f64) {
+pub fn compress_dynamic_range(pixels: &mut [[f64; 3]], palette: &SrgbPalette, strength: f64) {
     if strength <= 0.0 {
         return;
     }
 
-    let pal = palette_to_linear(palette);
-    let black_y = luminance(pal[0]);
-    let white_y = luminance(pal[1]);
+    let (black_y, white_y) = display_luminance_range(palette);
     let display_range = white_y - black_y;
 
     if display_range <= 0.0 {
@@ -183,10 +190,8 @@ pub fn compress_dynamic_range(pixels: &mut [[f64; 3]], palette: &Palette, streng
 ///
 /// Only compresses when the image genuinely exceeds the display range (±10% tolerance).
 /// Strength = clip(skew^1.4, 0, 1) where skew = position of log-average in log range.
-pub fn auto_compress_dynamic_range(pixels: &mut [[f64; 3]], palette: &Palette) {
-    let pal = palette_to_linear(palette);
-    let black_y = luminance(pal[0]);
-    let white_y = luminance(pal[1]);
+pub fn auto_compress_dynamic_range(pixels: &mut [[f64; 3]], palette: &SrgbPalette) {
+    let (black_y, white_y) = display_luminance_range(palette);
     let display_range = white_y - black_y;
 
     if display_range <= 0.0 {
@@ -296,7 +301,7 @@ fn smoothstep(edge0: f64, edge1: f64, x: f64) -> f64 {
 /// returning an endpoint when the projection falls outside the segment, which covers all
 /// vertices. For 4+ color palettes the true nearest point on the convex hull can be
 /// interior to a triangular face — this is a known approximation.
-pub fn gamut_compress(pixels: &mut [[f64; 3]], palette: &Palette, strength: f64) {
+pub fn gamut_compress(pixels: &mut [[f64; 3]], palette: &SrgbPalette, strength: f64) {
     if strength <= 0.0 {
         return;
     }
@@ -363,9 +368,8 @@ pub fn gamut_compress(pixels: &mut [[f64; 3]], palette: &Palette, strength: f64)
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn spectra_palette() -> &'static Palette {
-        use crate::measured_palettes::SPECTRA_7_3_6COLOR;
-        &SPECTRA_7_3_6COLOR
+    fn spectra_palette() -> &'static SrgbPalette {
+            crate::srgb_palette::fixtures::spectra6()
     }
 
     #[test]

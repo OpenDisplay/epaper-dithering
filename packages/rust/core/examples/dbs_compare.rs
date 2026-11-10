@@ -28,13 +28,18 @@ use epaper_dithering_core::{
     color_space::srgb_channel_to_linear,
     color_space_lab::rgb_to_oklab,
     dbs::{perceived_error, DbsParams},
-    dither, dither_with_canonical,
+    dither,
     enums::{DitherMode, GamutCompression, ToneCompression},
-    measured_palettes::SPECTRA_7_3_6COLOR,
-    palettes::{ColorScheme, Palette},
+    palette::Palette,
+    srgb_palette::SrgbPalette,
     types::ImageBuffer,
-    DitherConfig,
+    DitherOptions,
 };
+
+fn example_palette(name: &str) -> Palette {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../examples/palettes").join(name);
+    Palette::from_json(&std::fs::read_to_string(path).expect("read palette")).expect("valid palette")
+}
 use image::{imageops, RgbImage};
 
 const BLOCK: usize = 4;
@@ -125,7 +130,7 @@ fn block_delta_e(a: &[u8], b: &[u8], width: usize, height: usize) -> f64 {
     total / blocks as f64
 }
 
-fn render(indices: &[u8], palette: &Palette, w: u32, h: u32) -> RgbImage {
+fn render(indices: &[u8], palette: &SrgbPalette, w: u32, h: u32) -> RgbImage {
     let rgb = indices.iter().flat_map(|&i| palette.colors[i as usize]).collect();
     RgbImage::from_raw(w, h, rgb).expect("render buffer size")
 }
@@ -165,7 +170,8 @@ const VARIANTS: [Variant; 4] = [
 
 fn main() {
     let args = parse_args();
-    let palette: &Palette = if args.measured { &SPECTRA_7_3_6COLOR } else { ColorScheme::Mono.palette() };
+    let palette = example_palette(if args.measured { "spectra_7_3_6color.json" } else { "ideal_mono.json" });
+    let srgb = SrgbPalette::from(&palette);
     let (w, h) = (args.width as usize, args.height as usize);
     std::fs::create_dir_all(&args.out).expect("create output dir");
 
@@ -210,28 +216,27 @@ fn main() {
         std::fs::create_dir_all(&dir).expect("create image dir");
         src.save(dir.join("source.png")).expect("save source");
 
-        let buf = ImageBuffer::new(src.as_raw(), w);
+        let buf = ImageBuffer::new(src.as_raw(), w).expect("whole RGB buffer");
         let mut renders = vec![src.clone()];
         let mut rows = String::new();
 
         for (vi, v) in variants.iter().enumerate() {
-            let cfg = DitherConfig {
+            let o = DitherOptions {
                 mode: v.mode,
                 dbs: v.dbs.then_some(args.params),
                 ..Default::default()
             };
             let t = Instant::now();
             let indices = if args.measured {
-                let cfg = DitherConfig { tone: ToneCompression::Auto, gamut: GamutCompression::Auto, ..cfg };
-                dither_with_canonical(&buf, palette, ColorScheme::Bwgbry.palette(), cfg)
+                dither(&buf, &palette, &DitherOptions { tone: ToneCompression::Auto, gamut: GamutCompression::Auto, ..o })
             } else {
-                dither(&buf, palette, cfg)
+                dither(&buf, &palette, &o)
             };
             let elapsed = t.elapsed();
 
-            let img = render(&indices, palette, args.width, args.height);
+            let img = render(&indices, &srgb, args.width, args.height);
             let de = block_delta_e(src.as_raw(), img.as_raw(), w, h);
-            let pe = perceived_error(src.as_raw(), w, h, palette, &indices, &args.params);
+            let pe = perceived_error(src.as_raw(), w, h, &srgb, &indices, &args.params);
             let diff = args.baseline.as_ref().and_then(|b| {
                 let base = image::open(b.join(stem).join(format!("{}.png", v.name))).ok()?.to_rgb8();
                 (base.dimensions() == img.dimensions())
