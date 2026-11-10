@@ -1,0 +1,80 @@
+{
+  "format": "epaper-palette",
+  "version": 1,
+  "measured": false,
+  "source": "epaper-dithering 6.x built-in ideal grayscale8",
+  "entries": [
+    {
+      "appearance": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "name": "black",
+      "nominal": "#000000"
+    },
+    {
+      "appearance": [
+        14.197678356496308,
+        0.0,
+        0.0
+      ],
+      "name": "gray1",
+      "nominal": "#242424"
+    },
+    {
+      "appearance": [
+        31.02611512683285,
+        0.0,
+        1.1102230246251565e-14
+      ],
+      "name": "gray2",
+      "nominal": "#494949"
+    },
+    {
+      "appearance": [
+        46.03239886147558,
+        0.0,
+        0.0
+      ],
+      "name": "gray3",
+      "nominal": "#6d6d6d"
+    },
+    {
+      "appearance": [
+        60.55510312750863,
+        0.0,
+        -4.440892098500626e-14
+      ],
+      "name": "gray4",
+      "nominal": "#929292"
+    },
+    {
+      "appearance": [
+        74.0477876345469,
+        0.0,
+        -2.220446049250313e-14
+      ],
+      "name": "gray5",
+      "nominal": "#b6b6b6"
+    },
+    {
+      "appearance": [
+        87.40603610161055,
+        0.0,
+        0.0
+      ],
+      "name": "gray6",
+      "nominal": "#dbdbdb"
+    },
+    {
+      "appearance": [
+        100.0,
+        0.0,
+        0.0
+      ],
+      "name": "white",
+      "nominal": "#ffffff"
+    }
+  ]
+}

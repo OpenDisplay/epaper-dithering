@@ -1,0 +1,35 @@
+{
+  "format": "epaper-palette",
+  "version": 1,
+  "measured": true,
+  "source": "epaper-dithering 6.x built-in measured HANSHOW_BWY",
+  "entries": [
+    {
+      "appearance": [
+        2.3734771892699342,
+        0.0,
+        0.0
+      ],
+      "name": "black",
+      "nominal": "#000000"
+    },
+    {
+      "appearance": [
+        100.0,
+        0.0,
+        0.0
+      ],
+      "name": "white",
+      "nominal": "#ffffff"
+    },
+    {
+      "appearance": [
+        90.67917549132233,
+        -9.364535879588576,
+        89.79806794597611
+      ],
+      "name": "yellow",
+      "nominal": "#ffff00"
+    }
+  ]
+}

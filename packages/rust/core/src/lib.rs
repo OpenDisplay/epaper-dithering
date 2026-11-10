@@ -10,6 +10,7 @@ pub mod kernels;
 pub mod lab;
 pub mod measured_palettes;
 pub mod palette;
+mod palette_file;
 pub mod palettes;
 pub mod tone_map;
 pub mod types;

@@ -1,0 +1,26 @@
+{
+  "format": "epaper-palette",
+  "version": 1,
+  "measured": true,
+  "source": "epaper-dithering 6.x built-in measured MONO_4_26",
+  "entries": [
+    {
+      "appearance": [
+        1.915448441767488,
+        0.0,
+        0.0
+      ],
+      "name": "black",
+      "nominal": "#000000"
+    },
+    {
+      "appearance": [
+        100.0,
+        0.0,
+        0.0
+      ],
+      "name": "white",
+      "nominal": "#ffffff"
+    }
+  ]
+}
