@@ -22,14 +22,11 @@ Examples:
 from __future__ import annotations
 
 import argparse
-import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-import epaper_dithering as _lib
-from epaper_dithering import ColorPalette, ColorScheme, DitherMode, dither_image
+import example_palettes
+from epaper_dithering import DitherMode, DitherOptions, Palette, dither_image
 from PIL import Image, ImageDraw, ImageFont
 
 DISPLAY_WIDTH = 800
@@ -41,11 +38,9 @@ DOCS_SCALE = 0.5
 # Discovered automatically from the library — no manual updates needed
 ALL_ALGORITHMS: list[DitherMode] = list(DitherMode)
 
-COLOR_SCHEMES: list[tuple[str, ColorScheme]] = [(s.name, s) for s in ColorScheme]
+COLOR_SCHEMES: list[tuple[str, Palette]] = example_palettes.ideal()
 
-MEASURED_PALETTES: list[tuple[str, ColorPalette]] = [
-    (name, getattr(_lib, name)) for name in _lib.__all__ if isinstance(getattr(_lib, name), ColorPalette)
-]
+MEASURED_PALETTES: list[tuple[str, Palette]] = example_palettes.measured()
 
 ALL_PALETTES_FOR_ALGO = COLOR_SCHEMES + MEASURED_PALETTES  # type: ignore[assignment]
 COLOR_SCHEME_NAMES = {s for s, _ in COLOR_SCHEMES}
@@ -79,10 +74,10 @@ def gc_str(gc: float | str) -> str:
 
 
 def render(
-    src: Image.Image, scheme: object, mode: DitherMode, tc: float | str, gc: float | str = 0.0
+    src: Image.Image, scheme: Palette, mode: DitherMode, tc: float | str, gc: float | str = 0.0
 ) -> tuple[Image.Image, float]:
     t0 = time.perf_counter()
-    dithered = dither_image(src, scheme, mode=mode, tone=tc, gamut=gc)
+    dithered = dither_image(src, scheme, DitherOptions(mode=mode, tone=tc, gamut=gc))
     return dithered.convert("RGB"), time.perf_counter() - t0
 
 
@@ -203,7 +198,7 @@ def run(
     # --docs: full-res + 50% thumbnails for the README
     # ------------------------------------------------------------------
     if docs:
-        docs_dir = Path(__file__).parent.parent / "docs" / "images"
+        docs_dir = example_palettes.ROOT / "packages/python/docs/images"
         print(f"── docs → {docs_dir}")
 
         # algorithms: use the requested palette, fall back to first available
@@ -239,7 +234,7 @@ def run(
 
 
 def main() -> None:
-    here = Path(__file__).parent.parent
+    here = example_palettes.ROOT / "packages/python"
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("image", nargs="?", default=str(here / "marienplatz.jpg"))
     parser.add_argument("--width", type=int, default=DISPLAY_WIDTH)

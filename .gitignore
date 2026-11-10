@@ -86,3 +86,11 @@ packages/python/test_timed.py
 packages/python/benchmark.py
 packages/python/np_test.py
 packages/python/*.pdf
+
+# Library lockfiles are not committed (same as packages/rust/ios); packages/python/Cargo.lock is,
+# because the Python sdist builds from it.
+packages/rust/Cargo.lock
+packages/rust/wasm/Cargo.lock
+
+# Dev-tool output (tools/pipeline.py)
+packages/python/pipeline_out/
