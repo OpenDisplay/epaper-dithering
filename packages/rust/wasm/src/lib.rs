@@ -3,11 +3,34 @@ use epaper_dithering_core::{
     dbs::DbsParams,
     dither,
     enums::{DitherMode, GamutCompression, ToneCompression},
-    palette::Palette,
+    palette::{parse_nominal, Ink, Lab, Palette, PaletteEntry},
     types::ImageBuffer,
     DitherOptions,
 };
+use serde::Deserialize;
 use wasm_bindgen::prelude::*;
+
+#[derive(Deserialize)]
+struct EntryIn {
+    appearance: [f64; 3],
+    name: Option<String>,
+    nominal: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SrgbIn {
+    rgb: [u8; 3],
+    name: Option<String>,
+    nominal: Option<String>,
+}
+
+fn ink(i: usize, name: Option<String>, nominal: Option<String>) -> Result<Option<Ink>, JsValue> {
+    match (name, nominal) {
+        (Some(name), Some(nominal)) => Ok(Some(Ink { name, nominal: parse_nominal(&nominal).map_err(js_err)? })),
+        (None, None) => Ok(None),
+        _ => Err(js_err(format!("entry {i}: an ink needs both a name and a nominal colour"))),
+    }
+}
 
 fn js_err(e: impl ToString) -> JsValue {
     JsValue::from_str(&e.to_string())
@@ -25,6 +48,35 @@ impl WasmPalette {
     #[wasm_bindgen(js_name = fromJson)]
     pub fn from_json(json: &str) -> Result<WasmPalette, JsValue> {
         Palette::from_json(json).map(|inner| WasmPalette { inner }).map_err(js_err)
+    }
+
+    /// Build from absolute measurements (`[{appearance, name?, nominal?}]` as JSON),
+    /// normalising so `entries[white_index]` becomes L* 100, a* = b* = 0.
+    #[wasm_bindgen(js_name = fromAbsoluteLab)]
+    pub fn from_absolute_lab(entries_json: &str, white_index: usize, measured: bool) -> Result<WasmPalette, JsValue> {
+        let raw: Vec<EntryIn> = serde_json::from_str(entries_json).map_err(js_err)?;
+        let entries = raw
+            .into_iter()
+            .enumerate()
+            .map(|(i, e)| {
+                let [l, a, b] = e.appearance;
+                Ok(PaletteEntry { appearance: Lab { l, a, b }, ink: ink(i, e.name, e.nominal)? })
+            })
+            .collect::<Result<Vec<_>, JsValue>>()?;
+        Palette::from_absolute_lab(entries, white_index, measured).map(|inner| WasmPalette { inner }).map_err(js_err)
+    }
+
+    /// Build from sRGB colours (`[{rgb: [r, g, b], name?, nominal?}]` as JSON); normalises to
+    /// the `white` ink if there is one.
+    #[wasm_bindgen(js_name = fromSrgb)]
+    pub fn from_srgb(colors_json: &str, measured: bool) -> Result<WasmPalette, JsValue> {
+        let raw: Vec<SrgbIn> = serde_json::from_str(colors_json).map_err(js_err)?;
+        let colors = raw
+            .into_iter()
+            .enumerate()
+            .map(|(i, c)| Ok((c.rgb, ink(i, c.name, c.nominal)?)))
+            .collect::<Result<Vec<_>, JsValue>>()?;
+        Palette::from_srgb(colors, measured).map(|inner| WasmPalette { inner }).map_err(js_err)
     }
 
     #[wasm_bindgen(js_name = toJson)]

@@ -55,6 +55,34 @@ describe('Palette', () => {
     expect(() => new Palette(entries)).toThrow(/black/);
   });
 
+  it('normalises absolute measurements with fromAbsoluteLab', () => {
+    const palette = Palette.fromAbsoluteLab([
+      { appearance: [30.47, 8.7, 4.58], name: 'black', nominal: '#000000' },
+      { appearance: [68.26, 8.33, 5.98], name: 'white', nominal: '#ffffff' },
+    ], 1, true);
+    const [l, a, b] = palette.entries[1].appearance;
+    expect(l).toBeCloseTo(100, 9);
+    expect(a).toBeCloseTo(0, 9);
+    expect(b).toBeCloseTo(0, 9);
+    expect(palette.entries[0].appearance[0]).toBeGreaterThan(30.47);
+    expect(palette.measured).toBe(true);
+  });
+
+  it('builds from sRGB with fromSrgb, normalising to the white ink', () => {
+    const palette = Palette.fromSrgb([
+      { rgb: { r: 26, g: 13, b: 35 }, name: 'black', nominal: '#000000' },
+      { rgb: { r: 185, g: 202, b: 205 }, name: 'white', nominal: '#ffffff' },
+      { rgb: { r: 121, g: 9, b: 0 } },
+    ]);
+    expect(palette.previewRgb()[1]).toEqual({ r: 255, g: 255, b: 255 });
+    expect(palette.indexOf('white')).toBe(1);
+    expect(palette.length).toBe(3);
+  });
+
+  it('rejects a bad white index', () => {
+    expect(() => Palette.fromAbsoluteLab([{ appearance: [50, 0, 0] }, { appearance: [60, 0, 0] }], 5)).toThrow(/out of range/);
+  });
+
   it('rejects malformed JSON', () => {
     expect(() => Palette.fromJson('{')).toThrow();
   });

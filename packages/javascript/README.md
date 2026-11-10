@@ -106,9 +106,12 @@ palette.previewRgb();   // [{ r, g, b }, ...] what the panel shows, per entry
 palette.toJson();       // save it as a palette file
 ```
 
-Constructors throw on invalid palettes: fewer than 2 or more than 256 entries, duplicate ink names or
-nominals, malformed files, or a `white` entry more than ΔE 0.5 from L\* 100 (the message tells you
-to normalise with `from_absolute_lab`, which the Rust and Python APIs provide). The repository's
+From measurements, use `Palette.fromAbsoluteLab(entries, whiteIndex, measured)` (absolute CIELAB,
+normalised so `entries[whiteIndex]` becomes L\* 100) or `Palette.fromSrgb([{ rgb: { r, g, b }, name?, nominal? }, ...])`.
+
+Constructors throw on invalid palettes: fewer than 2 or more than 256 entries, an appearance that is
+not finite, duplicate ink names or nominals, malformed files, or a `white` entry more than ΔE 0.5
+from L\* 100 (the message tells you to normalise with `from_absolute_lab`, i.e. `fromAbsoluteLab`). The repository's
 [`examples/palettes/`](../../examples/palettes/) folder has starting points (the idealised 6.x
 schemes and several measured panels); they are not part of the package. The file format is
 described in the [Python README](../python/README.md#palettes).

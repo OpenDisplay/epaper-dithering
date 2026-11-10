@@ -121,7 +121,8 @@ L\* 100, it raises `PaletteError` and tells you to use `from_absolute_lab`. Pale
 `Palette.from_srgb([((r, g, b), name, nominal), ...])`; it normalises to the `white` ink if there is
 one.
 
-`PaletteError` (a `ValueError`) is also raised for fewer than 2 or more than 256 entries, duplicate
+`PaletteError` (a `ValueError`) is also raised for fewer than 2 or more than 256 entries, appearances
+that are not finite, duplicate
 ink names or nominals, and malformed or unsupported files.
 
 ### How named inks behave
@@ -133,8 +134,8 @@ both on by default, make sure colours that *ask for* an ink get it:
   and neither receives nor passes on dithering error. This is decided on the original image, so it
   still holds when you also adjust exposure or tone for a photo in the same image.
 - **Anchoring** (`anchor=True`): before matching, colours are mapped so each ink's nominal lands
-  exactly on its appearance (black-point compensation between the darkest and lightest ink, plus a
-  local correction around each ink that fades with distance). Near-ink colours and anti-aliased edges
+  exactly on its appearance (black-point compensation between the inks named for `#000000` and
+  `#ffffff`, plus a local correction around each ink that fades with distance). Near-ink colours and anti-aliased edges
   follow smoothly, and photos keep their tonal range instead of crushing shadows into black.
 
 Unnamed entries (the mixes of a 16-colour mode, say) take part in dithering but are never targets of

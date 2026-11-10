@@ -5,11 +5,14 @@
 //! single sRGB step is a large OKLab distance, and lifting black into the visible range
 //! would turn that into a visible jump. CIELAB's linear segment keeps shadows smooth.)
 //!
-//! 1. **Global black-point compensation** between the darkest and the lightest ink: L\* is
-//!    rescaled linearly so the darkest nominal lands on its appearance and the lightest
-//!    nominal on its appearance; a\*/b\* get the two inks' offsets blended by lightness.
-//!    Monotonic in lightness, smooth, and it moves every colour by a sensible amount.
-//! 2. **Damped local correction** for every ink: after step 1 each ink still has a residual
+//! 1. **Global black-point compensation** between the ink whose nominal is pure black
+//!    (`#000000`) and the ink whose nominal is pure white (`#ffffff`): L\* is rescaled
+//!    linearly so each lands on its appearance; a\*/b\* get the two inks' offsets blended by
+//!    lightness. A missing end stays where it is (L\* 0 or L\* 100, which is already the
+//!    panel's white because appearances are normalised to it). Other inks never drive this
+//!    step: fitting it between, say, red and blue would invert the grey axis.
+//! 2. **Damped local correction** for every ink (and a zero correction pinned at an
+//!    unnamed black or white end): after step 1 each ink still has a residual
 //!    (its target minus where step 1 put its nominal). A pixel moves by
 //!    `Σ w_k r_k / (Σ w_k + W0)` with `w_k = 1/d_k²`. At an ink the weight is unbounded, so
 //!    the ink lands exactly; far from every ink the `W0` term wins and the correction fades
@@ -85,18 +88,18 @@ impl Mapping {
         if !moves {
             return None;
         }
-        let darkest = inks.iter().min_by(|a, b| a.0.l.total_cmp(&b.0.l));
-        let lightest = inks.iter().max_by(|a, b| a.0.l.total_cmp(&b.0.l));
-        let global = match (darkest, lightest) {
-            (Some(d), Some(l)) if l.0.l - d.0.l > 1.0 => Some(Global {
-                dark_source: d.0,
-                dark_target: d.1,
-                light_source: l.0,
-                light_target: l.1,
-            }),
-            _ => None,
+        let nominal_is = |rgb: [u8; 3]| {
+            palette.inks().position(|(_, ink)| ink.nominal == rgb).map(|k| inks[k])
         };
-        let locals = inks
+        let black_point = Lab { l: 0.0, a: 0.0, b: 0.0 };
+        let white_point = Lab { l: 100.0, a: 0.0, b: 0.0 };
+        let (dark_source, dark_target) = nominal_is([0, 0, 0]).map_or((black_point, black_point), |k| (k.0, k.1));
+        let (light_source, light_target) =
+            nominal_is([255, 255, 255]).map_or((white_point, white_point), |k| (k.0, k.1));
+        let moves_ends = dark_source != dark_target || light_source != light_target;
+        let rising = light_target.l - dark_target.l > 1.0 && light_source.l - dark_source.l > 1.0;
+        let global = (moves_ends && rising).then_some(Global { dark_source, dark_target, light_source, light_target });
+        let mut locals: Vec<Local> = inks
             .iter()
             .map(|&(source, target, target_linear)| {
                 let moved = global.as_ref().map_or(source, |g| g.apply(source));
@@ -107,6 +110,14 @@ impl Mapping {
                 }
             })
             .collect();
+        // An unnamed end of the grey axis is still a fixed point: pin it with a zero
+        // correction so other inks' local corrections fade out before reaching it.
+        for (named, point) in [(nominal_is([0, 0, 0]).is_some(), black_point), (nominal_is([255, 255, 255]).is_some(), white_point)] {
+            if !named {
+                let at = global.as_ref().map_or(point, |g| g.apply(point));
+                locals.push(Local { source: at, residual: [0.0; 3], target_linear: lab_to_linear(at).map(|c| c.clamp(0.0, 1.0)) });
+            }
+        }
         Some(Self { global, locals })
     }
 
@@ -212,6 +223,42 @@ mod tests {
                     assert!(de < 3.0, "jump of ΔE {de:.2} at {base:?}");
                 }
             }
+        }
+    }
+
+    /// spectra6 with only the inks in `mask` (bit i = entry i) named.
+    fn spectra6_subset(mask: u32) -> Palette {
+        let entries = spectra6()
+            .entries()
+            .iter()
+            .enumerate()
+            .map(|(i, e)| PaletteEntry { appearance: e.appearance, ink: if mask & (1 << i) != 0 { e.ink.clone() } else { None } })
+            .collect();
+        Palette::new(entries, true).unwrap()
+    }
+
+    #[test]
+    fn grey_ramp_stays_monotonic_for_every_subset_of_named_inks() {
+        for mask in 0..64u32 {
+            let p = spectra6_subset(mask);
+            let mut ramp: Vec<[f64; 3]> = (0..=255u8).map(|v| linear([v, v, v])).collect();
+            anchor_map(&mut ramp, &p);
+            let ls: Vec<f64> = ramp.iter().map(|&px| crate::lab::linear_to_lab(px).l).collect();
+            for (i, w) in ls.windows(2).enumerate() {
+                assert!(w[1] >= w[0] - 1e-9, "inks {mask:06b}: L* fell from {:.2} to {:.2} at grey {i}", w[0], w[1]);
+            }
+        }
+    }
+
+    #[test]
+    fn white_stays_white_for_every_subset_of_named_inks() {
+        // Entry 1 is white and the lightest entry, named or not.
+        for mask in 0..64u32 {
+            let p = spectra6_subset(mask);
+            let mut px = vec![linear([255, 255, 255])];
+            anchor_map(&mut px, &p);
+            let de = delta_e76(lab_of_linear(px[0]), srgb_to_lab([255, 255, 255]));
+            assert!(de < 2.0, "inks {mask:06b}: #ffffff moved by ΔE {de:.2}");
         }
     }
 

@@ -45,7 +45,7 @@ struct EntryOut<'a> {
     nominal: Option<String>,
 }
 
-fn parse_nominal(s: &str) -> Result<[u8; 3], PaletteError> {
+pub(crate) fn parse_nominal(s: &str) -> Result<[u8; 3], PaletteError> {
     let invalid = || PaletteError::InvalidNominal(s.to_owned());
     let hex = s.strip_prefix('#').filter(|h| h.len() == 6 && h.is_ascii()).ok_or_else(invalid)?;
     let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|_| invalid());

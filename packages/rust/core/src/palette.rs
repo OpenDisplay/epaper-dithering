@@ -48,6 +48,8 @@ pub enum PaletteError {
     DuplicateNominal([u8; 3]),
     WhiteNotNormalised { delta_e: f64 },
     WhiteIndexOutOfRange(usize),
+    /// An appearance component is NaN or infinite.
+    InvalidAppearance { index: usize },
     InvalidJson(String),
     UnsupportedFormat(String),
     UnsupportedVersion(u64),
@@ -70,6 +72,9 @@ impl fmt::Display for PaletteError {
                  absolute measurements"
             ),
             Self::WhiteIndexOutOfRange(i) => write!(f, "white entry index {i} is out of range"),
+            Self::InvalidAppearance { index } => {
+                write!(f, "entry {index} has an appearance that is not a finite L*a*b* value")
+            }
             Self::InvalidJson(msg) => write!(f, "invalid palette file: {msg}"),
             Self::UnsupportedFormat(fmt_name) => {
                 write!(f, "not an epaper-palette file (format is {fmt_name:?})")
@@ -82,6 +87,11 @@ impl fmt::Display for PaletteError {
 
 impl std::error::Error for PaletteError {}
 
+/// Parse a `#rrggbb` nominal colour, as palette files spell it.
+pub fn parse_nominal(s: &str) -> Result<[u8; 3], PaletteError> {
+    crate::palette_file::parse_nominal(s)
+}
+
 impl Palette {
     /// Build a palette from appearances that are already normalised to the panel's white.
     pub fn new(entries: Vec<PaletteEntry>, measured: bool) -> Result<Self, PaletteError> {
@@ -91,6 +101,12 @@ impl Palette {
         }
         if n > MAX_ENTRIES {
             return Err(PaletteError::TooManyEntries(n));
+        }
+        if let Some(index) = entries.iter().position(|e| {
+            let Lab { l, a, b } = e.appearance;
+            !(l.is_finite() && a.is_finite() && b.is_finite())
+        }) {
+            return Err(PaletteError::InvalidAppearance { index });
         }
         let inks: Vec<&Ink> = entries.iter().filter_map(|e| e.ink.as_ref()).collect();
         for (i, ink) in inks.iter().enumerate() {
@@ -245,6 +261,16 @@ mod tests {
         .unwrap_err();
         assert!(matches!(err, PaletteError::WhiteNotNormalised { delta_e } if delta_e > 30.0), "{err:?}");
         assert!(err.to_string().contains("from_absolute_lab"), "{err}");
+    }
+
+    #[test]
+    fn rejects_non_finite_appearance() {
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let err = Palette::new(vec![entry(20.0, 0.0, 0.0), entry(60.0, bad, 0.0)], false).unwrap_err();
+            assert_eq!(err, PaletteError::InvalidAppearance { index: 1 });
+        }
+        let err = Palette::new(vec![ink(f64::NAN, 0.0, 0.0, "white", [255, 255, 255]), entry(20.0, 0.0, 0.0)], false).unwrap_err();
+        assert_eq!(err, PaletteError::InvalidAppearance { index: 0 });
     }
 
     #[test]

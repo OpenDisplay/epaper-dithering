@@ -79,7 +79,7 @@ ordered list of entries; each has an `appearance` (CIELAB D65, **normalised so t
 are never shipped in the crate, wheel or npm package and no API returns them.
 
 - Named inks drive two behaviours, both on by default: **anchoring** (`core/src/anchor.rs`: black-point
-  compensation between the darkest and lightest ink plus a damped local correction, in CIELAB, exact
+  compensation between the inks whose nominals are `#000000`/`#ffffff` (a missing end stays fixed) plus a damped local correction, in CIELAB, exact
   at every ink) and **snapping** (a pixel exactly equal to an ink's nominal takes that ink, decided on
   the original input, pinned through diffusion and DBS).
 - Algorithms run on `SrgbPalette` (the clamped sRGB of each appearance, `#[doc(hidden)]`); the
