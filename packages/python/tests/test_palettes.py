@@ -84,6 +84,24 @@ class TestValidation:
         with pytest.raises(PaletteError):
             Palette.from_json("{")
 
+    @pytest.mark.parametrize("nominal", ["#fff", "#gggggg", "ffffffff"])
+    def test_bad_nominal_string_is_rejected(self, nominal):
+        with pytest.raises(ValueError, match="#rrggbb"):
+            PaletteEntry((50.0, 0.0, 0.0), name="grey", nominal=nominal)
+
+    def test_from_srgb_rejects_name_without_nominal(self):
+        with pytest.raises(ValueError, match="both a name and a nominal"):
+            Palette.from_srgb([((0, 0, 0), "black", None), ((255, 255, 255), None, None)])
+
+    def test_with_source_returns_a_copy_with_the_note(self):
+        palette = example("ideal_mono")
+        noted = palette.with_source("measured in the lab")
+        assert noted.source == "measured in the lab"
+        assert palette.source != "measured in the lab"
+
+    def test_repr_names_the_inks(self):
+        assert repr(example("ideal_bwr")) == "Palette(3 entries, inks=['black', 'white', 'red'], measured=False)"
+
     def test_from_srgb_accepts_tuples_and_hex(self):
         palette = Palette.from_srgb([((0, 0, 0), "black", "#000000"), ((255, 255, 255), "white", (255, 255, 255))])
         assert palette.preview_rgb() == [(0, 0, 0), (255, 255, 255)]
@@ -102,6 +120,10 @@ class TestOptions:
         by_name = dither_image(small_test_image, palette, DitherOptions(mode="floyd_steinberg"))
         by_enum = dither_image(small_test_image, palette, DitherOptions(mode=DitherMode.FLOYD_STEINBERG))
         assert list(by_name.getdata()) == list(by_enum.getdata())
+
+    def test_non_numeric_tone_raises_type_error(self, small_test_image):
+        with pytest.raises(TypeError, match="tone|float"):
+            dither_image(small_test_image, example("ideal_mono"), DitherOptions(tone="strong"))
 
     def test_unknown_mode_raises_value_error(self, small_test_image):
         with pytest.raises(ValueError, match="bayer"):

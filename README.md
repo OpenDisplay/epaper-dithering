@@ -94,7 +94,7 @@ colour that requests it:
 ```
 
 [`examples/palettes/`](examples/palettes/) has starting points: the idealised schemes of 6.x and
-measured palettes for several real panels. They are not shipped in any package. See the
+two measurements of a Waveshare 7.3" Spectra 6 panel. They are not shipped in any package. See the
 [Python README](packages/python/README.md#palettes) for building palettes from measurements and
 for how named inks behave, and [CALIBRATION.md](packages/python/docs/CALIBRATION.md) for measuring
 a panel.
