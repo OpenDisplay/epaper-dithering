@@ -76,13 +76,13 @@ def grid(cells: list[list[Image.Image]]) -> Image.Image:
 print("Generating frankfurt night before/after...")
 frankfurt_orig = Image.open(FIXTURES / "frankfurt_nacht.png").convert("RGB")
 frankfurt_no_pre = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
-                                DitherOptions(mode=DitherMode.BURKES)).convert("RGB")
+                                DitherOptions(mode=DitherMode.BURKES, anchor=False)).convert("RGB")
 frankfurt_auto   = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
-                                DitherOptions(mode=DitherMode.BURKES, tone="auto", gamut="auto")).convert("RGB")
+                                DitherOptions(mode=DitherMode.BURKES)).convert("RGB")
 
 p1 = label(frankfurt_orig,   "Original")
-p2 = label(frankfurt_no_pre, "Spectra 6-color · Burkes · no preprocessing")
-p3 = label(frankfurt_auto,   "Spectra 6-color · Burkes · auto tone + gamut")
+p2 = label(frankfurt_no_pre, "Spectra 6-color · Burkes · anchoring off")
+p3 = label(frankfurt_auto,   "Spectra 6-color · Burkes · defaults (anchoring on)")
 
 hstack([p1, p2, p3]).save(OUT / "frankfurt_before_after.png")
 

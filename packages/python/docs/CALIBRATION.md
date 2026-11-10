@@ -7,7 +7,8 @@ significantly darker than pure RGB values:
 - **Pure RGB assumption**: White=(255,255,255), Red=(255,0,0)
 - **Reality**: White~(180-200), Red~(115-125) -- 30-87% darker
 
-Using measured values produces much better dithering results.
+Using measured values produces much better dithering results. The library stores them
+normalised to the panel's white (see step 6).
 
 ## What You Need
 
@@ -21,13 +22,15 @@ Using measured values produces much better dithering results.
 Use the included script to generate a patch image for your display:
 
 ```bash
-# List available color schemes
-python scripts/generate_patches.py --list
+# From the repo root. List the example palettes the script can draw patches for
+uv run --project packages/python python tools/generate_patches.py --list
 
-# Generate for your display (replace scheme and size)
-python scripts/generate_patches.py --scheme BWGBRY --size 800x480 -o patches.png
-python scripts/generate_patches.py --scheme BWR --size 296x128 -o patches.png
+# Generate for your display (replace palette and size)
+uv run --project packages/python python tools/generate_patches.py --palette ideal_bwgbry --size 800x480 -o patches.png
+uv run --project packages/python python tools/generate_patches.py --palette ideal_bwr --size 296x128 -o patches.png
 ```
+
+Each patch shows an entry's nominal colour, which is what you send to the panel for that ink.
 
 The script automatically picks a grid layout (e.g. 3x2 for 6 colors on a
 landscape display) that keeps patches as large as possible.
@@ -132,71 +135,60 @@ Round to the nearest integer. Clamp to [0, 255] if any value exceeds the range.
 > then scale by 255. Standard photo editors (Photoshop/GIMP eyedropper on an sRGB export)
 > already report gamma-encoded values, so no extra step is needed there.
 
-## Step 6: Create Your ColorPalette
+## Step 6: Create Your Palette
 
-Use the normalized values to create a `ColorPalette`:
+The library keeps every palette **normalised to the panel's own white**: the entry named `white`
+must be L\* 100, a\* = b\* = 0. That is a different reference from the paper sheet in step 5, so
+the panel's white still comes out below 255 there (e.g. `(185, 202, 205)`), and the library
+normalises once more, to it.
 
-```python
-from epaper_dithering import ColorPalette
-
-my_display = ColorPalette(
-    colors={
-        "black": (26, 13, 35),
-        "white": (185, 202, 205),
-        "yellow": (202, 184, 0),
-        "red": (121, 9, 0),
-        "blue": (0, 69, 139),
-        "green": (40, 82, 57),
-    },
-    accent="red",
-)
-```
-
-Then use it for dithering:
+With sRGB values from step 5, `Palette.from_srgb` does that for you when one entry is the `white`
+ink:
 
 ```python
-from epaper_dithering import dither_image, DitherMode
+from epaper_dithering import Palette
 
-result = dither_image(image, my_display, DitherMode.FLOYD_STEINBERG)
+my_display = Palette.from_srgb(
+    [
+        ((26, 13, 35), "black", "#000000"),
+        ((185, 202, 205), "white", "#ffffff"),
+        ((202, 184, 0), "yellow", "#ffff00"),
+        ((121, 9, 0), "red", "#ff0000"),
+        ((0, 69, 139), "blue", "#0000ff"),
+        ((40, 82, 57), "green", "#00ff00"),
+    ],
+    measured=True,
+).with_source("Spectra 7.3in, RAW photo under two 5000 K lights, 2026-01-12")
 ```
 
-## Color Order Requirement
+If your tool reports CIELAB instead (a colorimeter, or a converted photo), use
+`Palette.from_absolute_lab(entries, white_index=..., measured=True)` with `PaletteEntry` values.
+
+Name every **pure ink** and give it the nominal colour your software sends for it; leave in-between
+mixes (e.g. the extra colours of a multi-pass mode) unnamed. Named inks are what keeps requested
+colours solid: see "How named inks behave" in the [README](../README.md#how-named-inks-behave).
+
+Save it as a palette file and dither with it:
+
+```python
+from pathlib import Path
+from epaper_dithering import DitherOptions, dither_image
+
+Path("my_display.json").write_text(my_display.to_json())
+result = dither_image(image, my_display, DitherOptions(mode="floyd_steinberg"))
+```
+
+## Entry Order
 
 > [!IMPORTANT]
-> Color names and order must match the corresponding `ColorScheme`.
-> Reordering colors will break palette encoding.
+> The output index of a colour is its position in the palette. List the entries in the order your
+> display driver expects, or remap the indices yourself before sending them.
 
-Check the reference order for your scheme:
+## Sharing Your Measurements
 
-```python
-from epaper_dithering import ColorScheme
-
-scheme = ColorScheme.BWGBRY
-print(list(scheme.palette.colors.keys()))
-# ['black', 'white', 'yellow', 'red', 'blue', 'green']
-```
-
-Your `ColorPalette` must use the same key order.
-
-## Adding to the Library
-
-To contribute your measurements:
-
-1. Add a constant to `src/epaper_dithering/palettes.py`:
-   ```python
-   MY_DISPLAY_BWR = ColorPalette(
-       colors={
-           "black": (5, 5, 5),
-           "white": (185, 190, 180),
-           "red": (120, 15, 5),
-       },
-       accent="red",
-   )
-   ```
-
-2. Export in `__init__.py`
-
-3. Submit a PR -- measurements for any display model help the community!
+To contribute a measured palette, add its JSON file to
+[`examples/palettes/`](../../../examples/palettes/), describe it in that folder's README (panel
+model, how and when it was measured), and open a PR. Measurements for any display model help.
 
 ## References
 
