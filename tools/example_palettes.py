@@ -21,7 +21,7 @@ def ideal() -> list[tuple[str, Palette]]:
 
 
 def measured() -> list[tuple[str, Palette]]:
-    """The measured palettes, labelled by file name (e.g. "SOLUM_BWR")."""
+    """The measured palettes, labelled by file name (e.g. "SPECTRA_7_3_6COLOR")."""
     return [
         (p.stem.upper(), Palette.load(p))
         for p in sorted(EXAMPLES.glob("*.json"))

@@ -2,7 +2,7 @@
   "format": "epaper-palette",
   "version": 1,
   "measured": true,
-  "source": "BWRY 16-colour mode measured on ODBEEBA6 (2.9in GDEY029F51H) from a camera-white-balanced photo, 2026-11-06; normalised to entry 1 (paper white). Ink assignment is a test-fixture assumption, see README.md.",
+  "source": "BWRY 16-colour mode of a 2.9in GDEY029F51H panel, measured 2026-11-06 from a camera-white-balanced photo; normalised to entry 1 (paper white). Ink assignment is a test-fixture assumption, see README.md.",
   "entries": [
     {
       "appearance": [

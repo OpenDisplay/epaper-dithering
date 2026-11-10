@@ -111,7 +111,7 @@ describe('ditherImage with palettes', () => {
 
   it('keeps pure black dashboard text solid', () => {
     const png = PNG.sync.read(readFileSync(resolve(FIXTURES, 'images/success/dashboard_photo.png')));
-    const palette = Palette.fromJson(readFileSync(resolve(FIXTURES, 'palettes/bwry16_odbeeba6.json'), 'utf8'));
+    const palette = Palette.fromJson(readFileSync(resolve(FIXTURES, 'palettes/bwry16_measured.json'), 'utf8'));
     const result = ditherImage({ width: png.width, height: png.height, data: new Uint8ClampedArray(png.data) }, palette);
     const black = palette.indexOf('black');
     for (let i = 0; i < png.width * png.height; i++) {

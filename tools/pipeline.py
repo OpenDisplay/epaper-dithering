@@ -7,7 +7,7 @@ Usage:
 Options:
     --tc auto|0|0.5|1.0     Tone compression  (default: 0)
     --gc auto|0|0.5|1.0     Gamut compression (default: 0)
-    --palette spectra_7_3_6color_v2|solum_bwr|...  (default: spectra_7_3_6color_v2)
+    --palette spectra_7_3_6color_v2|spectra_7_3_6color  (default: spectra_7_3_6color_v2)
     --mode BURKES|FLOYD_STEINBERG|ATKINSON|...      (default: BURKES)
 
 Output: pipeline_out/pipeline_<name>_tc<tc>_gc<gc>.png — a vertical strip:

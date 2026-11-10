@@ -11,10 +11,10 @@ whose `nominal` is the ideal colour of that ink.
 | File | What it is |
 |---|---|
 | `ideal_*.json` | The 6.x idealised schemes (`#000000`, `#ff0000`, …). Appearance equals nominal, so anchoring does nothing. Use them only when no measurement exists. |
-| `spectra_7_3_6color.json`, `spectra_7_3_6color_v2.json` | Measured 7.3" Spectra 6 panels |
-| `mono_4_26.json` | Measured 4.26" black/white panel |
-| `bwry_4_2.json`, `bwry_3_97.json` | Measured BWRY panels |
-| `solum_bwr.json`, `hanshow_bwr.json`, `hanshow_bwy.json` | Measured electronic shelf label panels |
+| `spectra_7_3_6color.json`, `spectra_7_3_6color_v2.json` | Waveshare 7.3" Spectra 6 panel, measured 2026-02-03 (iPhone RAW) and 2026-03-15 (linear DNG) |
+
+The 6.x constants `MONO_4_26`, `BWRY_4_2`, `SOLUM_BWR`, `HANSHOW_BWR` and `HANSHOW_BWY` were never
+measured (placeholder values) and are not provided.
 
 The 6.x measured values were sRGB relative to the camera, not to the panel's white (Spectra's white
 was `185, 202, 205`). On export every palette was normalised so its white entry is L\* 100,

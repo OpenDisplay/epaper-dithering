@@ -1,11 +1,10 @@
 # Success-test palettes
 
-## `bwry16_odbeeba6.json`
+## `bwry16_measured.json`
 
-The 16-colour mode of a BWRY panel (OpenDisplay ODBEEBA6, 2.9" GDEY029F51H), measured on
-2026-11-06 from a hand-held, camera-white-balanced photo of a 4×4 swatch grid. The source data is
-`source_palette16_photo_ODBEEBA6.json`, copied unchanged from the OpenDisplay Silabs firmware repo
-(`panels/palette16_photo_ODBEEBA6.json`): absolute CIELAB (D65) converted from the photo's sRGB,
+The 16-colour mode of a 2.9" GDEY029F51H BWRY panel, measured on 2026-11-06 from a hand-held,
+camera-white-balanced photo of a 4×4 swatch grid. The source data is `source_bwry16_photo.json`:
+absolute CIELAB (D65) converted from the photo's sRGB,
 with paper white at L\* 68.26.
 
 It was converted with `Palette::from_absolute_lab(entries, white_index = 1, measured = true)`, which

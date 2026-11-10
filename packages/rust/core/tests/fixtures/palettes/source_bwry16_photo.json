@@ -1,6 +1,5 @@
 {
- "_comment": "Measured on ODBEEBA6 (2.9in GDEY029F51H) from a hand-held photo of the web tool's 'Upload test swatches' grid (4x4, row-major, raw codes, no dithering), 2026-11-06. The photo was white-balanced in camera; Lab is converted from its sRGB directly (D65), with NO per-entry normalisation, so white is L*68. Sampled at inset 0.3 of each cell; active area x514-1022 y453-1611 of a 1506x2000 image. Written to the unit's 0xB0 with measured=1.",
- "device": "ODBEEBA6",
+ "_comment": "Measured on a 2.9in GDEY029F51H panel from a hand-held photo of a 4x4 swatch grid (row-major, raw panel codes, no dithering), 2026-11-06. The photo was white-balanced in camera; Lab is converted from its sRGB directly (D65), with NO per-entry normalisation, so white is L*68. Sampled at inset 0.3 of each cell; active area x514-1022 y453-1611 of a 1506x2000 image.",
  "mode": "colour16",
  "source": "photo, camera white balance",
  "entries": [

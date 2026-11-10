@@ -329,6 +329,6 @@ mod tests {
         let p = Palette::new(vec![entry(20.0, 0.0, 0.0), entry(60.0, 0.0, 0.0)], false).unwrap();
         assert!(!p.measured());
         assert_eq!(p.source(), None);
-        assert_eq!(p.with_source("ODBEEBA6 photo").source(), Some("ODBEEBA6 photo"));
+        assert_eq!(p.with_source("photo of the test swatches").source(), Some("photo of the test swatches"));
     }
 }

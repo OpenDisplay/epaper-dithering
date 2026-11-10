@@ -174,7 +174,7 @@ def run(
             img, t = render(src, palette, DitherMode.BURKES, tc_val, gamut_compression)
             label = f"{pal_label} · Burkes · {tc_str(tc_val)}{gc_label}"
             tc_cells.append((label, img))
-            if pal_label == "SOLUM_BWR":
+            if pal_label == "SPECTRA_7_3_6COLOR":
                 tc_cells_solum.append((label, img))
             print(f"  {pal_label:<14} {tc_str(tc_val):<10} {t * 1000:>6.0f}ms")
     save(make_sheet(tc_cells, 3, iw, ih), out_dir / "tone_compression.png")
@@ -246,9 +246,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--docs-tc-palette",
-        default="SOLUM_BWR",
+        default="SPECTRA_7_3_6COLOR",
         metavar="NAME",
-        help="Palette for docs tone_compression image (default: SOLUM_BWR)",
+        help="Palette for docs tone_compression image (default: SPECTRA_7_3_6COLOR)",
     )
     parser.add_argument(
         "--docs-gc-palette",

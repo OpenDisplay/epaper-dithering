@@ -216,7 +216,7 @@ interface PaletteEntry {
 | 6.x | 7.x |
 |---|---|
 | `ditherImage(img, ColorScheme.BWR)` | `ditherImage(img, Palette.fromJson(idealBwrJson))` (from `examples/palettes/ideal_bwr.json`) |
-| `SPECTRA_7_3_6COLOR` and other measured constants | the matching file in `examples/palettes/` |
+| `SPECTRA_7_3_6COLOR`, `SPECTRA_7_3_6COLOR_V2` | `examples/palettes/spectra_7_3_6color*.json`; the other 6.x "measured" constants were unmeasured placeholders and are gone |
 | `ColorPalette` objects | `new Palette(entries)` |
 | `DitherMode.BURKES === 1` | `DitherMode.BURKES === 'burkes'` |
 | `getPalette`, `getColorCount`, `fromValue` | `palette.previewRgb()`, `palette.length` |

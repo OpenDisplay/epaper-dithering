@@ -14,7 +14,7 @@ use image::RgbImage;
 
 const PALETTES: &[(&str, &str)] = &[
     ("spectra6", "../../../examples/palettes/spectra_7_3_6color.json"),
-    ("bwry16", "tests/fixtures/palettes/bwry16_odbeeba6.json"),
+    ("bwry16", "tests/fixtures/palettes/bwry16_measured.json"),
 ];
 
 fn load(rel: &str) -> Option<Palette> {

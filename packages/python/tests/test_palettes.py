@@ -117,7 +117,7 @@ class TestDitherImage:
         assert [tuple(flat[i : i + 3]) for i in range(0, len(flat), 3)] == palette.preview_rgb()
 
     def test_pure_black_text_is_solid(self):
-        palette = Palette.load(SUCCESS / "palettes/bwry16_odbeeba6.json")
+        palette = Palette.load(SUCCESS / "palettes/bwry16_measured.json")
         image = Image.open(SUCCESS / "images/success/dashboard_photo.png").convert("RGB")
         out = dither_image(image, palette)
         black = palette.index_of("black")

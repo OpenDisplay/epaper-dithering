@@ -20,7 +20,7 @@ fn palette(rel: &str) -> Palette {
 }
 
 fn bwry16() -> Palette {
-    palette("tests/fixtures/palettes/bwry16_odbeeba6.json")
+    palette("tests/fixtures/palettes/bwry16_measured.json")
 }
 
 fn spectra6() -> Palette {

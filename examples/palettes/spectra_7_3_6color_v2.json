@@ -2,7 +2,7 @@
   "format": "epaper-palette",
   "version": 1,
   "measured": true,
-  "source": "epaper-dithering 6.x built-in measured SPECTRA_7_3_6COLOR_V2",
+  "source": "Waveshare 7.3in Spectra 6 panel, measured 2026-03-15 from a DNG developed with a linear tone curve; exported from the epaper-dithering 6.x constant SPECTRA_7_3_6COLOR_V2",
   "entries": [
     {
       "appearance": [

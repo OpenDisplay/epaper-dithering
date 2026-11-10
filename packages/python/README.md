@@ -208,7 +208,7 @@ result = dither_image(img, palette, DitherOptions(dbs=DbsParams(viewing_distance
 | 6.x | 7.x |
 |---|---|
 | `dither_image(img, ColorScheme.BWR)` | `dither_image(img, Palette.load(".../ideal_bwr.json"))` |
-| `SPECTRA_7_3_6COLOR` and other measured constants | the matching file in `examples/palettes/` |
+| `SPECTRA_7_3_6COLOR`, `SPECTRA_7_3_6COLOR_V2` | `examples/palettes/spectra_7_3_6color*.json`; the other 6.x "measured" constants were unmeasured placeholders and are gone |
 | `ColorPalette(colors={...}, accent=...)` | `Palette.from_srgb([...])`, or better `Palette.from_absolute_lab([...])` from your measurements |
 | keyword options (`mode=`, `tone=`, `dbs=` …) | `DitherOptions(mode=..., tone=..., dbs=...)` |
 | `DitherMode.BURKES == 1` | `DitherMode.BURKES == "burkes"` |

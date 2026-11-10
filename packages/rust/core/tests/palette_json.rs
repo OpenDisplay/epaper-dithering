@@ -39,7 +39,7 @@ fn round_trips() {
 
 #[test]
 fn ignores_unknown_top_level_keys() {
-    assert!(Palette::from_json(&with("\"version\": 1,", "\"version\": 1, \"device\": \"ODBEEBA6\",")).is_ok());
+    assert!(Palette::from_json(&with("\"version\": 1,", "\"version\": 1, \"device\": \"panel-42\",")).is_ok());
 }
 
 #[test]
