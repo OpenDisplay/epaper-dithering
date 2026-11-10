@@ -106,15 +106,21 @@ describe('Dithering Algorithms', () => {
     expect(resultNearly.indices[0]).toBe(1);    // white
   });
 
-  it('defaults gamut to off and accepts the off alias', () => {
+  it('defaults tone and gamut to off', () => {
     const image = createTestImage(16, 16, { r: 128, g: 64, b: 200 });
     const resultDefault = ditherImage(image, SPECTRA_7_3_6COLOR, { mode: DitherMode.BURKES });
-    const resultZero = ditherImage(image, SPECTRA_7_3_6COLOR, { mode: DitherMode.BURKES, gamut: 0.0 });
-    const resultOff = ditherImage(image, SPECTRA_7_3_6COLOR, { mode: DitherMode.BURKES, gamut: 'off' });
+    const resultZero = ditherImage(image, SPECTRA_7_3_6COLOR, { mode: DitherMode.BURKES, tone: 0, gamut: 0 });
 
     expect(resultDefault.indices).toEqual(resultZero.indices);
-    expect(resultDefault.indices).toEqual(resultOff.indices);
   });
+
+  it.each([['tone', -0.1], ['tone', 1.5], ['gamut', Number.NaN], ['gamut', 'auto']] as const)(
+    'rejects %s = %s',
+    (field, value) => {
+      const image = createTestImage(4, 4, { r: 128, g: 128, b: 128 });
+      expect(() => ditherImage(image, MONO, { [field]: value } as never)).toThrow(new RegExp(field));
+    },
+  );
 
   it.each([DitherMode.ORDERED, DitherMode.BURKES, DitherMode.FLOYD_STEINBERG])(
     'pins exact display colors inside mixed measured images for mode %s',

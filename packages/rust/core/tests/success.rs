@@ -5,7 +5,6 @@ use std::path::Path;
 
 use epaper_dithering_core::{
     dither,
-    enums::GamutCompression,
     palette::Palette,
     types::ImageBuffer,
     DitherOptions,
@@ -64,7 +63,7 @@ fn pure_inks_are_solid_spectra6() {
 
 #[test]
 fn pure_inks_survive_preprocessing() {
-    let o = DitherOptions { exposure: 1.3, saturation: 0.5, gamut: GamutCompression::Auto, ..Default::default() };
+    let o = DitherOptions { exposure: 1.3, saturation: 0.5, tone: 1.0, gamut: 1.0, ..Default::default() };
     assert_inks_solid(&bwry16(), &o);
     assert_inks_solid(&spectra6(), &o);
 }

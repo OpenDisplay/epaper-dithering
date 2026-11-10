@@ -5,16 +5,16 @@
 //
 // Examples:
 //   cargo run --example dither photo.jpg
-//   cargo run --example dither photo.jpg out.png spectra_7_3_6color stucki auto
+//   cargo run --example dither photo.jpg out.png spectra_7_3_6color stucki 1.0
 //   cargo run --example dither photo.jpg out.png my_panel.json stucki 0.5
 //
 // Palette: a path to an epaper-palette JSON file, or the name of a file in
 //          examples/palettes/ (without .json). Default: ideal_bwr.
 // Modes:   none, ordered, floyd_steinberg, burkes, atkinson, stucki, sierra, sierra_lite,
 //          jarvis_judice_ninke, dizzy
-// Gamut:   none, auto, 0.0-1.0  (default: none)
+// Gamut:   0.0-1.0  (default: 0)
 
-use epaper_dithering_core::enums::{DitherMode, GamutCompression};
+use epaper_dithering_core::enums::DitherMode;
 use epaper_dithering_core::palette::Palette;
 use epaper_dithering_core::types::ImageBuffer;
 use epaper_dithering_core::{dither, DitherOptions};
@@ -49,7 +49,7 @@ fn main() {
     let output_path = args.get(2).map(String::as_str).unwrap_or("dithered.png");
     let palette_name = args.get(3).map(String::as_str).unwrap_or("ideal_bwr");
     let mode_name   = args.get(4).map(String::as_str).unwrap_or("burkes");
-    let gamut_name  = args.get(5).map(String::as_str).unwrap_or("none");
+    let gamut_name  = args.get(5).map(String::as_str).unwrap_or("0");
 
     let palette = load_palette(palette_name);
     let mode: DitherMode = mode_name.parse().unwrap_or_else(|e| {
@@ -67,14 +67,10 @@ fn main() {
     let (width, height) = img.dimensions();
     let buf = ImageBuffer::new(img.as_raw(), width as usize).expect("decoded image is a whole RGB buffer");
 
-    let gamut = match gamut_name {
-        "none" | "0"  => GamutCompression::None,
-        "auto" | "1"  => GamutCompression::Auto,
-        s => match s.parse::<f64>() {
-            Ok(v)  => GamutCompression::Fixed(v),
-            Err(_) => { eprintln!("Unknown gamut: {s}"); std::process::exit(1); }
-        },
-    };
+    let gamut: f64 = gamut_name.parse().unwrap_or_else(|_| {
+        eprintln!("Gamut must be a number from 0.0 to 1.0, got {gamut_name:?}");
+        std::process::exit(1);
+    });
 
     println!("Input:  {input_path} ({width}x{height})");
     println!("Palette: {palette_name}  Mode: {mode_name}  Gamut: {gamut_name}");

@@ -29,7 +29,7 @@ use epaper_dithering_core::{
     color_space_lab::rgb_to_oklab,
     dbs::{perceived_error, DbsParams},
     dither,
-    enums::{DitherMode, GamutCompression},
+    enums::DitherMode,
     palette::Palette,
     srgb_palette::SrgbPalette,
     types::ImageBuffer,
@@ -228,7 +228,7 @@ fn main() {
             };
             let t = Instant::now();
             let indices = if args.measured {
-                dither(&buf, &palette, &DitherOptions { gamut: GamutCompression::Auto, ..o })
+                dither(&buf, &palette, &DitherOptions { gamut: 1.0, ..o })
             } else {
                 dither(&buf, &palette, &o)
             };

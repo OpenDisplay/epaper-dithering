@@ -112,6 +112,60 @@ pub fn apply_shadows_highlights(pixels: &mut [[f64; 3]], shadows: f64, highlight
     });
 }
 
+/// Luminance of the palette's darkest and lightest entries: the display's black and
+/// white, whatever order the palette lists them in.
+fn display_luminance_range(palette: &SrgbPalette) -> (f64, f64) {
+    palette_to_linear(palette)
+        .into_iter()
+        .map(luminance)
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), y| (lo.min(y), hi.max(y)))
+}
+
+/// Scale a near-black pixel toward a target luminance while preserving its channel ratios.
+/// When the pixel is exactly black, all channels are set to `target_y` (neutral).
+fn scale_dark_pixel(pixel: &mut [f64; 3], target_y: f64) {
+    let max_ch = pixel[0].max(pixel[1]).max(pixel[2]);
+    if max_ch > 1e-12 {
+        let scale = target_y / max_ch;
+        for c in pixel.iter_mut() {
+            *c = (*c * scale).clamp(0.0, 1.0);
+        }
+    } else {
+        *pixel = [target_y; 3];
+    }
+}
+
+// ── compress_dynamic_range (tone) ─────────────────────────────────────────────
+
+/// Lift the black point: remap luminance from [0, 1] onto the display's
+/// [black_Y, white_Y] range (its darkest and lightest entries).
+///
+/// Only lightness changes: each pixel's channels are scaled together, so hue and chroma
+/// ratios are kept. `strength` blends between no change (0.0) and the full remap (1.0).
+pub fn compress_dynamic_range(pixels: &mut [[f64; 3]], palette: &SrgbPalette, strength: f64) {
+    if strength <= 0.0 {
+        return;
+    }
+    let (black_y, white_y) = display_luminance_range(palette);
+    let display_range = white_y - black_y;
+    if display_range <= 0.0 {
+        return;
+    }
+    pixels.par_iter_mut().for_each(|pixel| {
+        let y = luminance(*pixel);
+        let compressed_y = black_y + y * display_range;
+        let target_y = y + strength * (compressed_y - y);
+        if y > 1e-6 {
+            let scale = (target_y / y).clamp(0.0, 1e6);
+            for c in pixel.iter_mut() {
+                *c = (*c * scale).clamp(0.0, 1.0);
+            }
+        } else {
+            scale_dark_pixel(pixel, black_y * strength);
+        }
+    });
+}
+
 // ── gamut_compress ────────────────────────────────────────────────────────────
 
 const GAMUT_THRESHOLD: f64 = 0.15;
@@ -225,6 +279,32 @@ mod tests {
     use super::*;
     fn spectra_palette() -> &'static SrgbPalette {
             crate::srgb_palette::fixtures::spectra6()
+    }
+
+    #[test]
+    fn tone_zero_is_identity() {
+        let original = vec![[0.0, 0.0, 0.0], [0.2, 0.1, 0.05], [1.0, 1.0, 1.0]];
+        let mut px = original.clone();
+        compress_dynamic_range(&mut px, spectra_palette(), 0.0);
+        assert_eq!(px, original);
+    }
+
+    #[test]
+    fn full_tone_maps_black_onto_the_panel_black_and_keeps_white() {
+        let pal = spectra_palette();
+        let (black_y, white_y) = display_luminance_range(pal);
+        let mut px = vec![[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]];
+        compress_dynamic_range(&mut px, pal, 1.0);
+        approx::assert_relative_eq!(luminance(px[0]), black_y, epsilon = 1e-6);
+        approx::assert_relative_eq!(luminance(px[1]), white_y, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn tone_keeps_hue_by_scaling_channels_together() {
+        let mut px = vec![[0.30, 0.10, 0.05]];
+        compress_dynamic_range(&mut px, spectra_palette(), 1.0);
+        approx::assert_relative_eq!(px[0][0] / px[0][1], 3.0, epsilon = 1e-9);
+        approx::assert_relative_eq!(px[0][1] / px[0][2], 2.0, epsilon = 1e-9);
     }
 
     #[test]

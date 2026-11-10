@@ -220,35 +220,34 @@ class TestColorScience:
             assert result_false.mode == "P", f"{mode.name} should work with serpentine=False"
 
 
-class TestGamutCompression:
-    """Gamut compression options."""
+class TestToneAndGamut:
+    """Tone (black-point lift) and gamut compression: opt-in strengths from 0.0 to 1.0."""
 
     @pytest.mark.parametrize("mode", list(DitherMode))
-    def test_auto_gamut_all_modes(self, mode):
-        """Auto gamut compression should produce valid output for all modes."""
+    def test_full_strength_all_modes(self, mode):
         img = Image.new("RGB", (10, 10), (128, 64, 200))
-        result = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, gamut="auto"))
+        result = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, tone=1.0, gamut=1.0))
 
         assert result.mode == "P"
         assert result.size == (10, 10)
 
-    def test_default_gamut_matches_off_aliases(self):
-        """gamut defaults to off, and 'off' is the string alias for 0.0."""
+    def test_both_default_to_off(self):
         img = Image.new("RGB", (16, 16), (128, 64, 200))
         result_default = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES))
-        result_zero = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, gamut=0.0))
-        result_off = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, gamut="off"))
+        result_zero = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, tone=0.0, gamut=0.0))
 
         assert np.array_equal(np.array(result_default), np.array(result_zero))
-        assert np.array_equal(np.array(result_default), np.array(result_off))
 
-
-class TestBlackPointCompensation:
-    """Anchoring maps pure black and white onto the panel's own black and white."""
+    def test_tone_lifts_shadows(self):
+        dark = Image.new("RGB", (32, 32), (12, 12, 12))
+        off = dither_image(dark, SPECTRA_7_3_6COLOR)
+        on = dither_image(dark, SPECTRA_7_3_6COLOR, DitherOptions(tone=1.0))
+        black = SPECTRA_7_3_6COLOR.index_of("black")
+        assert list(off.get_flattened_data()).count(black) > list(on.get_flattened_data()).count(black)
 
     def test_white_frame_stays_white_on_a_palette_below_srgb_white(self):
-        # Unnamed palette whose lightest entry is well below sRGB white: #ffffff must still
-        # land on that entry, and a few black pixels must not drag the frame down.
+        # Unnamed palette whose lightest entry is well below sRGB white: white still maps there,
+        # and a few black pixels must not drag the frame down.
         palette = Palette.from_srgb([((30, 30, 30), None, None), ((200, 200, 200), None, None)])
         img = Image.new("RGB", (100, 100), (255, 255, 255))
         for x in range(100):
@@ -260,13 +259,6 @@ class TestBlackPointCompensation:
         pixels = list(result.get_flattened_data())
         assert pixels.count(1) == 9700
         assert pixels.count(0) == 300
-
-    def test_unnamed_measured_palette_is_compensated_by_default(self):
-        unnamed = Palette([type(e)(e.appearance) for e in SPECTRA_7_3_6COLOR.entries], measured=True)
-        img = _color_gradient()
-        on = dither_image(img, unnamed)
-        off = dither_image(img, unnamed, DitherOptions(anchor=False))
-        assert on.tobytes() != off.tobytes()
 
 
 class TestGilRelease:
@@ -318,7 +310,7 @@ class TestGilRelease:
         points.
 
         Measured on the reference machine, calling `_rs.dither_image` directly
-        with a single call on a 3200x1920 image (gamut="auto"),
+        with a single call on a 3200x1920 image (full gamut compression),
         3 trials each:
           - GIL held (fix reverted):    1-2 samples,  ~0.68s wall
           - GIL released (fix applied): 34-37 samples, ~0.70s wall
@@ -349,7 +341,7 @@ class TestGilRelease:
                 saturation=1.0,
                 shadows=0.0,
                 highlights=0.0,
-                gamut=None,  # "auto"
+                gamut=1.0,
             )
             done.set()
 

@@ -231,7 +231,6 @@
     .slider-val.muted { color: var(--muted); }
 
     /* Compression section hidden when not applicable */
-    #compressionSection { display: none; }
 
     .sub-group-label {
       font-size: 9px;
@@ -627,16 +626,14 @@
       </div>
     </div>
 
-    <!-- Compression controls (measured palettes only) -->
+    <!-- Tone and gamut (opt-in) -->
     <div id="compressionSection">
-      <div class="group-label">Gamut Compression</div>
-      <div class="toggle-row">
-        <span>Auto gamut</span>
-        <label class="toggle">
-          <input type="checkbox" id="gamutAutoToggle">
-          <span class="track"></span>
-        </label>
+      <div class="group-label">Black-point lift (tone)</div>
+      <div class="slider-row">
+        <input type="range" id="toneSlider" min="0" max="100" value="0" step="5">
+        <span class="slider-val muted" id="toneVal">0%</span>
       </div>
+      <div class="group-label">Gamut Compression</div>
       <div class="slider-row">
         <input type="range" id="gamutSlider" min="0" max="100" value="0" step="5">
         <span class="slider-val" id="gamutVal">0%</span>
@@ -739,7 +736,8 @@ const schemeSelect    = document.getElementById('schemeSelect');
 const modeSelect      = document.getElementById('modeSelect');
 const serpentine      = document.getElementById('serpentineToggle');
 const compressionSection = document.getElementById('compressionSection');
-const gamutAutoToggle = document.getElementById('gamutAutoToggle');
+const toneSlider      = document.getElementById('toneSlider');
+const toneVal         = document.getElementById('toneVal');
 const gamutSlider     = document.getElementById('gamutSlider');
 const gamutVal        = document.getElementById('gamutVal');
 const exposureSlider   = document.getElementById('exposureSlider');
@@ -783,17 +781,12 @@ function onSettingChange() {
 
 // ── Compression helpers ──────────────────────────────────────────
 
-function isMeasuredPalette() {
-  return !schemeSelect.value.startsWith('ideal_');
-}
-
-function updateCompressionSection() {
-  compressionSection.style.display = isMeasuredPalette() ? 'block' : 'none';
-}
-
 function getGamutCompression() {
-  if (!isMeasuredPalette()) return 0.0;
-  return gamutAutoToggle.checked ? 'auto' : gamutSlider.value / 100;
+  return gamutSlider.value / 100;
+}
+
+function getTone() {
+  return toneSlider.value / 100;
 }
 
 // ── Pre-dither helpers ───────────────────────────────────────────
@@ -831,6 +824,7 @@ function runDither() {
         saturation: getSaturation(),
         shadows:    getShadows(),
         highlights: getHighlights(),
+        tone:  getTone(),
         gamut: gamutComp,
       },
     );
@@ -901,7 +895,6 @@ function loadFile(file) {
       statSize.textContent = `${img.naturalWidth}×${img.naturalHeight}`;
       document.title = `Dither Lab — ${file.name}`;
 
-      updateCompressionSection();
       runDither();
     };
     img.src = e.target.result;
@@ -920,18 +913,16 @@ function setStatus(type, text) {
 
 uploadZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
-schemeSelect.addEventListener('change', () => { updateCompressionSection(); onSettingChange(); });
+schemeSelect.addEventListener('change', onSettingChange);
 modeSelect.addEventListener('change', onSettingChange);
 serpentine.addEventListener('change', onSettingChange);
-gamutAutoToggle.addEventListener('change', () => {
-  const isAuto = gamutAutoToggle.checked;
-  gamutSlider.disabled = isAuto;
-  gamutVal.textContent = isAuto ? 'auto' : `${gamutSlider.value}%`;
-  gamutVal.className   = 'slider-val' + (isAuto ? ' muted' : '');
-  onSettingChange();
-});
 gamutSlider.addEventListener('input', () => {
   gamutVal.textContent = `${gamutSlider.value}%`;
+  runDither();
+});
+toneSlider.addEventListener('input', () => {
+  toneVal.textContent = `${toneSlider.value}%`;
+  toneVal.className   = 'slider-val' + (toneSlider.value === '0' ? ' muted' : '');
   runDither();
 });
 

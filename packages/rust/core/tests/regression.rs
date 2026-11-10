@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use epaper_dithering_core::{
     dither, DitherOptions,
-    enums::{DitherMode, GamutCompression},
+    enums::DitherMode,
     palette::Palette,
     types::ImageBuffer,
 };
@@ -66,7 +66,7 @@ fn assert_regression(
     tag: &str,
     mode: DitherMode,
     palette: Palette,
-    gamut: GamutCompression,
+    gamut: f64,
 ) {
     let (pixels, w, _h) = load_rgb(filename);
     let img = ImageBuffer::new(&pixels, w).unwrap();
@@ -124,7 +124,7 @@ fn discover_images() -> Vec<String> {
 
 // ── Regression suites ─────────────────────────────────────────────────────────
 
-/// Primary path: Burkes + 6-color measured palette + auto gamut.
+/// Primary path: Burkes + 6-color measured palette + full gamut compression.
 /// This is the most common real-world usage.
 #[test]
 fn burkes_spectra6_auto() {
@@ -134,7 +134,7 @@ fn burkes_spectra6_auto() {
             "burkes_spectra6_auto",
             DitherMode::Burkes,
             spectra6(),
-            GamutCompression::Auto,
+            1.0,
         );
     }
 }
@@ -149,7 +149,7 @@ fn floyd_steinberg_mono_raw() {
             "floyd_steinberg_mono_raw",
             DitherMode::FloydSteinberg,
             mono(),
-            GamutCompression::None,
+            0.0,
         );
     }
 }
@@ -164,7 +164,7 @@ fn ordered_spectra6_auto() {
             "ordered_spectra6_auto",
             DitherMode::Ordered,
             spectra6(),
-            GamutCompression::Auto,
+            1.0,
         );
     }
 }
@@ -179,7 +179,7 @@ fn dizzy_spectra6_auto() {
             "dizzy_spectra6_auto",
             DitherMode::Dizzy,
             spectra6(),
-            GamutCompression::Auto,
+            1.0,
         );
     }
 }
@@ -194,7 +194,7 @@ fn dizzy_mono_raw() {
             "dizzy_mono_raw",
             DitherMode::Dizzy,
             mono(),
-            GamutCompression::None,
+            0.0,
         );
     }
 }

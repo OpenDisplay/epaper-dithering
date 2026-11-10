@@ -2,7 +2,7 @@ use epaper_dithering_core::{
     composite::composite_rgba_on_white,
     dbs::DbsParams,
     dither,
-    enums::{DitherMode, GamutCompression},
+    enums::DitherMode,
     palette::{parse_nominal, Ink, Lab, Palette, PaletteEntry},
     types::ImageBuffer,
     DitherOptions,
@@ -101,14 +101,6 @@ impl WasmPalette {
     }
 }
 
-fn parse_gamut(v: Option<f64>) -> GamutCompression {
-    match v {
-        None               => GamutCompression::Auto,
-        Some(s) if s > 0.0 => GamutCompression::Fixed(s),
-        _                  => GamutCompression::None,
-    }
-}
-
 /// `dbs_passes = None` disables DBS refinement; otherwise build and validate its parameters.
 fn parse_dbs(passes: Option<u32>, viewing_distance_cm: f64, ppi: f64) -> Result<Option<DbsParams>, JsValue> {
     passes
@@ -119,7 +111,8 @@ fn parse_dbs(passes: Option<u32>, viewing_distance_cm: f64, ppi: f64) -> Result<
         .transpose()
 }
 
-/// Dither a flat RGB image to `palette`. `mode` is a snake_case mode name.
+/// Dither a flat RGB image to `palette`. `mode` is a snake_case mode name; `tone` and
+/// `gamut` are strengths from 0.0 (off) to 1.0, validated by the TypeScript wrapper.
 ///
 /// Returns a `Uint8Array` of palette indices (one per pixel, length = width × height).
 #[wasm_bindgen]
@@ -134,7 +127,8 @@ pub fn dither_image(
     saturation: f64,
     shadows: f64,
     highlights: f64,
-    gamut: Option<f64>,
+    tone: f64,
+    gamut: f64,
     dbs_passes: Option<u32>,
     dbs_viewing_distance_cm: f64,
     dbs_ppi: f64,
@@ -149,7 +143,8 @@ pub fn dither_image(
         saturation,
         shadows,
         highlights,
-        gamut: parse_gamut(gamut),
+        tone,
+        gamut,
         dbs: parse_dbs(dbs_passes, dbs_viewing_distance_cm, dbs_ppi)?,
         anchor,
         snap,

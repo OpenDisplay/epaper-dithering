@@ -75,14 +75,14 @@ def grid(cells: list[list[Image.Image]]) -> Image.Image:
 
 print("Generating frankfurt night before/after...")
 frankfurt_orig = Image.open(FIXTURES / "frankfurt_nacht.png").convert("RGB")
-frankfurt_no_pre = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
-                                DitherOptions(mode=DitherMode.BURKES, anchor=False)).convert("RGB")
-frankfurt_auto   = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
-                                DitherOptions(mode=DitherMode.BURKES)).convert("RGB")
+frankfurt_default = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
+                                 DitherOptions(mode=DitherMode.BURKES)).convert("RGB")
+frankfurt_lifted  = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
+                                 DitherOptions(mode=DitherMode.BURKES, tone=1.0)).convert("RGB")
 
-p1 = label(frankfurt_orig,   "Original")
-p2 = label(frankfurt_no_pre, "Spectra 6-color · Burkes · anchoring off")
-p3 = label(frankfurt_auto,   "Spectra 6-color · Burkes · defaults (anchoring on)")
+p1 = label(frankfurt_orig,    "Original")
+p2 = label(frankfurt_default, "Spectra 6-color · Burkes · defaults")
+p3 = label(frankfurt_lifted,  "Spectra 6-color · Burkes · tone 1.0 (black-point lift)")
 
 hstack([p1, p2, p3]).save(OUT / "frankfurt_before_after.png")
 
@@ -145,7 +145,7 @@ grid(scheme_cells).save(OUT / "color_schemes_grid.png")
 
 print("Generating DBS comparison...")
 src3 = load("river.png")
-base = DitherOptions(mode=DitherMode.BURKES, gamut="auto")
+base = DitherOptions(mode=DitherMode.BURKES, gamut=1.0)
 burkes = dither_image(src3, SPECTRA_7_3_6COLOR_V2, base).convert("RGB")
 refined = dither_image(src3, SPECTRA_7_3_6COLOR_V2, DitherOptions(**{**base.__dict__, "dbs": True})).convert("RGB")
 

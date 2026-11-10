@@ -122,12 +122,19 @@ class TestOptions:
         assert list(by_name.getdata()) == list(by_enum.getdata())
 
     def test_non_numeric_gamut_raises_type_error(self, small_test_image):
-        with pytest.raises(TypeError, match="float"):
+        with pytest.raises(TypeError, match="gamut must be a number"):
             dither_image(small_test_image, example("ideal_mono"), DitherOptions(gamut="strong"))
 
-    def test_tone_option_is_gone(self):
+    @pytest.mark.parametrize("value", ["auto", "off"])
+    def test_auto_and_off_strings_are_gone(self, small_test_image, value):
         with pytest.raises(TypeError):
-            DitherOptions(tone="auto")  # type: ignore[call-arg]
+            dither_image(small_test_image, example("ideal_mono"), DitherOptions(tone=value))
+
+    @pytest.mark.parametrize("field", ["tone", "gamut"])
+    @pytest.mark.parametrize("value", [-0.1, 1.5, float("nan")])
+    def test_strength_outside_zero_to_one_raises_value_error(self, small_test_image, field, value):
+        with pytest.raises(ValueError, match=field):
+            dither_image(small_test_image, example("ideal_mono"), DitherOptions(**{field: value}))
 
     def test_unknown_mode_raises_value_error(self, small_test_image):
         with pytest.raises(ValueError, match="bayer"):

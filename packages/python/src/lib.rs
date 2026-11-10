@@ -3,7 +3,7 @@ use epaper_dithering_core::{
     composite::composite_rgba_on_white,
     dbs::DbsParams,
     dither,
-    enums::{DitherMode, GamutCompression},
+    enums::DitherMode,
     palette::{Ink, Lab, Palette, PaletteEntry},
     srgb_palette::SrgbPalette,
     tone_map,
@@ -127,14 +127,6 @@ impl PyPalette {
     }
 }
 
-fn parse_gamut(v: Option<f64>) -> GamutCompression {
-    match v {
-        None               => GamutCompression::Auto,
-        Some(s) if s > 0.0 => GamutCompression::Fixed(s),
-        _                  => GamutCompression::None,
-    }
-}
-
 /// `dbs_passes = None` disables DBS refinement; otherwise build and validate its parameters.
 fn parse_dbs(passes: Option<u32>, viewing_distance_cm: f64, ppi: f64) -> PyResult<Option<DbsParams>> {
     passes
@@ -145,14 +137,14 @@ fn parse_dbs(passes: Option<u32>, viewing_distance_cm: f64, ppi: f64) -> PyResul
         .transpose()
 }
 
-/// Dither a flat RGB image to `palette`. `mode` is a snake_case mode name; `gamut`
-/// `None` means "auto". Returns one palette index per pixel.
+/// Dither a flat RGB image to `palette`. `mode` is a snake_case mode name; `tone` and
+/// `gamut` are strengths from 0.0 (off) to 1.0. Returns one palette index per pixel.
 #[pyfunction]
 #[pyo3(signature = (
     pixels, width, height, palette, *,
     mode="burkes", serpentine=true,
     exposure=1.0, saturation=1.0, shadows=0.0, highlights=0.0,
-    gamut=Some(0.0),
+    tone=0.0, gamut=0.0,
     dbs_passes=None, dbs_viewing_distance_cm=40.0, dbs_ppi=127.0,
     anchor=true, snap=true,
 ))]
@@ -169,7 +161,8 @@ fn dither_image(
     saturation: f64,
     shadows: f64,
     highlights: f64,
-    gamut: Option<f64>,
+    tone: f64,
+    gamut: f64,
     dbs_passes: Option<u32>,
     dbs_viewing_distance_cm: f64,
     dbs_ppi: f64,
@@ -190,7 +183,8 @@ fn dither_image(
         saturation,
         shadows,
         highlights,
-        gamut: parse_gamut(gamut),
+        tone,
+        gamut,
         dbs: parse_dbs(dbs_passes, dbs_viewing_distance_cm, dbs_ppi)?,
         anchor,
         snap,

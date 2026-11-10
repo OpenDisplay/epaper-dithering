@@ -66,7 +66,7 @@ Rust tuning harnesses stay in `packages/rust/core/examples/` because cargo needs
 - `packages/rust/wasm/` — wasm-bindgen bindings; `packages/javascript/src/` is the TS wrapper.
 - `packages/rust/ios/` — standalone XCFramework build (`build-xcframework.sh`), not part of the workspace.
 
-The pre-processing pipeline order is fixed and documented on `DitherOptions` in `core/src/lib.rs`: `exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs`; ink snapping is decided on the original input. Each step is a no-op at its identity value.
+The pre-processing pipeline order is fixed and documented on `DitherOptions` in `core/src/lib.rs`: `exposure → saturation → shadows/highlights → tone → anchor → gamut → match + diffuse → dbs`; ink snapping is decided on the original input. Each step is a no-op at its identity value.
 
 ### Palettes are runtime data
 
@@ -78,9 +78,9 @@ ordered list of entries; each has an `appearance` (CIELAB D65, **normalised so t
 (`from_absolute_lab`) or from sRGB (`from_srgb`). Example files live in `examples/palettes/`; they
 are never shipped in the crate, wheel or npm package and no API returns them.
 
-- Named inks drive two behaviours, both on by default: **anchoring** (`core/src/anchor.rs`: black-point
-  compensation between the inks whose nominals are `#000000`/`#ffffff`, falling back to the darkest/lightest entry, plus a damped local correction; it replaced tone compression, in CIELAB, exact
-  at every ink) and **snapping** (a pixel exactly equal to an ink's nominal takes that ink, decided on
+- Named inks drive two behaviours, both on by default: **anchoring** (`core/src/anchor.rs`: a damped local
+  correction around each ink, `1/d⁴` falloff, in CIELAB, exact at every ink; it never re-maps the whole
+  tonal range) and **snapping** (a pixel exactly equal to an ink's nominal takes that ink, decided on
   the original input, pinned through diffusion and DBS).
 - Algorithms run on `SrgbPalette` (the clamped sRGB of each appearance, `#[doc(hidden)]`); the
   supported API is `Palette` + `dither()`.
@@ -92,7 +92,8 @@ are never shipped in the crate, wheel or npm package and no API returns them.
 - Pixel↔palette matching uses weighted Cartesian OKLab distance (`dist² = dL² + Wab²·(da² + db²)`, `Wab = 1.5`) in `color_space_lab.rs`. LCH-weighted distance was rejected for an achromatic-attractor bug; hue preservation matters more than lightness because error diffusion compensates spatially for lightness but not hue. Re-tuning harness: `core/examples/wab_sweep.rs`.
 - Ordered dither applies the Bayer threshold in sRGB-fraction space, not linear (pinned by `ordered_dither_activity_is_perceptually_uniform`).
 - Palette appearances are normalised to the panel's white. The 6.x "measured" constants were not, so the exported example files are brighter than 6.x.
-- Anchoring works in CIELAB, not OKLab: OKLab's cube root has no linear toe, so lifting black turned single sRGB steps near black into visible jumps.
+- Anchoring works in CIELAB, not OKLab: OKLab's cube root has no linear toe, so corrections near black turned single sRGB steps into visible jumps.
+- `tone` (black-point lift, lightness only) and `gamut` are opt-in 0–1 strengths with no `auto` mode. A global lift inside anchoring was tried and rejected: it washed photos out by default.
 
 ## Releases and versioning
 

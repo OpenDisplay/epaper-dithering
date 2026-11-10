@@ -8,7 +8,7 @@ use epaper_dithering_core::{
     color_space_lab::{PaletteLab, WAB, match_pixel_oklab, rgb_to_oklab},
     dither, DitherOptions,
     dizzy::dizzy_dither,
-    enums::{DitherMode, GamutCompression},
+    enums::DitherMode,
     palette::Palette,
     srgb_palette::SrgbPalette,
     tone_map::gamut_compress,
@@ -226,7 +226,7 @@ fn bench_full_pipeline(c: &mut Criterion) {
         b.iter(|| {
             dither(&img, &spectra, &DitherOptions {
                 mode: DitherMode::Burkes,
-                gamut: GamutCompression::Auto,
+                gamut: 1.0,
                 ..Default::default()
             })
         })
@@ -236,7 +236,7 @@ fn bench_full_pipeline(c: &mut Criterion) {
         b.iter(|| {
             dither(&img, &mono, &DitherOptions {
                 mode: DitherMode::Burkes,
-                gamut: GamutCompression::None,
+                gamut: 0.0,
                 ..Default::default()
             })
         })
@@ -279,7 +279,7 @@ fn bench_real_images(c: &mut Criterion) {
                         &spectra,
                         &DitherOptions {
                             mode: DitherMode::Burkes,
-                            gamut: GamutCompression::Auto,
+                            gamut: 1.0,
                             ..Default::default()
                         },
                     )
@@ -308,7 +308,7 @@ fn bench_full_res(c: &mut Criterion) {
         b.iter(|| {
             dither(&img, &spectra, &DitherOptions {
                 mode: DitherMode::Burkes,
-                gamut: GamutCompression::Auto,
+                gamut: 1.0,
                 ..Default::default()
             })
         })

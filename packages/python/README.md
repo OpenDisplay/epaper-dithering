@@ -133,10 +133,10 @@ both on by default, make sure colours that *ask for* an ink get it:
 - **Snapping** (`snap=True`): a pixel exactly equal to an ink's `nominal` takes that ink, undithered,
   and neither receives nor passes on dithering error. This is decided on the original image, so it
   still holds when you also adjust exposure or tone for a photo in the same image.
-- **Anchoring** (`anchor=True`): before matching, colours are mapped so each ink's nominal lands
-  exactly on its appearance (black-point compensation between the inks named for `#000000` and
-  `#ffffff`, plus a local correction around each ink that fades with distance). Near-ink colours and anti-aliased edges
-  follow smoothly, and photos keep their tonal range instead of crushing shadows into black.
+- **Anchoring** (`anchor=True`): before matching, colours near each ink are mapped so the ink's
+  nominal lands exactly on its appearance; the correction fades with distance, so near-ink colours
+  and anti-aliased edges follow smoothly while colours far from every ink (most of a photo) are left
+  alone. Anchoring does not re-map the image's tonal range; that is the opt-in `tone` option.
 
 Unnamed entries (the mixes of a 16-colour mode, say) take part in dithering but are never targets of
 either.
@@ -153,17 +153,19 @@ options = DitherOptions(
     saturation=1.0,  # OKLab chroma multiplier, 0.0 = greyscale
     shadows=0.0,  # shadow lift, 0.0–1.0
     highlights=0.0,  # highlight compression, 0.0–1.0
-    gamut=0.0,  # gamut compression: 0.0/"off", "auto", or 0.0–1.0
+    tone=0.0,  # black-point lift, 0.0 (off) to 1.0
+    gamut=0.0,  # gamut compression, 0.0 (off) to 1.0
     dbs=None,  # None/False, True (defaults), or DbsParams(...)
     anchor=True,
     snap=True,
 )
 ```
 
-Pipeline order: `exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs`.
-Anchoring includes black-point compensation: pure black and white land on the panel's own black and
-white (the inks named for `#000000`/`#ffffff`, or else its darkest and lightest entries), so the
-image's tonal range is mapped onto the panel's. It replaces 6.x's dynamic-range ("tone") compression.
+Pipeline order: `exposure → saturation → shadows/highlights → tone → anchor → gamut → match + diffuse → dbs`.
+`tone` and `gamut` are off by default, so nothing re-maps a photo's tonal range unless you ask.
+`tone` lifts the black point: it remaps lightness onto the panel's darkest and lightest colours,
+keeping hue, which brings out shadow detail at the cost of deep blacks. `gamut` pulls out-of-gamut
+colours toward the palette's gamut before matching.
 
 ### Dithering algorithms
 
@@ -211,7 +213,7 @@ result = dither_image(img, palette, DitherOptions(dbs=DbsParams(viewing_distance
 | `SPECTRA_7_3_6COLOR`, `SPECTRA_7_3_6COLOR_V2` | `examples/palettes/spectra_7_3_6color*.json`; the other 6.x "measured" constants were unmeasured placeholders and are gone |
 | `ColorPalette(colors={...}, accent=...)` | `Palette.from_srgb([...])`, or better `Palette.from_absolute_lab([...])` from your measurements |
 | keyword options (`mode=`, `dbs=` …) | `DitherOptions(mode=..., dbs=...)` |
-| `tone=` (dynamic-range compression) | removed: anchoring compensates the black point, on by default |
+| `tone="auto"`, `gamut="auto"`, `"off"` | numbers only: `tone`/`gamut` are 0.0 (off) to 1.0; `tone` now lifts lightness only, keeping hue |
 | `DitherMode.BURKES == 1` | `DitherMode.BURKES == "burkes"` |
 | exact "canonical" colours pass through | named inks with a `nominal` snap (and anchor) |
 

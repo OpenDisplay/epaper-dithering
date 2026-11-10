@@ -5,7 +5,7 @@ Usage:
     uv run --project packages/python python tools/pipeline.py [options] [image1.jpg ...]
 
 Options:
-    --gc auto|0|0.5|1.0     Gamut compression (default: 0)
+    --gc 0|0.5|1.0          Gamut compression strength (default: 0)
     --palette spectra_7_3_6color_v2|spectra_7_3_6color  (default: spectra_7_3_6color_v2)
     --mode BURKES|FLOYD_STEINBERG|ATKINSON|...      (default: BURKES)
 
@@ -77,10 +77,8 @@ MODES: dict[str, DitherMode] = {m.name: m for m in DitherMode}
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def parse_compression(val: str) -> float | str:
-    """Parse 'auto', '0', '0.5', '1.0' → "auto" or float."""
-    if val.lower() == "auto":
-        return "auto"
+def parse_compression(val: str) -> float:
+    """Parse a 0.0–1.0 strength."""
     return float(val)
 
 
@@ -165,13 +163,11 @@ def _run_step(fn, pixels_linear: np.ndarray, palette: Palette, strength: float |
     return np.array(out, dtype=np.float64).reshape(pixels_linear.shape)
 
 
-def apply_gc(pixels_linear: np.ndarray, palette: Palette, gc: float | str) -> tuple[np.ndarray, str]:
+def apply_gc(pixels_linear: np.ndarray, palette: Palette, gc: float) -> tuple[np.ndarray, str]:
     if gc == 0.0:
         return pixels_linear, "disabled"
-    # gamut_compress: None → full strength (auto), else fixed strength.
-    strength = None if gc == "auto" else float(gc)
-    result = _run_step(_rs.gamut_compress, pixels_linear, palette, strength)
-    return result, "auto" if gc == "auto" else f"strength={gc:.2g}"
+    result = _run_step(_rs.gamut_compress, pixels_linear, palette, gc)
+    return result, f"strength={gc:.2g}"
 
 
 # ── Main per-image function ───────────────────────────────────────────────────
@@ -181,7 +177,7 @@ def run(
     image_path: Path,
     palette: Palette,
     palette_name: str,
-    gc: float | str,
+    gc: float,
     mode: DitherMode,
     out_path: Path,
 ) -> None:
@@ -253,7 +249,7 @@ def run(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Pipeline visualization for epaper dithering.")
     parser.add_argument("images", nargs="*", help="Image paths (default: marienplatz.jpg)")
-    parser.add_argument("--gc", default="0", help="Gamut compression: auto|0|0.5|1.0 (default: 0)")
+    parser.add_argument("--gc", default="0", help="Gamut compression strength 0.0–1.0 (default: 0)")
     parser.add_argument(
         "--palette", default="spectra_7_3_6color_v2", choices=list(PALETTES), help="Example palette name"
     )

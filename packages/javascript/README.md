@@ -120,9 +120,9 @@ described in the [Python README](../python/README.md#palettes).
 
 - `snap`: a pixel exactly equal to an ink's `nominal` takes that ink, undithered and excluded from
   error diffusion. Decided on the original image, before any adjustment.
-- `anchor`: colours are mapped so each ink's nominal lands on its appearance (black-point
-  compensation plus a local correction around each ink), so near-ink colours follow smoothly and
-  photos keep their shadows.
+- `anchor`: colours near each ink are mapped so the ink's nominal lands on its appearance; the
+  correction fades with distance, so near-ink colours follow smoothly and the rest of a photo is
+  left alone. Re-mapping the tonal range is the opt-in `tone` option.
 
 ## API Reference
 
@@ -140,19 +140,21 @@ ditherImage(image: ImageBuffer, palette: Palette, options?: DitherOptions): Pale
 | `saturation` | `number` | `1.0` | OKLab saturation multiplier. `0.0` = greyscale, `>1` = boost |
 | `shadows` | `number` | `0.0` | Shadow lift strength. `0.0` = off, `1.0` = strong |
 | `highlights` | `number` | `0.0` | Highlight compression strength. `0.0` = off, `1.0` = strong |
-| `gamut` | `number \| 'auto' \| 'off'` | `0.0` | Gamut compression |
+| `tone` | `number` | `0` | Black-point lift, `0` (off) to `1`, lightness only |
+| `gamut` | `number` | `0` | Gamut compression, `0` (off) to `1` |
 | `dbs` | `boolean \| DbsParams` | `false` | Direct Binary Search refinement. `true` = default parameters |
-| `anchor` | `boolean` | `true` | Black-point compensation, and ink nominals onto their appearances, before matching |
+| `anchor` | `boolean` | `true` | Map ink nominals onto their appearances before matching |
 | `snap` | `boolean` | `true` | Pure ink colours take that ink, undithered |
 
-Pipeline: `exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs`.
-Anchoring includes black-point compensation: pure black and white land on the panel's own black and
-white (the inks named for `#000000`/`#ffffff`, or else its darkest and lightest entries), so the
-image's tonal range is mapped onto the panel's. It replaces 6.x's dynamic-range ("tone") compression.
+Pipeline: `exposure → saturation → shadows/highlights → tone → anchor → gamut → match + diffuse → dbs`.
+`tone` and `gamut` are off by default, so nothing re-maps a photo's tonal range unless you ask.
+`tone` lifts the black point: it remaps lightness onto the panel's darkest and lightest colours,
+keeping hue, which brings out shadow detail at the cost of deep blacks. `gamut` pulls out-of-gamut
+colours toward the palette's gamut before matching.
 
 Returns a `PaletteImageBuffer` whose `palette` holds each entry's preview colour. Throws if
-`image.data.length` is not `width × height × 4`, on an unknown mode name, or on invalid DBS
-parameters.
+`image.data.length` is not `width × height × 4`, on an unknown mode name, on a `tone`/`gamut`
+outside 0–1, or on invalid DBS parameters.
 
 #### DBS refinement
 
@@ -219,7 +221,7 @@ interface PaletteEntry {
 | `SPECTRA_7_3_6COLOR`, `SPECTRA_7_3_6COLOR_V2` | `examples/palettes/spectra_7_3_6color*.json`; the other 6.x "measured" constants were unmeasured placeholders and are gone |
 | `ColorPalette` objects | `new Palette(entries)` |
 | `DitherMode.BURKES === 1` | `DitherMode.BURKES === 'burkes'` |
-| `tone` option | removed: anchoring compensates the black point, on by default |
+| `tone: 'auto'`, `gamut: 'auto'`, `'off'` | numbers only: `tone`/`gamut` are `0` (off) to `1`; `tone` now lifts lightness only |
 | `getPalette`, `getColorCount`, `fromValue` | `palette.previewRgb()`, `palette.length` |
 
 The 6.x measured constants were relative to the camera, not to the panel's white; the exported files

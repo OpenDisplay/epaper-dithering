@@ -129,13 +129,12 @@ describe('ditherImage with palettes', () => {
     expect(unsnapped.indices.length).toBe(4);
   });
 
-  it('compensates the black point of an unnamed palette by default', () => {
-    const named = example('spectra_7_3_6color');
-    const unnamed = new Palette(named.entries.map((e) => ({ appearance: e.appearance })), true);
-    const image = createGradient(32, 8);
-    const on = ditherImage(image, unnamed).indices;
-    const off = ditherImage(image, unnamed, { anchor: false }).indices;
-    expect(Array.from(on)).not.toEqual(Array.from(off));
+  it('lifts shadows only when tone is set', () => {
+    const palette = example('spectra_7_3_6color');
+    const dark = createTestImage(16, 16, { r: 12, g: 12, b: 12 });
+    const black = palette.indexOf('black');
+    const count = (indices: Uint8Array) => Array.from(indices).filter((i) => i === black).length;
+    expect(count(ditherImage(dark, palette).indices)).toBeGreaterThan(count(ditherImage(dark, palette, { tone: 1 }).indices));
   });
 
   it('throws when the image buffer has the wrong length', () => {

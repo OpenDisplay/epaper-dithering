@@ -12,9 +12,9 @@ The library knows nothing about any particular display or firmware. You describe
 
 ## Examples
 
-![Frankfurt at night — original vs Spectra 6-color with anchoring off and on](docs/examples/frankfurt_before_after.png)
+![Frankfurt at night — original vs Spectra 6-color with default settings and with tone 1.0](docs/examples/frankfurt_before_after.png)
 
-With anchoring (on by default) the panel's real black and white become the ends of the tonal range, so shadows keep their detail instead of collapsing into the black ink.
+By default the panel's deep black is kept; the opt-in `tone` option lifts the black point to bring out shadow detail instead.
 
 **Dithering algorithms** (Spectra 6-color, Marienplatz U-Bahn station):
 
@@ -24,7 +24,7 @@ With anchoring (on by default) the panel's real black and white become the ends 
 
 ![Idealised palettes compared](docs/examples/color_schemes_grid.png)
 
-**DBS refinement** (Spectra 6-color, auto tone + gamut). Direct Binary Search optimizes the dithered pixels against a model of the eye at a given viewing distance: here it recovers the blue sky that plain error diffusion washes out to grey. The zoomed crops show the trade-off up close, including a few colored specks where it mixes inks. It is opt-in and slower (about 0.3 s per 800×480 panel on a multi-core machine, vs. ~30 ms).
+**DBS refinement** (Spectra 6-color, gamut compression 1.0). Direct Binary Search optimizes the dithered pixels against a model of the eye at a given viewing distance: here it recovers the blue sky that plain error diffusion washes out to grey. The zoomed crops show the trade-off up close, including a few colored specks where it mixes inks. It is opt-in and slower (about 0.3 s per 800×480 panel on a multi-core machine, vs. ~30 ms).
 
 ![Original vs Burkes vs Burkes + DBS, full image and 4× crops](docs/examples/dbs_comparison.png)
 
@@ -106,7 +106,7 @@ a panel.
 - **Any panel**: palettes are runtime data, from 2 to 256 colours, including per-unit measurements and multi-pass modes
 - **Requested inks stay solid**: exact ink colours snap to their ink; anchoring maps each ink's nominal onto its measured appearance before matching
 - **OKLab Color Matching**: Weighted Cartesian OKLab — preserves hue without the achromatic-attractor bug of LCH-weighted approaches
-- **Pre-dither Knobs**: Per-image exposure, saturation, shadows, highlights and gamut compression; black-point compensation is part of anchoring — all orthogonal
+- **Pre-dither Knobs**: Per-image exposure, saturation, shadows, highlights, black-point lift (tone) and gamut compression, all opt-in strengths — all orthogonal
 - **DBS Refinement**: Optional Direct Binary Search pass that optimizes the dithered pixels for how they are perceived at a given viewing distance and panel resolution — opt-in, slower
 
 ## Repository Structure

@@ -3,7 +3,7 @@
 
     schemes.png              All idealised palettes, Burkes
     algorithms_{NAME}.png    All dither modes for every idealised and measured palette
-    gamut_compression.png    Measured palettes: gc=0 | gc=auto | gc=1.0
+    gamut_compression.png    Measured palettes: gc=0 | gc=0.5 | gc=1.0
 
 Add --docs to also generate images for the README in docs/images/:
     Full resolution in docs/images/
@@ -53,9 +53,7 @@ def load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def gc_str(gc: float | str) -> str:
-    if gc == "auto":
-        return "gc=auto"
+def gc_str(gc: float) -> str:
     if gc == 1.0 or gc == 1:
         return "gc=100%"
     if gc == 0 or gc == 0.0:
@@ -64,7 +62,7 @@ def gc_str(gc: float | str) -> str:
 
 
 def render(
-    src: Image.Image, scheme: Palette, mode: DitherMode, gc: float | str = 0.0
+    src: Image.Image, scheme: Palette, mode: DitherMode, gc: float = 0.0
 ) -> tuple[Image.Image, float]:
     t0 = time.perf_counter()
     dithered = dither_image(src, scheme, DitherOptions(mode=mode, gamut=gc))
@@ -115,7 +113,7 @@ def run(
     docs: bool,
     docs_algo: str,
     docs_gc: str,
-    gamut_compression: float | str = 0.0,
+    gamut_compression: float = 0.0,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     src = Image.open(image_path).convert("RGB").resize((width, height), Image.LANCZOS)
@@ -152,12 +150,12 @@ def run(
     print()
 
     # ------------------------------------------------------------------
-    # 3. gamut_compression.png — measured palettes, gc=0 | gc=auto | gc=1.0
+    # 3. gamut_compression.png — measured palettes, gc=0 | gc=0.5 | gc=1.0
     # ------------------------------------------------------------------
     print("── gamut_compression ────────────────────────")
     gc_cells: list[tuple[str, Image.Image]] = []
     for pal_label, palette in MEASURED_PALETTES:
-        for gc_val in [0.0, "auto", 1.0]:
+        for gc_val in [0.0, 0.5, 1.0]:
             img, t = render(src, palette, DitherMode.BURKES, gc_val)
             label = f"{pal_label} · Burkes · {gc_str(gc_val)}"
             gc_cells.append((label, img))
@@ -215,12 +213,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--gamut-compression",
-        default="auto",
+        default="0",
         metavar="GC",
-        help="Gamut compression: 'auto' (default), or strength 0.0–1.0.",
+        help="Gamut compression strength 0.0–1.0 (default: 0).",
     )
     args = parser.parse_args()
-    gc: float | str = "auto" if args.gamut_compression == "auto" else float(args.gamut_compression)
+    gc = float(args.gamut_compression)
     run(
         Path(args.image),
         Path(args.out),

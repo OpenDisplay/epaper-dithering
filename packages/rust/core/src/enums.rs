@@ -2,8 +2,6 @@ use crate::algorithms::{
     Kernel, ATKINSON, BURKES, FLOYD_STEINBERG, JARVIS_JUDICE_NINKE, SIERRA, SIERRA_LITE, STUCKI,
 };
 use crate::error::DitherError;
-use crate::srgb_palette::SrgbPalette;
-use crate::tone_map;
 
 /// Dithering algorithm. Bindings name modes by their snake_case [`Display`] form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,32 +25,6 @@ pub enum DitherMode {
     /// diffusing error only to not-yet-quantized neighbours. Produces no
     /// directional structure. `serpentine` is ignored: there is no scan direction.
     Dizzy,
-}
-
-/// Gamut compression applied before dithering.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub enum GamutCompression {
-    /// No gamut compression (default).
-    #[default]
-    None,
-    /// Full gamut compression at strength 1.0.
-    Auto,
-    /// Fixed blend strength in [0.0, 1.0].
-    Fixed(f64),
-}
-
-impl GamutCompression {
-    pub fn apply(self, pixels: &mut [[f64; 3]], palette: &SrgbPalette) {
-        match self {
-            GamutCompression::None => {}
-            GamutCompression::Auto => tone_map::gamut_compress(pixels, palette, 1.0),
-            GamutCompression::Fixed(s) => if s > 0.0 {
-                tone_map::gamut_compress(pixels, palette, s)
-            }
-        }
-    }
-
-
 }
 
 const NAMES: [(DitherMode, &str); 10] = [
