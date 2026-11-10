@@ -2,7 +2,8 @@
 //!
 //!   cargo run --release --example anchor_compare [out_dir]
 //!
-//! For every fixture image and every palette below, writes `<out>/<palette>/<image>.png`:
+//! For the dashboard success fixture, every other fixture image and every palette below,
+//! writes `<out>/<palette>/<image>.png`:
 //! source | anchoring off | anchoring on. The dithered panels are drawn in each palette's
 //! preview colours, i.e. what the panel shows, normalised to its white.
 
@@ -49,6 +50,7 @@ fn main() {
         .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "png" || e == "jpg"))
         .collect();
     images.sort();
+    images.insert(0, dir.join("success/dashboard_photo.png"));
 
     for &(name, rel) in PALETTES {
         let Some(palette) = load(rel) else {
