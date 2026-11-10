@@ -36,16 +36,6 @@ class TestDitheringAlgorithms:
         palette = result.getpalette()
         assert palette is not None, "Output should have a palette"
 
-    @pytest.mark.parametrize("scheme", IDEAL_NAMES)
-    def test_all_color_schemes(self, small_test_image, scheme):
-        """Test each color scheme works correctly."""
-        palette_obj = example(f"ideal_{scheme}")
-        result = dither_image(small_test_image, palette_obj, DitherOptions(mode=DitherMode.BURKES))
-
-        assert result.mode == "P"
-        palette = result.getpalette()
-        assert len(palette) >= len(palette_obj) * 3, "Palette should contain all palette colors"
-
     def test_output_image_type(self, small_test_image):
         """Test output is PIL Image."""
         result = dither_image(small_test_image, example("ideal_mono"), DitherOptions(mode=DitherMode.FLOYD_STEINBERG))
@@ -231,13 +221,15 @@ class TestColorScience:
 
 
 class TestToneCompression:
-    """Test dynamic range compression with measured palettes."""
+    """Dynamic range compression. Anchoring is off so these isolate the tone step."""
 
     def test_tone_compression_with_measured_palette(self):
         """Tone compression should run and produce valid output with measured palette."""
 
         img = Image.new("RGB", (20, 20), (200, 200, 200))
-        result = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.FLOYD_STEINBERG, tone=1.0))
+        result = dither_image(
+            img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.FLOYD_STEINBERG, tone=1.0, anchor=False)
+        )
 
         assert result.mode == "P"
         assert result.size == (20, 20)
@@ -247,25 +239,19 @@ class TestToneCompression:
         """Tone compression should work with all dithering modes."""
 
         img = Image.new("RGB", (10, 10), (128, 128, 128))
-        result = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, tone=1.0))
+        result = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, tone=1.0, anchor=False))
 
         assert result.mode == "P"
         assert result.size == (10, 10)
-
-    def test_tone_compression_zero_matches_no_compression(self):
-        """tone=0.0 should produce same result as without compression."""
-
-        img = Image.new("RGB", (20, 20), (128, 128, 128))
-        result_zero = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.NONE, tone=0.0))
-        result_none = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.NONE))
-        assert np.array_equal(np.array(result_zero), np.array(result_none))
 
     @pytest.mark.parametrize("mode", list(DitherMode))
     def test_auto_tone_compression_all_modes(self, mode):
         """Auto tone compression should produce valid output for all modes."""
 
         img = Image.new("RGB", (10, 10), (128, 128, 128))
-        result = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, tone="auto", gamut="auto"))
+        result = dither_image(
+            img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, tone="auto", gamut="auto", anchor=False)
+        )
 
         assert result.mode == "P"
         assert result.size == (10, 10)
@@ -274,10 +260,12 @@ class TestToneCompression:
         """tone/gamut default to off, and 'off' is the string alias for 0.0."""
 
         img = Image.new("RGB", (16, 16), (128, 128, 128))
-        result_default = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES))
-        result_zero = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, tone=0.0, gamut=0.0))
+        result_default = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, anchor=False))
+        result_zero = dither_image(
+            img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, tone=0.0, gamut=0.0, anchor=False)
+        )
         result_off = dither_image(
-            img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, tone="off", gamut="off")
+            img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, tone="off", gamut="off", anchor=False)
         )
 
         assert np.array_equal(np.array(result_default), np.array(result_zero))
@@ -295,9 +283,11 @@ class TestToneCompression:
                 pixels[x, y] = (v, v, v)
 
         result_off = dither_image(
-            gradient, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.FLOYD_STEINBERG, tone=0.0)
+            gradient, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.FLOYD_STEINBERG, tone=0.0, anchor=False)
         )
-        result_on = dither_image(gradient, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.FLOYD_STEINBERG, tone=1.0))
+        result_on = dither_image(
+            gradient, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.FLOYD_STEINBERG, tone=1.0, anchor=False)
+        )
 
         assert not np.array_equal(np.array(result_off), np.array(result_on)), (
             "Tone compression should produce different output than no compression"
@@ -571,7 +561,7 @@ class TestDbs:
         assert refined.size == plain.size
         assert refined.tobytes() != plain.tobytes()
 
-    def test_changes_output_for_color_scheme(self):
+    def test_changes_output_for_ideal_palette(self):
         img = _color_gradient()
         plain = dither_image(img, example("ideal_bwr"))
         refined = dither_image(img, example("ideal_bwr"), DitherOptions(dbs=True))

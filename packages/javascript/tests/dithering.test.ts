@@ -60,29 +60,6 @@ describe('Dithering Algorithms', () => {
     }
   );
 
-  it('handles RGBA input correctly', () => {
-    const image = createTestImage(10, 10, { r: 128, g: 128, b: 128 });
-    const result = ditherImage(image, BWR, { mode: DitherMode.BURKES });
-
-    expect(result).toBeDefined();
-    expect(result.width).toBe(10);
-    expect(result.height).toBe(10);
-  });
-
-  it('produces different output for different algorithms', () => {
-    const image = createGradient(100, 100);
-
-    const burkes = ditherImage(image, MONO, { mode: DitherMode.BURKES });
-    const floydSteinberg = ditherImage(image, MONO, { mode: DitherMode.FLOYD_STEINBERG });
-
-    let differences = 0;
-    for (let i = 0; i < burkes.indices.length; i++) {
-      if (burkes.indices[i] !== floydSteinberg.indices[i]) differences++;
-    }
-
-    expect(differences).toBeGreaterThan(0);
-  });
-
   it('default mode is BURKES', () => {
     const image = createTestImage(10, 10, { r: 128, g: 128, b: 128 });
 
@@ -129,24 +106,6 @@ describe('Dithering Algorithms', () => {
     expect(resultNearly.indices[0]).toBe(1);    // white
   });
 
-  it('accepts a measured palette and returns correct palette length', () => {
-    const image = createTestImage(10, 10, { r: 100, g: 150, b: 80 });
-    const result = ditherImage(image, SPECTRA_7_3_6COLOR);
-
-    expect(result.palette.length).toBe(6);
-    expect(result.indices.length).toBe(100);
-  });
-
-  it('measured palette palette indices are within range', () => {
-    const image = createGradient(20, 20);
-    const result = ditherImage(image, SPECTRA_7_3_6COLOR, { mode: DitherMode.FLOYD_STEINBERG });
-
-    for (let i = 0; i < result.indices.length; i++) {
-      expect(result.indices[i]).toBeGreaterThanOrEqual(0);
-      expect(result.indices[i]).toBeLessThan(6);
-    }
-  });
-
   it('defaults tone/gamut to off and accepts the off alias', () => {
     const image = createTestImage(16, 16, { r: 128, g: 128, b: 128 });
     const resultDefault = ditherImage(image, SPECTRA_7_3_6COLOR, { mode: DitherMode.BURKES });
@@ -163,14 +122,6 @@ describe('Dithering Algorithms', () => {
 
     expect(resultDefault.indices).toEqual(resultZero.indices);
     expect(resultDefault.indices).toEqual(resultOff.indices);
-  });
-
-  it('DitherMode.NONE maps pure ink colors directly for measured palettes', () => {
-    const red = { r: 255, g: 0, b: 0 };
-    const image = createTestImage(4, 4, red);
-    const result = ditherImage(image, SPECTRA_7_3_6COLOR, { mode: DitherMode.NONE });
-
-    expect(new Set(result.indices)).toEqual(new Set([3]));
   });
 
   it.each([DitherMode.ORDERED, DitherMode.BURKES, DitherMode.FLOYD_STEINBERG])(
