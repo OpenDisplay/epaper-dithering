@@ -218,7 +218,13 @@ result = dither_image(img, palette, DitherOptions(dbs=DbsParams(viewing_distance
 | exact "canonical" colours pass through | named inks with a `nominal` snap (and anchor) |
 
 The 6.x measured constants were relative to the camera, not to the panel's white. The exported
-files are normalised to white, so the same panel now renders brighter and keeps its shadows.
+files are normalised to white, so the same panel now renders brighter; set `tone` if you want the
+6.x-style shadow lift.
+
+Colours are now judged relative to the panel's own white. On panels whose yellow ink is nearly as
+light as their white (such as Spectra 6), warm mid-tones like orange shift toward red compared with
+6.x. With error diffusion this reads as orange; `none` (direct map) on photos shows it most, since it
+must pick a single ink.
 
 ## Measuring a panel
 

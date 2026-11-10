@@ -224,8 +224,14 @@ interface PaletteEntry {
 | `tone: 'auto'`, `gamut: 'auto'`, `'off'` | numbers only: `tone`/`gamut` are `0` (off) to `1`; `tone` now lifts lightness only |
 | `getPalette`, `getColorCount`, `fromValue` | `palette.previewRgb()`, `palette.length` |
 
-The 6.x measured constants were relative to the camera, not to the panel's white; the exported files
-are normalised, so the same panel now renders brighter and keeps its shadows.
+The 6.x measured constants were relative to the camera, not to the panel's white. The exported
+files are normalised to white, so the same panel now renders brighter; set `tone` if you want the
+6.x-style shadow lift.
+
+Colours are now judged relative to the panel's own white. On panels whose yellow ink is nearly as
+light as their white (such as Spectra 6), warm mid-tones like orange shift toward red compared with
+6.x. With error diffusion this reads as orange; `none` (direct map) on photos shows it most, since it
+must pick a single ink.
 
 ## Preview Tool
 
