@@ -1,39 +1,21 @@
-"""E-ink display dithering algorithms.
+"""Dithering for e-paper displays: an image and a palette in, palette indices out.
 
-A standalone library providing multiple dithering algorithms optimized
-for limited-color e-paper/e-ink displays.
+Load or build a `Palette` for your panel, then call `dither_image`. The library ships no
+built-in palettes; see `examples/palettes/` in the repository for starting points.
 """
 
-from .core import DbsParams, dither_image
+from .core import DbsParams, DitherOptions, dither_image
 from .enums import DitherMode
-from .palettes import (
-    BWRY_3_97,
-    BWRY_4_2,
-    HANSHOW_BWR,
-    HANSHOW_BWY,
-    MONO_4_26,
-    SOLUM_BWR,
-    SPECTRA_7_3_6COLOR,
-    SPECTRA_7_3_6COLOR_V2,
-    ColorPalette,
-    ColorScheme,
-)
+from .palette import Palette, PaletteEntry, PaletteError
 
 __version__ = "6.1.1"
 
 __all__ = [
     "dither_image",
+    "DitherOptions",
     "DbsParams",
     "DitherMode",
-    "ColorPalette",
-    "ColorScheme",
-    # Measured palettes for specific displays (v0.4.0)
-    "SPECTRA_7_3_6COLOR",
-    "SPECTRA_7_3_6COLOR_V2",
-    "MONO_4_26",
-    "BWRY_4_2",
-    "BWRY_3_97",
-    "SOLUM_BWR",
-    "HANSHOW_BWR",
-    "HANSHOW_BWY",
+    "Palette",
+    "PaletteEntry",
+    "PaletteError",
 ]

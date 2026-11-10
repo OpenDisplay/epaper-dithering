@@ -5,14 +5,13 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing import cast
 
 from PIL import Image
 
 import epaper_dithering._rs as _rs
 
 from .enums import DitherMode
-from .palettes import ColorPalette, ColorScheme
+from .palette import Palette
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,100 +77,82 @@ def _compression(v: float | str) -> float | None:
         return None
     if v == "off":
         return 0.0
+    if not isinstance(v, (int, float)):
+        raise TypeError(f"expected a float, 'auto' or 'off', got {v!r}")
     return float(v)
 
 
-def dither_image(  # pylint: disable=too-many-arguments
-    image: Image.Image,
-    color_scheme: ColorScheme | ColorPalette,
-    *,
-    mode: DitherMode = DitherMode.BURKES,
-    serpentine: bool = True,
-    exposure: float = 1.0,
-    saturation: float = 1.0,
-    shadows: float = 0.0,
-    highlights: float = 0.0,
-    tone: float | str = 0.0,
-    gamut: float | str = 0.0,
-    dbs: DbsParams | bool | None = None,
-) -> Image.Image:
-    """Apply dithering to an image for e-paper display.
+@dataclass(frozen=True)
+class DitherOptions:  # pylint: disable=too-many-instance-attributes
+    """Options for `dither_image`. Every field has a sensible default.
 
-    Args:
-        image: Input image (RGB or RGBA). RGBA is composited on white.
-        color_scheme: Target display palette — `ColorScheme` enum (idealized) or
-            measured `ColorPalette` instance.
+    Pipeline, each step a no-op at its identity value:
+    exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs.
+    Ink snapping is decided on the original image, before any of these steps.
 
-    Keyword Args:
-        mode: Dithering algorithm (default: BURKES).
-        serpentine: Alternate row scan direction for error diffusion (default: True).
-            Ignored for NONE and ORDERED modes.
+    Attributes:
+        mode: Dithering algorithm, as a `DitherMode` or its name (default "burkes").
+        serpentine: Alternate row scan direction for error diffusion.
         exposure: Linear-RGB exposure multiplier. 1.0 = no change, 2.0 = +1 stop.
         saturation: OKLab saturation multiplier. 1.0 = no change, 0.0 = grayscale.
-            Hue-preserving.
-        shadows: Shadow lift strength (S-curve lower half). 0.0 = off, 1.0 = strong.
-        highlights: Highlight compression strength (S-curve upper half). 0.0 = off, 1.0 = strong.
-        tone: Dynamic-range compression. 0.0 = off, "auto" = histogram-based fit
-            to display range, 0.0–1.0 = fixed strength. Only meaningful for measured palettes.
-        gamut: Gamut compression for out-of-gamut pixels. 0.0 = off, "auto" = full
-            strength on out-of-gamut pixels (smoothstep), 0.0–1.0 = fixed strength.
-        dbs: Direct Binary Search refinement after dithering. `None`/`False` = off,
-            `True` = default `DbsParams()`, or a `DbsParams` for custom viewing geometry.
-            Slow: seconds on a full panel.
+        shadows: Shadow lift strength. 0.0 = off, 1.0 = strong.
+        highlights: Highlight compression strength. 0.0 = off, 1.0 = strong.
+        tone: Dynamic-range compression: 0.0 / "off", "auto", or a 0.0–1.0 strength.
+        gamut: Gamut compression: 0.0 / "off", "auto", or a 0.0–1.0 strength.
+        dbs: Direct Binary Search refinement: None/False = off, True = defaults, or `DbsParams`.
+        anchor: Map each named ink's nominal colour onto its measured appearance first.
+        snap: A pixel exactly equal to a named ink's nominal takes that ink, undithered.
+    """
+
+    mode: DitherMode | str = DitherMode.BURKES
+    serpentine: bool = True
+    exposure: float = 1.0
+    saturation: float = 1.0
+    shadows: float = 0.0
+    highlights: float = 0.0
+    tone: float | str = 0.0
+    gamut: float | str = 0.0
+    dbs: DbsParams | bool | None = None
+    anchor: bool = True
+    snap: bool = True
+
+
+def dither_image(image: Image.Image, palette: Palette, options: DitherOptions | None = None) -> Image.Image:
+    """Dither an image to a palette.
+
+    Args:
+        image: Input image (any mode; RGBA is composited on white).
+        palette: The panel's palette.
+        options: Pipeline options; defaults to `DitherOptions()`.
 
     Returns:
-        Dithered palette-mode (`"P"`) PIL Image matching the color scheme.
+        A palette-mode ("P") image whose indices are palette entries and whose PIL palette
+        holds each entry's preview colour.
+
+    Raises:
+        ValueError: An unknown mode name or invalid DBS parameters.
     """
-    if not isinstance(tone, (float, int, str)):
-        raise TypeError(f"tone must be float, 'auto', or 'off', got {type(tone).__name__}")
-    if not isinstance(gamut, (float, int, str)):
-        raise TypeError(f"gamut must be float, 'auto', or 'off', got {type(gamut).__name__}")
-
-    scheme_name = color_scheme.name if isinstance(color_scheme, ColorScheme) else "custom"
-    _LOGGER.debug("Applying %s dithering for %s palette", mode.name, scheme_name)
-
+    o = options or DitherOptions()
+    _LOGGER.debug("Applying %s dithering to a %d-colour palette", o.mode, len(palette))
     pixels, width, height = _to_rgb_bytes(image)
-
-    common_kwargs: dict[str, object] = {
-        "mode_id": int(mode),
-        "serpentine": serpentine,
-        "exposure": exposure,
-        "saturation": saturation,
-        "shadows": shadows,
-        "highlights": highlights,
-        "tone": _compression(tone),
-        "gamut": _compression(gamut),
-        **_dbs_kwargs(dbs),
-    }
-
-    if isinstance(color_scheme, ColorScheme):
-        # Idealized scheme: tone/gamut auto don't apply; force them off.
-        common_kwargs["tone"] = 0.0
-        common_kwargs["gamut"] = 0.0
-        indices = _rs.dither_image(
-            pixels,
-            width,
-            height,
-            scheme_id=color_scheme.value,  # type: ignore[arg-type]  # non-standard enum: _value_ is int
-            **common_kwargs,  # type: ignore[arg-type]
-        )
-        palette_colors = list(color_scheme.palette.colors.values())
-    else:
-        palette_colors = list(color_scheme.colors.values())
-        palette_bytes = bytes(c for rgb in palette_colors for c in rgb)
-        accent_idx = list(color_scheme.colors.keys()).index(color_scheme.accent)
-        scheme_id = cast(int, color_scheme.scheme.value) if color_scheme.scheme is not None else None
-        indices = _rs.dither_image(
-            pixels,
-            width,
-            height,
-            scheme_id=scheme_id,
-            palette_bytes=palette_bytes,
-            accent_idx=accent_idx,
-            **common_kwargs,  # type: ignore[arg-type]
-        )
-
+    indices = _rs.dither_image(
+        pixels,
+        width,
+        height,
+        palette._inner,  # pylint: disable=protected-access
+        mode=str(o.mode),
+        serpentine=o.serpentine,
+        exposure=o.exposure,
+        saturation=o.saturation,
+        shadows=o.shadows,
+        highlights=o.highlights,
+        tone=_compression(o.tone),
+        gamut=_compression(o.gamut),
+        anchor=o.anchor,
+        snap=o.snap,
+        **_dbs_kwargs(o.dbs),  # type: ignore[arg-type]
+    )
     out = Image.new("P", (width, height))
     out.putdata(indices)
-    out.putpalette([c for rgb in palette_colors for c in rgb])
+    out.putpalette([c for rgb in palette.preview_rgb() for c in rgb])
     return out
