@@ -553,27 +553,26 @@
       <div class="field">
         <div class="group-label">Color Scheme</div>
         <select id="schemeSelect">
-          <optgroup label="Standard">
-            <option value="MONO">MONO — 2 color</option>
-            <option value="BWR">BWR — black/white/red</option>
-            <option value="BWY">BWY — black/white/yellow</option>
-            <option value="BWRY">BWRY — 4 color</option>
-            <option value="BWGBRY" selected>BWGBRY — Spectra 6</option>
-            <option value="GRAYSCALE_4">GRAYSCALE 4</option>
-            <option value="GRAYSCALE_16">GRAYSCALE 16</option>
-            <option value="SEVEN_COLOR">SEVEN COLOR — Spectra/ACeP 7</option>
-            <option value="BWGBRY_SPLIT">BWGBRY SPLIT — Spectra 6, split planes</option>
-            <option value="GRAYSCALE_8">GRAYSCALE 8 — e.g. Inkplate 10 (not a firmware value)</option>
+          <optgroup label="Ideal (examples/palettes)">
+            <option value="ideal_mono">Ideal mono</option>
+            <option value="ideal_bwr">Ideal BWR</option>
+            <option value="ideal_bwy">Ideal BWY</option>
+            <option value="ideal_bwry">Ideal BWRY</option>
+            <option value="ideal_bwgbry">Ideal BWGBRY (Spectra 6)</option>
+            <option value="ideal_grayscale4">Ideal grayscale 4</option>
+            <option value="ideal_grayscale16">Ideal grayscale 16</option>
+            <option value="ideal_seven_color">Ideal 7-colour</option>
+            <option value="ideal_grayscale8">Ideal grayscale 8</option>
           </optgroup>
-          <optgroup label="Measured Palettes">
-            <option value="SPECTRA_7_3_6COLOR">Spectra 7.3" 6-color</option>
-            <option value="SPECTRA_7_3_6COLOR_V2">Spectra 7.3" 6-color v2</option>
-            <option value="BWRY_3_97">BWRY 3.97" 800×480</option>
-            <option value="MONO_4_26">Mono 4.26"</option>
-            <option value="BWRY_4_2">BWRY 4.2"</option>
-            <option value="SOLUM_BWR">Solum BWR</option>
-            <option value="HANSHOW_BWR">Hanshow BWR</option>
-            <option value="HANSHOW_BWY">Hanshow BWY</option>
+          <optgroup label="Measured (examples/palettes)">
+            <option value="spectra_7_3_6color" selected>Spectra 7.3" 6-colour</option>
+            <option value="spectra_7_3_6color_v2">Spectra 7.3" 6-colour v2</option>
+            <option value="bwry_3_97">BWRY 3.97" 800×480</option>
+            <option value="mono_4_26">Mono 4.26"</option>
+            <option value="bwry_4_2">BWRY 4.2"</option>
+            <option value="solum_bwr">Solum BWR</option>
+            <option value="hanshow_bwr">Hanshow BWR</option>
+            <option value="hanshow_bwy">Hanshow BWY</option>
           </optgroup>
         </select>
       </div>
@@ -718,42 +717,20 @@
 </div>
 
 <script type="module">
-import {
-  ditherImage,
-  ColorScheme,
-  DitherMode,
-  SPECTRA_7_3_6COLOR,
-  SPECTRA_7_3_6COLOR_V2,
-  BWRY_3_97,
-  MONO_4_26,
-  BWRY_4_2,
-  SOLUM_BWR,
-  HANSHOW_BWR,
-  HANSHOW_BWY,
-} from './dist/index.js';
+import { ditherImage, DitherMode, Palette } from './dist/index.js';
 
-// ── Scheme / mode lookup maps ────────────────────────────────────
+// ── Palette / mode lookup ────────────────────────────────────────
+// Palettes are the repo's example files; `bun run dev` serves the repo root so they resolve.
 
-const SCHEMES = {
-  MONO:             ColorScheme.MONO,
-  BWR:              ColorScheme.BWR,
-  BWY:              ColorScheme.BWY,
-  BWRY:             ColorScheme.BWRY,
-  BWGBRY:           ColorScheme.BWGBRY,
-  GRAYSCALE_4:      ColorScheme.GRAYSCALE_4,
-  GRAYSCALE_16:     ColorScheme.GRAYSCALE_16,
-  SEVEN_COLOR:      ColorScheme.SEVEN_COLOR,
-  BWGBRY_SPLIT:     ColorScheme.BWGBRY_SPLIT,
-  GRAYSCALE_8:      ColorScheme.GRAYSCALE_8,
-  SPECTRA_7_3_6COLOR,
-  SPECTRA_7_3_6COLOR_V2,
-  BWRY_3_97,
-  MONO_4_26,
-  BWRY_4_2,
-  SOLUM_BWR,
-  HANSHOW_BWR,
-  HANSHOW_BWY,
-};
+const paletteCache = new Map();
+async function loadPalette(name) {
+  if (!paletteCache.has(name)) {
+    const res = await fetch(`/examples/palettes/${name}.json`);
+    if (!res.ok) throw new Error(`cannot load palette ${name}: HTTP ${res.status}`);
+    paletteCache.set(name, Palette.fromJson(await res.text()));
+  }
+  return paletteCache.get(name);
+}
 
 const MODES = {
   NONE:              DitherMode.NONE,
@@ -828,7 +805,7 @@ function onSettingChange() {
 // ── Compression helpers ──────────────────────────────────────────
 
 function isMeasuredPalette() {
-  return typeof SCHEMES[schemeSelect.value] !== 'number';
+  return !schemeSelect.value.startsWith('ideal_');
 }
 
 function updateCompressionSection() {
@@ -863,18 +840,17 @@ function runDither() {
   const toneComp  = getToneCompression();
   const gamutComp = getGamutCompression();
 
-  const scheme = SCHEMES[schemeKey];
   const mode   = MODES[modeKey];
 
   setStatus('working', 'processing…');
   algoBadge.textContent = modeKey.replace(/_/g, '-');
 
-  requestAnimationFrame(() => {
+  loadPalette(schemeKey).then((palette) => requestAnimationFrame(() => {
     const t0 = performance.now();
 
     const result = ditherImage(
       { width: currentImageData.width, height: currentImageData.height, data: currentImageData.data },
-      scheme,
+      palette,
       {
         mode,
         serpentine: useSerpentine,
@@ -918,7 +894,7 @@ function runDither() {
       : `${(elapsed / 1000).toFixed(2)} s`;
 
     setStatus('ready', `${result.width}×${result.height} · ${elapsed.toFixed(0)}ms`);
-  });
+  })).catch((err) => setStatus('error', String(err)));
 }
 
 // ── Image loading ────────────────────────────────────────────────

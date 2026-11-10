@@ -1,6 +1,6 @@
-import type { ImageBuffer, PaletteImageBuffer, ColorPalette } from './types';
+import type { ImageBuffer, PaletteImageBuffer } from './types';
 import { DitherMode } from './enums';
-import { ColorScheme, getPalette } from './palettes';
+import type { Palette } from './palette';
 import {
   initSync,
   dither_image as wasmDitherImage,
@@ -30,11 +30,12 @@ export interface DbsParams {
  * Options for `ditherImage`. All fields are optional — defaults are sensible.
  *
  * Pipeline (each step is a no-op at its identity value):
- * `exposure → saturation → shadows/highlights → tone → gamut → dither → dbs`.
+ * `exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs`.
+ * Ink snapping is decided on the original image, before any of these steps.
  */
 export interface DitherOptions {
-  /** Dithering algorithm. Default: `DitherMode.BURKES`. */
-  mode?: DitherMode;
+  /** Dithering algorithm, as a `DitherMode` or its name. Default: `'burkes'`. */
+  mode?: DitherMode | `${DitherMode}`;
   /** Alternate row scan direction for error diffusion. Default: `true`. */
   serpentine?: boolean;
   /** Linear-RGB exposure multiplier. 1.0 = no change, 2.0 = +1 stop. Default: `1.0`. */
@@ -55,19 +56,23 @@ export interface DitherOptions {
    * run it in a Web Worker in the browser. Default: `false`.
    */
   dbs?: boolean | DbsParams;
+  /** Map each named ink's nominal colour onto its measured appearance first. Default: `true`. */
+  anchor?: boolean;
+  /** A pixel exactly equal to a named ink's nominal takes that ink, undithered. Default: `true`. */
+  snap?: boolean;
 }
 
 /**
- * Apply dithering to an RGBA image for an e-paper display.
+ * Dither an RGBA image to a palette.
  *
  * @param image     Input RGBA image. Alpha is composited on white.
- * @param palette   Target palette: `ColorScheme` enum (idealized) or `ColorPalette` (measured).
+ * @param palette   The panel's palette.
  * @param options   Per-call overrides — see {@link DitherOptions}.
- * @returns Palette-indexed image buffer.
+ * @returns Palette-indexed image buffer whose `palette` holds each entry's preview colour.
  */
 export function ditherImage(
   image: ImageBuffer,
-  palette: ColorScheme | ColorPalette,
+  palette: Palette,
   options: DitherOptions = {},
 ): PaletteImageBuffer {
   const {
@@ -80,6 +85,8 @@ export function ditherImage(
     tone = 0.0,
     gamut = 0.0,
     dbs = false,
+    anchor = true,
+    snap = true,
   } = options;
   const dbsArgs = parseDbs(dbs);
 
@@ -94,43 +101,16 @@ export function ditherImage(
   const rgba = new Uint8Array(image.data.buffer, image.data.byteOffset, image.data.byteLength);
   const pixels = wasmCompositeRgba(rgba);
 
-  // Idealized schemes don't have a measured display range, so tone/gamut don't apply.
-  const isScheme = typeof palette === 'number';
-  const toneArg  = isScheme ? 0.0 : parseCompression(tone);
-  const gamutArg = isScheme ? 0.0 : parseCompression(gamut);
-
-  let schemeId: number | undefined = undefined;
-  let paletteBytes: Uint8Array;
-  let accentIdx = 0;
-  let outputColors: { r: number; g: number; b: number }[];
-
-  if (isScheme) {
-    schemeId = palette as number;
-    paletteBytes = new Uint8Array(0);
-    outputColors = Object.values(getPalette(palette).colors);
-  } else {
-    schemeId = palette.scheme ?? undefined;
-    const colors = Object.values(palette.colors);
-    paletteBytes = new Uint8Array(colors.flatMap(c => [c.r, c.g, c.b]));
-    accentIdx = Object.keys(palette.colors).indexOf(palette.accent);
-    if (accentIdx < 0) {
-      throw new Error(
-        `accent color '${palette.accent}' not found in palette colors [${Object.keys(palette.colors).join(', ')}]`,
-      );
-    }
-    outputColors = colors;
-  }
-
   const indices = wasmDitherImage(
-    pixels, image.width,
-    schemeId, paletteBytes, accentIdx,
-    mode as number, serpentine,
+    pixels, image.width, palette.wasm,
+    String(mode), serpentine,
     exposure, saturation, shadows, highlights,
-    toneArg, gamutArg,
+    parseCompression(tone), parseCompression(gamut),
     ...dbsArgs,
+    anchor, snap,
   );
 
-  return { width: image.width, height: image.height, indices, palette: outputColors };
+  return { width: image.width, height: image.height, indices, palette: palette.previewRgb() };
 }
 
 /**
