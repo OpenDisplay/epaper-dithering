@@ -75,6 +75,16 @@ pub fn lab_to_xyz(lab: Lab) -> [f64; 3] {
     [finv(fx) * D65[0], y * D65[1], finv(fz) * D65[2]]
 }
 
+/// Linear sRGB (0–1) → CIELAB.
+pub fn linear_to_lab(linear: [f64; 3]) -> Lab {
+    xyz_to_lab(mul(&SRGB_TO_XYZ, linear))
+}
+
+/// CIELAB → linear sRGB (0–1), unclamped.
+pub fn lab_to_linear(lab: Lab) -> [f64; 3] {
+    mul(&invert(&SRGB_TO_XYZ), lab_to_xyz(lab))
+}
+
 /// 8-bit sRGB → CIELAB.
 pub fn srgb_to_lab(rgb: [u8; 3]) -> Lab {
     let linear = rgb.map(srgb_channel_to_linear);

@@ -3,6 +3,7 @@
 //! Build a [`palette::Palette`] (from a JSON file, from measurements, or from sRGB) and
 //! call [`dither`]. The library has no built-in palettes.
 
+mod anchor;
 pub mod algorithms;
 pub mod color_space;
 pub mod color_space_lab;
@@ -37,8 +38,13 @@ use crate::{error::DitherError, palette::PaletteEntry};
 /// ```
 ///
 /// Pipeline (applied in order, each step is a no-op at its identity value):
-/// `exposure → saturation → shadows/highlights → tone → gamut → match + diffuse → dbs`.
+/// `exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs`.
 /// Ink snapping is decided on the original input, before any of these steps.
+///
+/// Anchoring runs before tone compression: it interprets the input's nominal colours as
+/// the panel's real ones, which already brings black and white into the display's range.
+/// `ToneCompression::Auto` then usually finds nothing left to compress; a fixed tone
+/// strength still applies on top.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DitherOptions {
     /// Dithering algorithm.
@@ -161,8 +167,9 @@ pub fn dither(img: &ImageBuffer, palette: &Palette, options: &DitherOptions) -> 
         return all;
     }
     let snap = mask.as_deref();
+    let anchoring = options.anchor && anchor::is_active(palette);
 
-    if !needs_preprocess(options) {
+    if !needs_preprocess(options) && !anchoring {
         let indices = dispatch(img, &p, snap, options.mode, options.serpentine);
         return refine(img, &p, indices, options.dbs, snap);
     }
@@ -183,6 +190,9 @@ pub fn dither(img: &ImageBuffer, palette: &Palette, options: &DitherOptions) -> 
     tone_map::apply_exposure(&mut linear, options.exposure);
     tone_map::adjust_saturation(&mut linear, options.saturation);
     tone_map::apply_shadows_highlights(&mut linear, options.shadows, options.highlights);
+    if anchoring {
+        anchor::anchor_map(&mut linear, palette);
+    }
     options.tone.apply(&mut linear, &p);
     options.gamut.apply(&mut linear, &p);
 
@@ -382,6 +392,22 @@ mod tests {
     fn image_buffer_rejects_bad_length() {
         assert_eq!(ImageBuffer::new(&[0; 10], 3).unwrap_err(), DitherError::InvalidImage { len: 10, width: 3 });
         assert_eq!(ImageBuffer::new(&[], 0).unwrap_err(), DitherError::InvalidImage { len: 0, width: 0 });
+    }
+
+    #[test]
+    fn anchor_option_changes_output_for_measured_inks() {
+        let data: Vec<u8> = (0..32u8).flat_map(|v| [v * 8, v * 4, 255 - v * 8]).cycle().take(16 * 16 * 3).collect();
+        let on = dither(&img(&data, 16), &spectra6(), &DitherOptions { snap: false, ..Default::default() });
+        let off = dither(&img(&data, 16), &spectra6(), &DitherOptions { snap: false, anchor: false, ..Default::default() });
+        assert_ne!(on, off, "anchoring should move colours for a measured palette");
+    }
+
+    #[test]
+    fn anchor_option_is_inert_without_inks() {
+        let data: Vec<u8> = (0..32u8).flat_map(|v| [v * 8, v * 4, 255 - v * 8]).cycle().take(16 * 16 * 3).collect();
+        let on = dither(&img(&data, 16), &spectra6_unnamed(), &DitherOptions::default());
+        let off = dither(&img(&data, 16), &spectra6_unnamed(), &DitherOptions { anchor: false, ..Default::default() });
+        assert_eq!(on, off);
     }
 
     #[test]
