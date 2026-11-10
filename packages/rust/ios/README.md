@@ -102,29 +102,3 @@ instead `release.yml` builds the XCFramework on macOS and attaches it to the Git
 `EpaperDithering.xcframework.zip.checksum`. Use conventional commits scoped `ios`
 (`feat(ios): …`, `fix(ios)!: …`); a change to an exported signature or to `ed_dither_options` is
 breaking and must bump `ed_abi_version()`.
-
-## Swift usage sketch
-
-```swift
-import EpaperDithering
-
-// pixels: [UInt8] flat RGB (w*h*3); palette: app palette bytes in app index order
-var opts = ed_dither_options_default()
-opts.mode_id = modeId
-opts.dbs_max_passes = ed_dither_options_default_dbs_passes()   // opt in to DBS (slower)
-opts.dbs_ppi = panelPPI                                         // e.g. from the panel's mm size
-var indices = [UInt8](repeating: 0, count: w * h)
-let status = pixels.withUnsafeBufferPointer { px in
-    palette.withUnsafeBufferPointer { pal in
-        indices.withUnsafeMutableBufferPointer { out in
-            ed_dither(px.baseAddress, px.count, w,
-                      pal.baseAddress, pal.count, accentIdx,
-                      nil, 0, 0,           // no canonical palette
-                      &opts,
-                      out.baseAddress, out.count)
-        }
-    }
-}
-precondition(status == ED_OK)
-// `indices` are palette indices in app order → hand straight to the existing packer.
-```
