@@ -30,7 +30,7 @@ export interface DbsParams {
  * Options for `ditherImage`. All fields are optional — defaults are sensible.
  *
  * Pipeline (each step is a no-op at its identity value):
- * `exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs`.
+ * `exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs`.
  * Ink snapping is decided on the original image, before any of these steps.
  */
 export interface DitherOptions {
@@ -46,8 +46,6 @@ export interface DitherOptions {
   shadows?: number;
   /** Highlight compression strength (S-curve upper half). 0.0 = off, 1.0 = strong. Default: `0.0`. */
   highlights?: number;
-  /** Dynamic-range compression: `0.0`/`'off'` disables, `'auto'` opts in. Default: `0.0`. */
-  tone?: number | 'auto' | 'off';
   /** Gamut compression: `0.0`/`'off'` disables, `'auto'` opts in. Default: `0.0`. */
   gamut?: number | 'auto' | 'off';
   /**
@@ -56,7 +54,7 @@ export interface DitherOptions {
    * run it in a Web Worker in the browser. Default: `false`.
    */
   dbs?: boolean | DbsParams;
-  /** Map each named ink's nominal colour onto its measured appearance first. Default: `true`. */
+  /** Map pure black/white onto the panel's own black/white and each named ink's nominal onto its appearance first. Default: `true`. */
   anchor?: boolean;
   /** A pixel exactly equal to a named ink's nominal takes that ink, undithered. Default: `true`. */
   snap?: boolean;
@@ -82,7 +80,6 @@ export function ditherImage(
     saturation = 1.0,
     shadows = 0.0,
     highlights = 0.0,
-    tone = 0.0,
     gamut = 0.0,
     dbs = false,
     anchor = true,
@@ -105,7 +102,7 @@ export function ditherImage(
     pixels, image.width, palette.wasm,
     String(mode), serpentine,
     exposure, saturation, shadows, highlights,
-    parseCompression(tone), parseCompression(gamut),
+    parseCompression(gamut),
     ...dbsArgs,
     anchor, snap,
   );

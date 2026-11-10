@@ -220,112 +220,59 @@ class TestColorScience:
             assert result_false.mode == "P", f"{mode.name} should work with serpentine=False"
 
 
-class TestToneCompression:
-    """Dynamic range compression. Anchoring is off so these isolate the tone step."""
-
-    def test_tone_compression_with_measured_palette(self):
-        """Tone compression should run and produce valid output with measured palette."""
-
-        img = Image.new("RGB", (20, 20), (200, 200, 200))
-        result = dither_image(
-            img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.FLOYD_STEINBERG, tone=1.0, anchor=False)
-        )
-
-        assert result.mode == "P"
-        assert result.size == (20, 20)
+class TestGamutCompression:
+    """Gamut compression options."""
 
     @pytest.mark.parametrize("mode", list(DitherMode))
-    def test_tone_compression_all_modes(self, mode):
-        """Tone compression should work with all dithering modes."""
-
-        img = Image.new("RGB", (10, 10), (128, 128, 128))
-        result = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, tone=1.0, anchor=False))
+    def test_auto_gamut_all_modes(self, mode):
+        """Auto gamut compression should produce valid output for all modes."""
+        img = Image.new("RGB", (10, 10), (128, 64, 200))
+        result = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, gamut="auto"))
 
         assert result.mode == "P"
         assert result.size == (10, 10)
 
-    @pytest.mark.parametrize("mode", list(DitherMode))
-    def test_auto_tone_compression_all_modes(self, mode):
-        """Auto tone compression should produce valid output for all modes."""
-
-        img = Image.new("RGB", (10, 10), (128, 128, 128))
-        result = dither_image(
-            img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, tone="auto", gamut="auto", anchor=False)
-        )
-
-        assert result.mode == "P"
-        assert result.size == (10, 10)
-
-    def test_default_tone_gamut_match_off_aliases(self):
-        """tone/gamut default to off, and 'off' is the string alias for 0.0."""
-
-        img = Image.new("RGB", (16, 16), (128, 128, 128))
-        result_default = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, anchor=False))
-        result_zero = dither_image(
-            img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, tone=0.0, gamut=0.0, anchor=False)
-        )
-        result_off = dither_image(
-            img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, tone="off", gamut="off", anchor=False)
-        )
+    def test_default_gamut_matches_off_aliases(self):
+        """gamut defaults to off, and 'off' is the string alias for 0.0."""
+        img = Image.new("RGB", (16, 16), (128, 64, 200))
+        result_default = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES))
+        result_zero = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, gamut=0.0))
+        result_off = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, gamut="off"))
 
         assert np.array_equal(np.array(result_default), np.array(result_zero))
         assert np.array_equal(np.array(result_default), np.array(result_off))
 
-    def test_tone_compression_changes_measured_output(self):
-        """Tone compression should change the output for measured palettes."""
 
-        # Use a gradient to see meaningful differences
-        gradient = Image.new("RGB", (50, 50))
-        pixels = gradient.load()
-        for y in range(50):
-            for x in range(50):
-                v = int(x * 255 / 49)
-                pixels[x, y] = (v, v, v)
+class TestBlackPointCompensation:
+    """Anchoring maps pure black and white onto the panel's own black and white."""
 
-        result_off = dither_image(
-            gradient, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.FLOYD_STEINBERG, tone=0.0, anchor=False)
-        )
-        result_on = dither_image(
-            gradient, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.FLOYD_STEINBERG, tone=1.0, anchor=False)
-        )
-
-        assert not np.array_equal(np.array(result_off), np.array(result_on)), (
-            "Tone compression should produce different output than no compression"
-        )
-
-
-class TestToneAutoRegression:
-    """Regression: auto tone mapping must not NaN-collapse bilevel images.
-
-    A crisp bilevel frame (pure-white background, a few percent pure-black
-    pixels, no antialiasing — exactly what a UI renderer produces) drove the
-    log-skew strength epsilon-negative; (-x).powf(1.4) is NaN, which poisoned
-    every pixel and made the nearest-palette search return index 0 for the
-    whole frame: an all-black display instead of white with text.
-    """
-
-    def test_bilevel_white_image_survives_auto_tone(self):
-        # Unnamed palette whose lightest entry is well below sRGB white (no "white" ink, so
-        # nothing normalises it), so auto tone compression actually engages for a white image.
+    def test_white_frame_stays_white_on_a_palette_below_srgb_white(self):
+        # Unnamed palette whose lightest entry is well below sRGB white: #ffffff must still
+        # land on that entry, and a few black pixels must not drag the frame down.
         palette = Palette.from_srgb([((30, 30, 30), None, None), ((200, 200, 200), None, None)])
         img = Image.new("RGB", (100, 100), (255, 255, 255))
-        # 3% pure black — enough that the 2nd-percentile luminance is 0.0.
         for x in range(100):
             for y in range(3):
                 img.putpixel((x, y), (0, 0, 0))
 
-        result = dither_image(img, palette, DitherOptions(mode=DitherMode.NONE, tone="auto"))
+        result = dither_image(img, palette, DitherOptions(mode=DitherMode.NONE))
 
-        white_pixels = list(result.getdata()).count(1)
-        assert white_pixels > 9000, (
-            f"expected a mostly-white result, got {white_pixels} white pixels — auto tone collapsed the frame"
-        )
+        pixels = list(result.get_flattened_data())
+        assert pixels.count(1) == 9700
+        assert pixels.count(0) == 300
+
+    def test_unnamed_measured_palette_is_compensated_by_default(self):
+        unnamed = Palette([type(e)(e.appearance) for e in SPECTRA_7_3_6COLOR.entries], measured=True)
+        img = _color_gradient()
+        on = dither_image(img, unnamed)
+        off = dither_image(img, unnamed, DitherOptions(anchor=False))
+        assert on.tobytes() != off.tobytes()
 
 
 class TestGilRelease:
     """`dither_image` must not hold the GIL for the whole rayon-parallel dither.
 
-    Audit H2: `dither_image`/`tone_compress`/`gamut_compress` used to run their
+    Audit H2: `dither_image`/`gamut_compress` used to run their
     rayon-parallel work with the GIL held. Because the GIL is process-global,
     calling this from an executor thread (as Home Assistant's `drawcustom`
     pipeline does) stalled the whole event loop for the duration of the dither.
@@ -371,7 +318,7 @@ class TestGilRelease:
         points.
 
         Measured on the reference machine, calling `_rs.dither_image` directly
-        with a single call on a 3200x1920 image (tone="auto", gamut="auto"),
+        with a single call on a 3200x1920 image (gamut="auto"),
         3 trials each:
           - GIL held (fix reverted):    1-2 samples,  ~0.68s wall
           - GIL released (fix applied): 34-37 samples, ~0.70s wall
@@ -402,7 +349,6 @@ class TestGilRelease:
                 saturation=1.0,
                 shadows=0.0,
                 highlights=0.0,
-                tone=None,  # "auto"
                 gamut=None,  # "auto"
             )
             done.set()

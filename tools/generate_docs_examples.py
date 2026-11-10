@@ -145,7 +145,7 @@ grid(scheme_cells).save(OUT / "color_schemes_grid.png")
 
 print("Generating DBS comparison...")
 src3 = load("river.png")
-base = DitherOptions(mode=DitherMode.BURKES, tone="auto", gamut="auto")
+base = DitherOptions(mode=DitherMode.BURKES, gamut="auto")
 burkes = dither_image(src3, SPECTRA_7_3_6COLOR_V2, base).convert("RGB")
 refined = dither_image(src3, SPECTRA_7_3_6COLOR_V2, DitherOptions(**{**base.__dict__, "dbs": True})).convert("RGB")
 

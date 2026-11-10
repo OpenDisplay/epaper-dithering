@@ -590,7 +590,7 @@
 
     </div>
 
-    <!-- Serpentine + tone compression -->
+    <!-- Serpentine -->
     <div>
       <div class="group-label">Options</div>
       <div class="toggle-row">
@@ -629,19 +629,7 @@
 
     <!-- Compression controls (measured palettes only) -->
     <div id="compressionSection">
-      <div class="group-label">Tone Compression</div>
-      <div class="toggle-row">
-        <span>Auto levels</span>
-        <label class="toggle">
-          <input type="checkbox" id="toneAutoToggle">
-          <span class="track"></span>
-        </label>
-      </div>
-      <div class="slider-row">
-        <input type="range" id="toneSlider" min="0" max="100" value="0" step="5">
-        <span class="slider-val" id="toneVal">0%</span>
-      </div>
-      <div class="sub-group-label">Gamut Compression</div>
+      <div class="group-label">Gamut Compression</div>
       <div class="toggle-row">
         <span>Auto gamut</span>
         <label class="toggle">
@@ -751,9 +739,6 @@ const schemeSelect    = document.getElementById('schemeSelect');
 const modeSelect      = document.getElementById('modeSelect');
 const serpentine      = document.getElementById('serpentineToggle');
 const compressionSection = document.getElementById('compressionSection');
-const toneAutoToggle  = document.getElementById('toneAutoToggle');
-const toneSlider      = document.getElementById('toneSlider');
-const toneVal         = document.getElementById('toneVal');
 const gamutAutoToggle = document.getElementById('gamutAutoToggle');
 const gamutSlider     = document.getElementById('gamutSlider');
 const gamutVal        = document.getElementById('gamutVal');
@@ -806,11 +791,6 @@ function updateCompressionSection() {
   compressionSection.style.display = isMeasuredPalette() ? 'block' : 'none';
 }
 
-function getToneCompression() {
-  if (!isMeasuredPalette()) return 0.0;
-  return toneAutoToggle.checked ? 'auto' : toneSlider.value / 100;
-}
-
 function getGamutCompression() {
   if (!isMeasuredPalette()) return 0.0;
   return gamutAutoToggle.checked ? 'auto' : gamutSlider.value / 100;
@@ -831,7 +811,6 @@ function runDither() {
   const schemeKey = schemeSelect.value;
   const modeKey   = modeSelect.value;
   const useSerpentine = serpentine.checked;
-  const toneComp  = getToneCompression();
   const gamutComp = getGamutCompression();
 
   const mode   = MODES[modeKey];
@@ -852,7 +831,6 @@ function runDither() {
         saturation: getSaturation(),
         shadows:    getShadows(),
         highlights: getHighlights(),
-        tone:  toneComp,
         gamut: gamutComp,
       },
     );
@@ -945,17 +923,6 @@ fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
 schemeSelect.addEventListener('change', () => { updateCompressionSection(); onSettingChange(); });
 modeSelect.addEventListener('change', onSettingChange);
 serpentine.addEventListener('change', onSettingChange);
-toneAutoToggle.addEventListener('change', () => {
-  const isAuto = toneAutoToggle.checked;
-  toneSlider.disabled = isAuto;
-  toneVal.textContent = isAuto ? 'auto' : `${toneSlider.value}%`;
-  toneVal.className   = 'slider-val' + (isAuto ? ' muted' : '');
-  onSettingChange();
-});
-toneSlider.addEventListener('input', () => {
-  toneVal.textContent = `${toneSlider.value}%`;
-  runDither();
-});
 gamutAutoToggle.addEventListener('change', () => {
   const isAuto = gamutAutoToggle.checked;
   gamutSlider.disabled = isAuto;

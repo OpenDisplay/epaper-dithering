@@ -87,7 +87,7 @@ class DitherOptions:  # pylint: disable=too-many-instance-attributes
     """Options for `dither_image`. Every field has a sensible default.
 
     Pipeline, each step a no-op at its identity value:
-    exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs.
+    exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs.
     Ink snapping is decided on the original image, before any of these steps.
 
     Attributes:
@@ -97,10 +97,10 @@ class DitherOptions:  # pylint: disable=too-many-instance-attributes
         saturation: OKLab saturation multiplier. 1.0 = no change, 0.0 = grayscale.
         shadows: Shadow lift strength. 0.0 = off, 1.0 = strong.
         highlights: Highlight compression strength. 0.0 = off, 1.0 = strong.
-        tone: Dynamic-range compression: 0.0 / "off", "auto", or a 0.0–1.0 strength.
         gamut: Gamut compression: 0.0 / "off", "auto", or a 0.0–1.0 strength.
         dbs: Direct Binary Search refinement: None/False = off, True = defaults, or `DbsParams`.
-        anchor: Map each named ink's nominal colour onto its measured appearance first.
+        anchor: Map pure black and white onto the panel's own black and white (black-point
+            compensation) and each named ink's nominal colour onto its appearance first.
         snap: A pixel exactly equal to a named ink's nominal takes that ink, undithered.
     """
 
@@ -110,7 +110,6 @@ class DitherOptions:  # pylint: disable=too-many-instance-attributes
     saturation: float = 1.0
     shadows: float = 0.0
     highlights: float = 0.0
-    tone: float | str = 0.0
     gamut: float | str = 0.0
     dbs: DbsParams | bool | None = None
     anchor: bool = True
@@ -146,7 +145,6 @@ def dither_image(image: Image.Image, palette: Palette, options: DitherOptions | 
         saturation=o.saturation,
         shadows=o.shadows,
         highlights=o.highlights,
-        tone=_compression(o.tone),
         gamut=_compression(o.gamut),
         anchor=o.anchor,
         snap=o.snap,

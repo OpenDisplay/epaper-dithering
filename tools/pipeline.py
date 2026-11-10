@@ -5,18 +5,16 @@ Usage:
     uv run --project packages/python python tools/pipeline.py [options] [image1.jpg ...]
 
 Options:
-    --tc auto|0|0.5|1.0     Tone compression  (default: 0)
     --gc auto|0|0.5|1.0     Gamut compression (default: 0)
     --palette spectra_7_3_6color_v2|spectra_7_3_6color  (default: spectra_7_3_6color_v2)
     --mode BURKES|FLOYD_STEINBERG|ATKINSON|...      (default: BURKES)
 
-Output: pipeline_out/pipeline_<name>_tc<tc>_gc<gc>.png — a vertical strip:
+Output: pipeline_out/pipeline_<name>_gc<gc>.png — a vertical strip:
     1. Input (sRGB)
     2. After sRGB→linear   + luminance histogram
-    3. After tone compression + luminance histogram
-    4. After gamut compression | OKLab movement heatmap
-    5. Direct palette map (no error diffusion)
-    6. Final dithered output
+    3. After gamut compression | OKLab movement heatmap
+    4. Direct palette map (no error diffusion; includes anchoring)
+    5. Final dithered output (includes anchoring)
 
 Defaults to marienplatz.jpg if no image paths given.
 """
@@ -167,17 +165,6 @@ def _run_step(fn, pixels_linear: np.ndarray, palette: Palette, strength: float |
     return np.array(out, dtype=np.float64).reshape(pixels_linear.shape)
 
 
-def apply_tc(pixels_linear: np.ndarray, palette: Palette, tc: float | str) -> tuple[np.ndarray, str]:
-    if tc == 0.0:
-        return pixels_linear, "disabled"
-    strength = None if tc == "auto" else float(tc)
-    result = _run_step(_rs.tone_compress, pixels_linear, palette, strength)
-    if tc == "auto":
-        changed = not np.allclose(result, pixels_linear)
-        return result, "applied" if changed else "SKIPPED (image fits display range)"
-    return result, f"strength={tc:.2g}"
-
-
 def apply_gc(pixels_linear: np.ndarray, palette: Palette, gc: float | str) -> tuple[np.ndarray, str]:
     if gc == 0.0:
         return pixels_linear, "disabled"
@@ -194,7 +181,6 @@ def run(
     image_path: Path,
     palette: Palette,
     palette_name: str,
-    tc: float | str,
     gc: float | str,
     mode: DitherMode,
     out_path: Path,
@@ -222,23 +208,12 @@ def run(
         font,
     )
 
-    # ── Step 3: Tone compression ───────────────────────────────────────────────
-    pixels_tc, tc_note = apply_tc(pixels_linear, palette, tc)
-    Y3 = lum(pixels_tc)
-    p2_3, p98_3 = float(np.percentile(Y3, 2)), float(np.percentile(Y3, 98))
-    panel3 = with_histogram(to_pil(pixels_tc), Y3, black_Y, white_Y, font)
-    panel3 = add_label(
-        panel3,
-        f"3. Tone compression [tc={fmt(tc)} — {tc_note}]  (p2={p2_3:.3f}  p98={p98_3:.3f})",
-        font,
-    )
-
-    # ── Step 4: Gamut compression ─────────────────────────────────────────────
-    pixels_gc, gc_note = apply_gc(pixels_tc, palette, gc)
-    n_moved = int(np.sum(np.any(np.abs(pixels_gc - pixels_tc) > 1e-5, axis=-1)))
+    # ── Step 3: Gamut compression ─────────────────────────────────────────────
+    pixels_gc, gc_note = apply_gc(pixels_linear, palette, gc)
+    n_moved = int(np.sum(np.any(np.abs(pixels_gc - pixels_linear) > 1e-5, axis=-1)))
     pct_moved = 100.0 * n_moved / (WIDTH * HEIGHT)
 
-    heatmap = gamut_heatmap(pixels_tc, pixels_gc)
+    heatmap = gamut_heatmap(pixels_linear, pixels_gc)
     half_w = WIDTH // 2
     side = Image.new("RGB", (WIDTH, HEIGHT))
     side.paste(to_pil(pixels_gc).resize((half_w, HEIGHT), Image.LANCZOS), (0, 0))
@@ -248,22 +223,22 @@ def run(
     d.text((half_w + 4, 4), f"heatmap: {pct_moved:.1f}% pixels moved", fill=(255, 130, 80), font=font)
     panel4 = add_label(
         side,
-        f"4. Gamut compression [gc={fmt(gc)} — {gc_note}]  {n_moved:,} px / {pct_moved:.1f}% affected  |  heatmap",
+        f"3. Gamut compression [gc={fmt(gc)} — {gc_note}]  {n_moved:,} px / {pct_moved:.1f}% affected  |  heatmap",
         font,
     )
 
     # ── Step 5: Direct palette map ────────────────────────────────────────────
-    direct = dither_image(src, palette, DitherOptions(mode=DitherMode.NONE, tone=tc, gamut=gc))
+    direct = dither_image(src, palette, DitherOptions(mode=DitherMode.NONE, gamut=gc))
     panel5 = add_label(
-        direct.convert("RGB"), f"5. Direct palette map (no error diffusion)  tc={fmt(tc)}  gc={fmt(gc)}", font
+        direct.convert("RGB"), f"4. Direct palette map (no error diffusion)  gc={fmt(gc)}", font
     )
 
     # ── Step 6: Final output ──────────────────────────────────────────────────
-    final = dither_image(src, palette, DitherOptions(mode=mode, tone=tc, gamut=gc))
-    panel6 = add_label(final.convert("RGB"), f"6. Final: {mode.name}  tc={fmt(tc)}  gc={fmt(gc)}", font)
+    final = dither_image(src, palette, DitherOptions(mode=mode, gamut=gc))
+    panel6 = add_label(final.convert("RGB"), f"5. Final: {mode.name}  gc={fmt(gc)}", font)
 
     # ── Assemble vertical strip ───────────────────────────────────────────────
-    panels = [panel1, panel2, panel3, panel4, panel5, panel6]
+    panels = [panel1, panel2, panel4, panel5, panel6]
     total_h = sum(p.height for p in panels)
     sheet = Image.new("RGB", (WIDTH, total_h), (10, 10, 10))
     y = 0
@@ -278,7 +253,6 @@ def run(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Pipeline visualization for epaper dithering.")
     parser.add_argument("images", nargs="*", help="Image paths (default: marienplatz.jpg)")
-    parser.add_argument("--tc", default="0", help="Tone compression: auto|0|0.5|1.0 (default: 0)")
     parser.add_argument("--gc", default="0", help="Gamut compression: auto|0|0.5|1.0 (default: 0)")
     parser.add_argument(
         "--palette", default="spectra_7_3_6color_v2", choices=list(PALETTES), help="Example palette name"
@@ -286,7 +260,6 @@ def main() -> None:
     parser.add_argument("--mode", default="BURKES", choices=list(MODES), help="Dither mode (default: BURKES)")
     args = parser.parse_args()
 
-    tc = parse_compression(args.tc)
     gc = parse_compression(args.gc)
     palette = PALETTES[args.palette]
     mode = MODES[args.mode]
@@ -296,14 +269,14 @@ def main() -> None:
     out_dir = here / "pipeline_out"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    suffix = f"_tc{fmt(tc)}_gc{fmt(gc)}_{args.palette}"
+    suffix = f"_gc{fmt(gc)}_{args.palette}"
     for img_path in image_paths:
         if not img_path.exists():
             print(f"  skip (not found): {img_path}")
             continue
         out_path = out_dir / f"pipeline_{img_path.stem}{suffix}.png"
-        print(f"Processing {img_path.name}  (tc={fmt(tc)}  gc={fmt(gc)}  palette={args.palette}  mode={args.mode})...")
-        run(img_path, palette, args.palette, tc, gc, mode, out_path)
+        print(f"Processing {img_path.name}  (gc={fmt(gc)}  palette={args.palette}  mode={args.mode})...")
+        run(img_path, palette, args.palette, gc, mode, out_path)
 
 
 if __name__ == "__main__":

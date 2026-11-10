@@ -27,7 +27,7 @@ pip install epaper-dithering
 - **Requested inks stay solid**: a pixel that asks for an ink (e.g. `#000000` text on a dashboard) comes out as that ink, undithered, even though the panel's real black is lighter than `#000000`.
 - **Perceptually correct matching**: weighted Cartesian OKLab, which preserves hue without the achromatic-attractor bug of LCH-weighted approaches.
 - **10 dithering algorithms**, from ordered dithering to Jarvis-Judice-Ninke and Dizzy.
-- **Pre-dither adjustments**: exposure, saturation, shadows, highlights, dynamic-range (tone) compression and gamut compression.
+- **Pre-dither adjustments**: exposure, saturation, shadows, highlights and gamut compression.
 - **DBS refinement**: an optional Direct Binary Search pass that optimises the result for how it is perceived at a given viewing distance.
 - **RGBA support**: transparent areas are composited on white.
 
@@ -153,7 +153,6 @@ options = DitherOptions(
     saturation=1.0,  # OKLab chroma multiplier, 0.0 = greyscale
     shadows=0.0,  # shadow lift, 0.0–1.0
     highlights=0.0,  # highlight compression, 0.0–1.0
-    tone=0.0,  # dynamic-range compression: 0.0/"off", "auto", or 0.0–1.0
     gamut=0.0,  # gamut compression: 0.0/"off", "auto", or 0.0–1.0
     dbs=None,  # None/False, True (defaults), or DbsParams(...)
     anchor=True,
@@ -161,9 +160,10 @@ options = DitherOptions(
 )
 ```
 
-Pipeline order: `exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs`.
-Anchoring already brings black and white into the panel's range, so `tone="auto"` usually finds
-nothing left to compress; a fixed `tone` strength still applies on top.
+Pipeline order: `exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs`.
+Anchoring includes black-point compensation: pure black and white land on the panel's own black and
+white (the inks named for `#000000`/`#ffffff`, or else its darkest and lightest entries), so the
+image's tonal range is mapped onto the panel's. It replaces 6.x's dynamic-range ("tone") compression.
 
 ### Dithering algorithms
 
@@ -210,7 +210,8 @@ result = dither_image(img, palette, DitherOptions(dbs=DbsParams(viewing_distance
 | `dither_image(img, ColorScheme.BWR)` | `dither_image(img, Palette.load(".../ideal_bwr.json"))` |
 | `SPECTRA_7_3_6COLOR`, `SPECTRA_7_3_6COLOR_V2` | `examples/palettes/spectra_7_3_6color*.json`; the other 6.x "measured" constants were unmeasured placeholders and are gone |
 | `ColorPalette(colors={...}, accent=...)` | `Palette.from_srgb([...])`, or better `Palette.from_absolute_lab([...])` from your measurements |
-| keyword options (`mode=`, `tone=`, `dbs=` …) | `DitherOptions(mode=..., tone=..., dbs=...)` |
+| keyword options (`mode=`, `dbs=` …) | `DitherOptions(mode=..., dbs=...)` |
+| `tone=` (dynamic-range compression) | removed: anchoring compensates the black point, on by default |
 | `DitherMode.BURKES == 1` | `DitherMode.BURKES == "burkes"` |
 | exact "canonical" colours pass through | named inks with a `nominal` snap (and anchor) |
 

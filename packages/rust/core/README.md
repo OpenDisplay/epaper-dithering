@@ -6,7 +6,7 @@ Dithering for e-paper / e-ink displays: an image and your panel's palette in, pa
 - **Requested inks stay solid** — exact ink colours snap to their ink, and anchoring maps every ink's nominal onto its measured appearance before matching
 - **Weighted Cartesian OKLab color matching** — perceptually accurate, hue-preserving, no achromatic-attractor bug
 - **7 error diffusion kernels** — Floyd-Steinberg, Atkinson, Burkes, Stucki, Sierra, Sierra Lite, Jarvis-Judice-Ninke — plus Dizzy and ordered (Bayer 4×4) dithering
-- **Pre-dither knobs** — exposure, saturation, shadows, highlights, dynamic-range compression, gamut compression
+- **Pre-dither knobs** — exposure, saturation, shadows, highlights, gamut compression; black-point compensation is part of anchoring
 - **DBS refinement** — optional Direct Binary Search for how the result is perceived
 
 ## Examples
@@ -52,10 +52,10 @@ std::fs::write("my_panel.json", palette.to_json())?;
 Example files live in the repository's `examples/palettes/`; they are not part of the crate.
 
 `DitherOptions` defaults: `Burkes`, `serpentine: true`, `exposure: 1.0`, `saturation: 1.0`,
-`shadows: 0.0`, `highlights: 0.0`, `tone: Fixed(0.0)`, `gamut: None`, `dbs: None`,
+`shadows: 0.0`, `highlights: 0.0`, `gamut: None`, `dbs: None`,
 `anchor: true`, `snap: true`.
 
-Pipeline order: `exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs`.
+Pipeline order: `exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs`.
 Snapping is decided on the original input: a pixel exactly equal to an ink's nominal takes that
 ink and is pinned through diffusion and DBS, even when other adjustments are on.
 

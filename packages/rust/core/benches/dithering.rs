@@ -8,10 +8,10 @@ use epaper_dithering_core::{
     color_space_lab::{PaletteLab, WAB, match_pixel_oklab, rgb_to_oklab},
     dither, DitherOptions,
     dizzy::dizzy_dither,
-    enums::{DitherMode, GamutCompression, ToneCompression},
+    enums::{DitherMode, GamutCompression},
     palette::Palette,
     srgb_palette::SrgbPalette,
-    tone_map::{auto_compress_dynamic_range, compress_dynamic_range, gamut_compress},
+    tone_map::gamut_compress,
     types::ImageBuffer,
 };
 
@@ -199,22 +199,6 @@ fn bench_preprocessing(c: &mut Criterion) {
     let mut group = c.benchmark_group("preprocessing");
     group.throughput(Throughput::Elements((w * h) as u64));
 
-    group.bench_function("auto_compress_dynamic_range", |b| {
-        b.iter_batched(
-            || synthetic_linear(w, h),
-            |mut pixels| auto_compress_dynamic_range(&mut pixels, palette),
-            criterion::BatchSize::SmallInput,
-        )
-    });
-
-    group.bench_function("compress_dynamic_range_full", |b| {
-        b.iter_batched(
-            || synthetic_linear(w, h),
-            |mut pixels| compress_dynamic_range(&mut pixels, palette, 1.0),
-            criterion::BatchSize::SmallInput,
-        )
-    });
-
     group.bench_function("gamut_compress_full", |b| {
         b.iter_batched(
             || synthetic_linear(w, h),
@@ -238,11 +222,10 @@ fn bench_full_pipeline(c: &mut Criterion) {
     let mut group = c.benchmark_group("full_pipeline");
     group.throughput(Throughput::Elements((w * h) as u64));
 
-    group.bench_function("burkes_auto_tone_auto_gamut_6color", |b| {
+    group.bench_function("burkes_auto_gamut_6color", |b| {
         b.iter(|| {
             dither(&img, &spectra, &DitherOptions {
                 mode: DitherMode::Burkes,
-                tone: ToneCompression::Auto,
                 gamut: GamutCompression::Auto,
                 ..Default::default()
             })
@@ -253,7 +236,6 @@ fn bench_full_pipeline(c: &mut Criterion) {
         b.iter(|| {
             dither(&img, &mono, &DitherOptions {
                 mode: DitherMode::Burkes,
-                tone: ToneCompression::Fixed(0.0),
                 gamut: GamutCompression::None,
                 ..Default::default()
             })
@@ -297,7 +279,6 @@ fn bench_real_images(c: &mut Criterion) {
                         &spectra,
                         &DitherOptions {
                             mode: DitherMode::Burkes,
-                            tone: ToneCompression::Auto,
                             gamut: GamutCompression::Auto,
                             ..Default::default()
                         },
@@ -327,7 +308,6 @@ fn bench_full_res(c: &mut Criterion) {
         b.iter(|| {
             dither(&img, &spectra, &DitherOptions {
                 mode: DitherMode::Burkes,
-                tone: ToneCompression::Auto,
                 gamut: GamutCompression::Auto,
                 ..Default::default()
             })

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Visual dithering comparison — produces three focused contact sheets.
 
-    schemes.png              All color schemes, Burkes, tc=0
-    algorithms_{NAME}.png    All dither modes for every color scheme and measured palette
-    tone_compression.png     Measured palettes: tc=0 | tc=auto | tc=1.0
+    schemes.png              All idealised palettes, Burkes
+    algorithms_{NAME}.png    All dither modes for every idealised and measured palette
     gamut_compression.png    Measured palettes: gc=0 | gc=auto | gc=1.0
 
 Add --docs to also generate images for the README in docs/images/:
@@ -43,7 +42,6 @@ COLOR_SCHEMES: list[tuple[str, Palette]] = example_palettes.ideal()
 MEASURED_PALETTES: list[tuple[str, Palette]] = example_palettes.measured()
 
 ALL_PALETTES_FOR_ALGO = COLOR_SCHEMES + MEASURED_PALETTES  # type: ignore[assignment]
-COLOR_SCHEME_NAMES = {s for s, _ in COLOR_SCHEMES}
 
 
 def load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -53,14 +51,6 @@ def load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         except OSError:
             pass
     return ImageFont.load_default()
-
-
-def tc_str(tc: float | str) -> str:
-    if tc == "auto":
-        return "tc=auto"
-    if tc == 1.0 or tc == 1:
-        return "tc=100%"
-    return f"tc={tc}"
 
 
 def gc_str(gc: float | str) -> str:
@@ -74,10 +64,10 @@ def gc_str(gc: float | str) -> str:
 
 
 def render(
-    src: Image.Image, scheme: Palette, mode: DitherMode, tc: float | str, gc: float | str = 0.0
+    src: Image.Image, scheme: Palette, mode: DitherMode, gc: float | str = 0.0
 ) -> tuple[Image.Image, float]:
     t0 = time.perf_counter()
-    dithered = dither_image(src, scheme, DitherOptions(mode=mode, tone=tc, gamut=gc))
+    dithered = dither_image(src, scheme, DitherOptions(mode=mode, gamut=gc))
     return dithered.convert("RGB"), time.perf_counter() - t0
 
 
@@ -124,7 +114,6 @@ def run(
     height: int,
     docs: bool,
     docs_algo: str,
-    docs_tc: str,
     docs_gc: str,
     gamut_compression: float | str = 0.0,
 ) -> None:
@@ -136,13 +125,13 @@ def run(
     print(f"Input:  {image_path}  ({width}×{height}){gc_label}\n")
 
     # ------------------------------------------------------------------
-    # 1. schemes.png — all color schemes, Burkes, tc=0
+    # 1. schemes.png — all idealised palettes, Burkes
     # ------------------------------------------------------------------
     print("── schemes ──────────────────────────────────")
     scheme_cells: list[tuple[str, Image.Image]] = []
     for label, scheme in COLOR_SCHEMES:
-        img, t = render(src, scheme, DitherMode.BURKES, 0.0, gamut_compression)
-        scheme_cells.append((f"{label} · Burkes · tc=0{gc_label}", img))
+        img, t = render(src, scheme, DitherMode.BURKES, gamut_compression)
+        scheme_cells.append((f"{label} · Burkes{gc_label}", img))
         print(f"  {label:<16} {t * 1000:>6.0f}ms")
     save(make_sheet(scheme_cells, 4, iw, ih), out_dir / "schemes.png")
     print()
@@ -153,41 +142,23 @@ def run(
     print("── algorithms ───────────────────────────────")
     algo_cells_by_name: dict[str, list[tuple[str, Image.Image]]] = {}
     for palette_label, palette in ALL_PALETTES_FOR_ALGO:
-        tc: float | str = 0.0 if palette_label in COLOR_SCHEME_NAMES else "auto"
         cells: list[tuple[str, Image.Image]] = []
         for mode in ALL_ALGORITHMS:
-            img, t = render(src, palette, mode, tc, gamut_compression)
-            cells.append((f"{mode.name} · {palette_label} · {tc_str(tc)}{gc_label}", img))
+            img, t = render(src, palette, mode, gamut_compression)
+            cells.append((f"{mode.name} · {palette_label}{gc_label}", img))
             print(f"  {palette_label:<16} {mode.name:<22} {t * 1000:>6.0f}ms")
         algo_cells_by_name[palette_label] = cells
         save(make_sheet(cells, 3, iw, ih), out_dir / f"algorithms_{palette_label}.png")
     print()
 
     # ------------------------------------------------------------------
-    # 3. tone_compression.png — measured palettes, tc=0 | tc=auto | tc=1.0
-    # ------------------------------------------------------------------
-    print("── tone_compression ─────────────────────────")
-    tc_cells: list[tuple[str, Image.Image]] = []
-    tc_cells_solum: list[tuple[str, Image.Image]] = []
-    for pal_label, palette in MEASURED_PALETTES:
-        for tc_val in [0.0, "auto", 1.0]:
-            img, t = render(src, palette, DitherMode.BURKES, tc_val, gamut_compression)
-            label = f"{pal_label} · Burkes · {tc_str(tc_val)}{gc_label}"
-            tc_cells.append((label, img))
-            if pal_label == "SPECTRA_7_3_6COLOR":
-                tc_cells_solum.append((label, img))
-            print(f"  {pal_label:<14} {tc_str(tc_val):<10} {t * 1000:>6.0f}ms")
-    save(make_sheet(tc_cells, 3, iw, ih), out_dir / "tone_compression.png")
-    print()
-
-    # ------------------------------------------------------------------
-    # 4. gamut_compression.png — measured palettes, gc=0 | gc=auto | gc=1.0
+    # 3. gamut_compression.png — measured palettes, gc=0 | gc=auto | gc=1.0
     # ------------------------------------------------------------------
     print("── gamut_compression ────────────────────────")
     gc_cells: list[tuple[str, Image.Image]] = []
     for pal_label, palette in MEASURED_PALETTES:
         for gc_val in [0.0, "auto", 1.0]:
-            img, t = render(src, palette, DitherMode.BURKES, "auto", gc_val)
+            img, t = render(src, palette, DitherMode.BURKES, gc_val)
             label = f"{pal_label} · Burkes · {gc_str(gc_val)}"
             gc_cells.append((label, img))
             print(f"  {pal_label:<14} {gc_str(gc_val):<10} {t * 1000:>6.0f}ms")
@@ -211,13 +182,7 @@ def run(
         if algo_key != docs_algo:
             print(f"  (note: --docs-algo-palette '{docs_algo}' not found, using '{algo_key}')")
 
-        # tone compression: use the requested palette, fall back to first measured
         measured_palette_names = [name for name, _ in MEASURED_PALETTES]
-        tc_key = docs_tc if docs_tc in measured_palette_names else measured_palette_names[0]
-        if tc_key != docs_tc:
-            print(f"  (note: --docs-tc-palette '{docs_tc}' not found, using '{tc_key}')")
-        tc_cells_docs = [cell for cell in tc_cells if cell[0].startswith(tc_key)]
-
         # gamut compression: use the requested palette, fall back to first measured
         gc_key = docs_gc if docs_gc in measured_palette_names else measured_palette_names[0]
         if gc_key != docs_gc:
@@ -227,8 +192,6 @@ def run(
         save(make_sheet(scheme_cells, 4, iw, ih), docs_dir / "schemes.png", also_thumb=True)
         save(make_sheet(algo_cells_by_name[algo_key], 3, iw, ih), docs_dir / "algorithms.png", also_thumb=True)
         print(f"     (palette: {algo_key})")
-        save(make_sheet(tc_cells_docs, 3, iw, ih), docs_dir / "tone_compression.png", also_thumb=True)
-        print(f"     (palette: {tc_key})")
         save(make_sheet(gc_cells_docs, 3, iw, ih), docs_dir / "gamut_compression.png", also_thumb=True)
         print(f"     (palette: {gc_key})")
 
@@ -243,12 +206,6 @@ def main() -> None:
     parser.add_argument("--docs", action="store_true", help="Also write images to docs/images/ for the README")
     parser.add_argument(
         "--docs-algo-palette", default="BWR", metavar="NAME", help="Palette for docs algorithms image (default: BWR)"
-    )
-    parser.add_argument(
-        "--docs-tc-palette",
-        default="SPECTRA_7_3_6COLOR",
-        metavar="NAME",
-        help="Palette for docs tone_compression image (default: SPECTRA_7_3_6COLOR)",
     )
     parser.add_argument(
         "--docs-gc-palette",
@@ -271,7 +228,6 @@ def main() -> None:
         args.height,
         args.docs,
         args.docs_algo_palette,
-        args.docs_tc_palette,
         args.docs_gc_palette,
         gc,
     )

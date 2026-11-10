@@ -12,7 +12,7 @@ in, palette indices out. Works in the browser and in Node.js (≥18).
 - **Requested inks stay solid**: a pixel that asks for an ink (e.g. `#000000` text) comes out as that ink, undithered, even though the panel's real black is lighter.
 - **OKLab colour matching**: weighted Cartesian OKLab, which preserves hue without the achromatic-attractor bug of LCH-weighted approaches.
 - **10 dithering algorithms**, from ordered dithering to Jarvis-Judice-Ninke and Dizzy.
-- **Pre-dither adjustments**: exposure, saturation, shadows, highlights, dynamic-range (tone) compression and gamut compression.
+- **Pre-dither adjustments**: exposure, saturation, shadows, highlights and gamut compression.
 - **DBS refinement**: an optional Direct Binary Search pass that optimises the result for how it is perceived.
 
 ## Installation
@@ -140,15 +140,15 @@ ditherImage(image: ImageBuffer, palette: Palette, options?: DitherOptions): Pale
 | `saturation` | `number` | `1.0` | OKLab saturation multiplier. `0.0` = greyscale, `>1` = boost |
 | `shadows` | `number` | `0.0` | Shadow lift strength. `0.0` = off, `1.0` = strong |
 | `highlights` | `number` | `0.0` | Highlight compression strength. `0.0` = off, `1.0` = strong |
-| `tone` | `number \| 'auto' \| 'off'` | `0.0` | Dynamic-range compression |
 | `gamut` | `number \| 'auto' \| 'off'` | `0.0` | Gamut compression |
 | `dbs` | `boolean \| DbsParams` | `false` | Direct Binary Search refinement. `true` = default parameters |
-| `anchor` | `boolean` | `true` | Map ink nominals onto their appearances before matching |
+| `anchor` | `boolean` | `true` | Black-point compensation, and ink nominals onto their appearances, before matching |
 | `snap` | `boolean` | `true` | Pure ink colours take that ink, undithered |
 
-Pipeline: `exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs`.
-Anchoring already brings black and white into the panel's range, so `tone: 'auto'` usually finds
-nothing left to compress.
+Pipeline: `exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs`.
+Anchoring includes black-point compensation: pure black and white land on the panel's own black and
+white (the inks named for `#000000`/`#ffffff`, or else its darkest and lightest entries), so the
+image's tonal range is mapped onto the panel's. It replaces 6.x's dynamic-range ("tone") compression.
 
 Returns a `PaletteImageBuffer` whose `palette` holds each entry's preview colour. Throws if
 `image.data.length` is not `width × height × 4`, on an unknown mode name, or on invalid DBS
@@ -219,6 +219,7 @@ interface PaletteEntry {
 | `SPECTRA_7_3_6COLOR`, `SPECTRA_7_3_6COLOR_V2` | `examples/palettes/spectra_7_3_6color*.json`; the other 6.x "measured" constants were unmeasured placeholders and are gone |
 | `ColorPalette` objects | `new Palette(entries)` |
 | `DitherMode.BURKES === 1` | `DitherMode.BURKES === 'burkes'` |
+| `tone` option | removed: anchoring compensates the black point, on by default |
 | `getPalette`, `getColorCount`, `fromValue` | `palette.previewRgb()`, `palette.length` |
 
 The 6.x measured constants were relative to the camera, not to the panel's white; the exported files

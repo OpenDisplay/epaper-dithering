@@ -66,7 +66,7 @@ Rust tuning harnesses stay in `packages/rust/core/examples/` because cargo needs
 - `packages/rust/wasm/` — wasm-bindgen bindings; `packages/javascript/src/` is the TS wrapper.
 - `packages/rust/ios/` — standalone XCFramework build (`build-xcframework.sh`), not part of the workspace.
 
-The pre-processing pipeline order is fixed and documented on `DitherConfig` in `core/src/lib.rs`: `exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs`; ink snapping is decided on the original input. Each step is a no-op at its identity value.
+The pre-processing pipeline order is fixed and documented on `DitherOptions` in `core/src/lib.rs`: `exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs`; ink snapping is decided on the original input. Each step is a no-op at its identity value.
 
 ### Palettes are runtime data
 
@@ -79,7 +79,7 @@ ordered list of entries; each has an `appearance` (CIELAB D65, **normalised so t
 are never shipped in the crate, wheel or npm package and no API returns them.
 
 - Named inks drive two behaviours, both on by default: **anchoring** (`core/src/anchor.rs`: black-point
-  compensation between the inks whose nominals are `#000000`/`#ffffff` (a missing end stays fixed) plus a damped local correction, in CIELAB, exact
+  compensation between the inks whose nominals are `#000000`/`#ffffff`, falling back to the darkest/lightest entry, plus a damped local correction; it replaced tone compression, in CIELAB, exact
   at every ink) and **snapping** (a pixel exactly equal to an ink's nominal takes that ink, decided on
   the original input, pinned through diffusion and DBS).
 - Algorithms run on `SrgbPalette` (the clamped sRGB of each appearance, `#[doc(hidden)]`); the

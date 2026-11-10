@@ -121,9 +121,13 @@ class TestOptions:
         by_enum = dither_image(small_test_image, palette, DitherOptions(mode=DitherMode.FLOYD_STEINBERG))
         assert list(by_name.getdata()) == list(by_enum.getdata())
 
-    def test_non_numeric_tone_raises_type_error(self, small_test_image):
-        with pytest.raises(TypeError, match="tone|float"):
-            dither_image(small_test_image, example("ideal_mono"), DitherOptions(tone="strong"))
+    def test_non_numeric_gamut_raises_type_error(self, small_test_image):
+        with pytest.raises(TypeError, match="float"):
+            dither_image(small_test_image, example("ideal_mono"), DitherOptions(gamut="strong"))
+
+    def test_tone_option_is_gone(self):
+        with pytest.raises(TypeError):
+            DitherOptions(tone="auto")  # type: ignore[call-arg]
 
     def test_unknown_mode_raises_value_error(self, small_test_image):
         with pytest.raises(ValueError, match="bayer"):

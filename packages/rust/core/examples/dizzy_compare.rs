@@ -10,7 +10,7 @@ use epaper_dithering_core::{
     color_space::srgb_channel_to_linear,
     color_space_lab::rgb_to_oklab,
     dither,
-    enums::{DitherMode, GamutCompression, ToneCompression},
+    enums::{DitherMode, GamutCompression},
     palette::Palette,
     types::ImageBuffer,
     DitherOptions,
@@ -93,7 +93,6 @@ fn main() {
                 let (indices, out_palette): (Vec<u8>, &Palette) = if is_measured {
                     let o = DitherOptions {
                         mode: *mode,
-                        tone: ToneCompression::Auto,
                         gamut: GamutCompression::Auto,
                         ..Default::default()
                     };

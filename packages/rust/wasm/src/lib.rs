@@ -2,7 +2,7 @@ use epaper_dithering_core::{
     composite::composite_rgba_on_white,
     dbs::DbsParams,
     dither,
-    enums::{DitherMode, GamutCompression, ToneCompression},
+    enums::{DitherMode, GamutCompression},
     palette::{parse_nominal, Ink, Lab, Palette, PaletteEntry},
     types::ImageBuffer,
     DitherOptions,
@@ -101,14 +101,6 @@ impl WasmPalette {
     }
 }
 
-/// `None` ⇒ Auto; otherwise Fixed(value). Negative or zero acts as "off" via Fixed semantics.
-fn parse_tone(v: Option<f64>) -> ToneCompression {
-    match v {
-        None    => ToneCompression::Auto,
-        Some(s) => ToneCompression::Fixed(s),
-    }
-}
-
 fn parse_gamut(v: Option<f64>) -> GamutCompression {
     match v {
         None               => GamutCompression::Auto,
@@ -142,7 +134,6 @@ pub fn dither_image(
     saturation: f64,
     shadows: f64,
     highlights: f64,
-    tone: Option<f64>,
     gamut: Option<f64>,
     dbs_passes: Option<u32>,
     dbs_viewing_distance_cm: f64,
@@ -158,7 +149,6 @@ pub fn dither_image(
         saturation,
         shadows,
         highlights,
-        tone: parse_tone(tone),
         gamut: parse_gamut(gamut),
         dbs: parse_dbs(dbs_passes, dbs_viewing_distance_cm, dbs_ppi)?,
         anchor,

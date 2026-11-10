@@ -3,7 +3,7 @@ use epaper_dithering_core::{
     composite::composite_rgba_on_white,
     dbs::DbsParams,
     dither,
-    enums::{DitherMode, GamutCompression, ToneCompression},
+    enums::{DitherMode, GamutCompression},
     palette::{Ink, Lab, Palette, PaletteEntry},
     srgb_palette::SrgbPalette,
     tone_map,
@@ -127,13 +127,6 @@ impl PyPalette {
     }
 }
 
-fn parse_tone(v: Option<f64>) -> ToneCompression {
-    match v {
-        None    => ToneCompression::Auto,
-        Some(s) => ToneCompression::Fixed(s),
-    }
-}
-
 fn parse_gamut(v: Option<f64>) -> GamutCompression {
     match v {
         None               => GamutCompression::Auto,
@@ -152,14 +145,14 @@ fn parse_dbs(passes: Option<u32>, viewing_distance_cm: f64, ppi: f64) -> PyResul
         .transpose()
 }
 
-/// Dither a flat RGB image to `palette`. `mode` is a snake_case mode name; `tone`/`gamut`
-/// `None` mean "auto". Returns one palette index per pixel.
+/// Dither a flat RGB image to `palette`. `mode` is a snake_case mode name; `gamut`
+/// `None` means "auto". Returns one palette index per pixel.
 #[pyfunction]
 #[pyo3(signature = (
     pixels, width, height, palette, *,
     mode="burkes", serpentine=true,
     exposure=1.0, saturation=1.0, shadows=0.0, highlights=0.0,
-    tone=Some(0.0), gamut=Some(0.0),
+    gamut=Some(0.0),
     dbs_passes=None, dbs_viewing_distance_cm=40.0, dbs_ppi=127.0,
     anchor=true, snap=true,
 ))]
@@ -176,7 +169,6 @@ fn dither_image(
     saturation: f64,
     shadows: f64,
     highlights: f64,
-    tone: Option<f64>,
     gamut: Option<f64>,
     dbs_passes: Option<u32>,
     dbs_viewing_distance_cm: f64,
@@ -198,7 +190,6 @@ fn dither_image(
         saturation,
         shadows,
         highlights,
-        tone: parse_tone(tone),
         gamut: parse_gamut(gamut),
         dbs: parse_dbs(dbs_passes, dbs_viewing_distance_cm, dbs_ppi)?,
         anchor,
@@ -239,20 +230,6 @@ fn flatten(pixels: Vec<[f64; 3]>) -> Vec<f64> {
     pixels.into_iter().flatten().collect()
 }
 
-/// Dynamic-range compression on a linear-RGB buffer. `strength=None` → auto (histogram-based).
-#[pyfunction]
-#[pyo3(signature = (pixels, palette, strength=None))]
-fn tone_compress(py: Python<'_>, pixels: Vec<f64>, palette: &PyPalette, strength: Option<f64>) -> PyResult<Vec<f64>> {
-    let mut px = to_linear_pixels(&pixels)?;
-    let srgb = SrgbPalette::from(&palette.inner);
-    py.detach(|| match strength {
-        None => tone_map::auto_compress_dynamic_range(&mut px, &srgb),
-        Some(s) if s > 0.0 => tone_map::compress_dynamic_range(&mut px, &srgb, s),
-        _ => {}
-    });
-    Ok(flatten(px))
-}
-
 /// Gamut compression on a linear-RGB buffer. `strength=None` → full strength (1.0).
 #[pyfunction]
 #[pyo3(signature = (pixels, palette, strength=None))]
@@ -285,7 +262,6 @@ fn _rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("PaletteError", m.py().get_type::<PaletteError>())?;
     m.add_function(wrap_pyfunction!(dither_image, m)?)?;
     m.add_function(wrap_pyfunction!(composite_rgba, m)?)?;
-    m.add_function(wrap_pyfunction!(tone_compress, m)?)?;
     m.add_function(wrap_pyfunction!(gamut_compress, m)?)?;
     m.add_function(wrap_pyfunction!(rgb_to_oklab_buffer, m)?)?;
     Ok(())

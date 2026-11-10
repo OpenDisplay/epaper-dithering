@@ -106,7 +106,7 @@ a panel.
 - **Any panel**: palettes are runtime data, from 2 to 256 colours, including per-unit measurements and multi-pass modes
 - **Requested inks stay solid**: exact ink colours snap to their ink; anchoring maps each ink's nominal onto its measured appearance before matching
 - **OKLab Color Matching**: Weighted Cartesian OKLab — preserves hue without the achromatic-attractor bug of LCH-weighted approaches
-- **Pre-dither Knobs**: Per-image exposure, saturation, shadows, highlights, dynamic-range (tone) compression, and gamut compression — all orthogonal
+- **Pre-dither Knobs**: Per-image exposure, saturation, shadows, highlights and gamut compression; black-point compensation is part of anchoring — all orthogonal
 - **DBS Refinement**: Optional Direct Binary Search pass that optimizes the dithered pixels for how they are perceived at a given viewing distance and panel resolution — opt-in, slower
 
 ## Repository Structure

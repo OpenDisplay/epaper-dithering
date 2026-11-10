@@ -22,7 +22,7 @@ pub mod types;
 
 use crate::color_space::{linear_channel_to_srgb, srgb_channel_to_linear};
 use crate::dbs::DbsParams;
-use crate::enums::{DitherMode, GamutCompression, ToneCompression};
+use crate::enums::{DitherMode, GamutCompression};
 use crate::palette::Palette;
 use crate::srgb_palette::SrgbPalette;
 use crate::types::ImageBuffer;
@@ -38,13 +38,12 @@ use crate::{error::DitherError, palette::PaletteEntry};
 /// ```
 ///
 /// Pipeline (applied in order, each step is a no-op at its identity value):
-/// `exposure → saturation → shadows/highlights → anchor → tone → gamut → match + diffuse → dbs`.
+/// `exposure → saturation → shadows/highlights → anchor → gamut → match + diffuse → dbs`.
 /// Ink snapping is decided on the original input, before any of these steps.
 ///
-/// Anchoring runs before tone compression: it interprets the input's nominal colours as
-/// the panel's real ones, which already brings black and white into the display's range.
-/// `ToneCompression::Auto` then usually finds nothing left to compress; a fixed tone
-/// strength still applies on top.
+/// Anchoring includes black-point compensation: pure black and white land on the panel's
+/// own black and white (named inks, or its darkest and lightest entries), so the image's
+/// tonal range is mapped onto the panel's.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DitherOptions {
     /// Dithering algorithm.
@@ -61,14 +60,13 @@ pub struct DitherOptions {
     pub shadows: f64,
     /// Highlight compression strength (upper-half S-curve). 0.0 = identity, 1.0 = strong.
     pub highlights: f64,
-    /// Dynamic-range compression. Auto = histogram-based; Fixed(s) = manual blend strength.
-    pub tone: ToneCompression,
     /// Gamut compression. Auto = full strength on out-of-gamut; Fixed(s) = manual.
     pub gamut: GamutCompression,
     /// Optional Direct Binary Search refinement of the dithered output (see `dbs`). Slow:
     /// seconds on a full panel, so `None` by default.
     pub dbs: Option<DbsParams>,
-    /// Map each named ink's nominal colour onto its measured appearance before matching.
+    /// Black-point compensation onto the panel's black and white, and each named ink's
+    /// nominal colour onto its measured appearance, before matching.
     pub anchor: bool,
     /// A pixel exactly equal to a named ink's nominal takes that ink, undithered.
     pub snap: bool,
@@ -83,7 +81,6 @@ impl Default for DitherOptions {
             saturation: 1.0,
             shadows:    0.0,
             highlights: 0.0,
-            tone:       ToneCompression::Fixed(0.0),
             gamut:      GamutCompression::None,
             dbs:        None,
             anchor:     true,
@@ -136,7 +133,6 @@ fn needs_preprocess(o: &DitherOptions) -> bool {
         || (o.saturation - 1.0).abs() > 1e-9
         || o.shadows > 0.0
         || o.highlights > 0.0
-        || !matches!(o.tone, ToneCompression::Fixed(s) if s <= 0.0)
         || !matches!(o.gamut, GamutCompression::None)
 }
 
@@ -193,7 +189,6 @@ pub fn dither(img: &ImageBuffer, palette: &Palette, options: &DitherOptions) -> 
     if anchoring {
         anchor::anchor_map(&mut linear, palette);
     }
-    options.tone.apply(&mut linear, &p);
     options.gamut.apply(&mut linear, &p);
 
     let processed: Vec<u8> = linear
@@ -259,7 +254,6 @@ mod tests {
     #[test]
     fn default_options_have_preprocessing_off_and_inks_on() {
         let o = DitherOptions::default();
-        assert!(matches!(o.tone, ToneCompression::Fixed(s) if s == 0.0));
         assert_eq!(o.gamut, GamutCompression::None);
         assert!(o.anchor);
         assert!(o.snap);
@@ -268,9 +262,7 @@ mod tests {
 
     #[test]
     fn enum_defaults_match_dither_options_default() {
-        let o = DitherOptions::default();
-        assert_eq!(ToneCompression::default(), o.tone);
-        assert_eq!(GamutCompression::default(), o.gamut);
+        assert_eq!(GamutCompression::default(), DitherOptions::default().gamut);
     }
 
     #[test]
@@ -324,7 +316,7 @@ mod tests {
     #[test]
     fn snap_survives_preprocessing() {
         let data = green_dots();
-        let o = DitherOptions { exposure: 1.3, tone: ToneCompression::Auto, ..Default::default() };
+        let o = DitherOptions { exposure: 1.3, saturation: 0.5, gamut: GamutCompression::Auto, ..Default::default() };
         let out = dither(&img(&data, 4), &spectra6(), &o);
         assert_eq!((out[0], out[3]), (5, 5));
     }
@@ -362,7 +354,8 @@ mod tests {
     }
 
     #[test]
-    fn tone_compression_finds_black_and_white_by_lightness() {
+    fn black_point_compensation_finds_black_and_white_by_lightness() {
+        // Same three colours in two orders: the output must be the same colours.
         let colours = |order: &[usize]| {
             let all = [[250u8, 250, 250], [200, 30, 30], [20, 20, 20]];
             Palette::from_srgb(order.iter().map(|&i| (all[i], None)).collect(), false).unwrap()
@@ -370,7 +363,7 @@ mod tests {
         let a = colours(&[0, 1, 2]);
         let b = colours(&[2, 0, 1]);
         let ramp: Vec<u8> = (0..64u8).flat_map(|v| [v * 4, v * 4, v * 4]).collect();
-        let o = DitherOptions { tone: ToneCompression::Fixed(1.0), ..Default::default() };
+        let o = DitherOptions::default();
         let to_rgb = |p: &Palette, idx: Vec<u8>| idx.iter().map(|&i| p.preview_srgb()[i as usize]).collect::<Vec<_>>();
         assert_eq!(to_rgb(&a, dither(&img(&ramp, 8), &a, &o)), to_rgb(&b, dither(&img(&ramp, 8), &b, &o)));
     }
@@ -403,11 +396,11 @@ mod tests {
     }
 
     #[test]
-    fn anchor_option_is_inert_without_inks() {
+    fn anchor_compensates_black_point_without_named_inks() {
         let data: Vec<u8> = (0..32u8).flat_map(|v| [v * 8, v * 4, 255 - v * 8]).cycle().take(16 * 16 * 3).collect();
         let on = dither(&img(&data, 16), &spectra6_unnamed(), &DitherOptions::default());
         let off = dither(&img(&data, 16), &spectra6_unnamed(), &DitherOptions { anchor: false, ..Default::default() });
-        assert_eq!(on, off);
+        assert_ne!(on, off, "an unnamed measured palette still gets black-point compensation");
     }
 
     #[test]

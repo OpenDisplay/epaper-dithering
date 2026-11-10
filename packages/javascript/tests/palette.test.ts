@@ -129,6 +129,15 @@ describe('ditherImage with palettes', () => {
     expect(unsnapped.indices.length).toBe(4);
   });
 
+  it('compensates the black point of an unnamed palette by default', () => {
+    const named = example('spectra_7_3_6color');
+    const unnamed = new Palette(named.entries.map((e) => ({ appearance: e.appearance })), true);
+    const image = createGradient(32, 8);
+    const on = ditherImage(image, unnamed).indices;
+    const off = ditherImage(image, unnamed, { anchor: false }).indices;
+    expect(Array.from(on)).not.toEqual(Array.from(off));
+  });
+
   it('throws when the image buffer has the wrong length', () => {
     const image = { width: 3, height: 3, data: new Uint8ClampedArray(10) };
     expect(() => ditherImage(image, example('ideal_mono'))).toThrow(/width × height × 4/);

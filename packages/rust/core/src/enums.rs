@@ -29,34 +29,6 @@ pub enum DitherMode {
     Dizzy,
 }
 
-/// Dynamic range compression applied before dithering.
-/// Only meaningful for measured palettes.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ToneCompression {
-    /// Reinhard 2004 skewness-based auto strength. Best for photos.
-    Auto,
-    /// Fixed blend strength in [0.0, 1.0]. 0.0 disables.
-    Fixed(f64),
-}
-
-impl Default for ToneCompression {
-    /// Matches `DitherConfig::default().tone` (tone compression off).
-    fn default() -> Self {
-        ToneCompression::Fixed(0.0)
-    }
-}
-
-impl ToneCompression {
-    pub fn apply(self, pixels: &mut [[f64; 3]], palette: &SrgbPalette) {
-        match self {
-            ToneCompression::Auto => tone_map::auto_compress_dynamic_range(pixels, palette),
-            ToneCompression::Fixed(s) => if s > 0.0 {
-                tone_map::compress_dynamic_range(pixels, palette, s)
-            }
-        }
-    }
-}
-
 /// Gamut compression applied before dithering.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum GamutCompression {

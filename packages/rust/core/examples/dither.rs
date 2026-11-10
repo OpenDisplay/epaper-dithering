@@ -1,21 +1,20 @@
 // Quick visual test: dither a real image and save the result.
 //
 // Usage:
-//   cargo run --example dither <input> [output] [palette] [mode] [tone] [gamut]
+//   cargo run --example dither <input> [output] [palette] [mode] [gamut]
 //
 // Examples:
 //   cargo run --example dither photo.jpg
-//   cargo run --example dither photo.jpg out.png spectra_7_3_6color stucki auto none
-//   cargo run --example dither photo.jpg out.png my_panel.json stucki 0.8 0.5
+//   cargo run --example dither photo.jpg out.png spectra_7_3_6color stucki auto
+//   cargo run --example dither photo.jpg out.png my_panel.json stucki 0.5
 //
 // Palette: a path to an epaper-palette JSON file, or the name of a file in
 //          examples/palettes/ (without .json). Default: ideal_bwr.
 // Modes:   none, ordered, floyd_steinberg, burkes, atkinson, stucki, sierra, sierra_lite,
 //          jarvis_judice_ninke, dizzy
-// Tone:    auto, none, 0.0-1.0  (default: none)
 // Gamut:   none, auto, 0.0-1.0  (default: none)
 
-use epaper_dithering_core::enums::{DitherMode, GamutCompression, ToneCompression};
+use epaper_dithering_core::enums::{DitherMode, GamutCompression};
 use epaper_dithering_core::palette::Palette;
 use epaper_dithering_core::types::ImageBuffer;
 use epaper_dithering_core::{dither, DitherOptions};
@@ -42,7 +41,7 @@ fn load_palette(arg: &str) -> Palette {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: dither <input> [output] [palette] [mode] [tone] [gamut]");
+        eprintln!("Usage: dither <input> [output] [palette] [mode] [gamut]");
         std::process::exit(1);
     }
 
@@ -50,8 +49,7 @@ fn main() {
     let output_path = args.get(2).map(String::as_str).unwrap_or("dithered.png");
     let palette_name = args.get(3).map(String::as_str).unwrap_or("ideal_bwr");
     let mode_name   = args.get(4).map(String::as_str).unwrap_or("burkes");
-    let tone_name   = args.get(5).map(String::as_str).unwrap_or("none");
-    let gamut_name  = args.get(6).map(String::as_str).unwrap_or("none");
+    let gamut_name  = args.get(5).map(String::as_str).unwrap_or("none");
 
     let palette = load_palette(palette_name);
     let mode: DitherMode = mode_name.parse().unwrap_or_else(|e| {
@@ -69,15 +67,6 @@ fn main() {
     let (width, height) = img.dimensions();
     let buf = ImageBuffer::new(img.as_raw(), width as usize).expect("decoded image is a whole RGB buffer");
 
-    let tone = match tone_name {
-        "auto"         => ToneCompression::Auto,
-        "none" | "0"   => ToneCompression::Fixed(0.0),
-        s => match s.parse::<f64>() {
-            Ok(v)  => ToneCompression::Fixed(v),
-            Err(_) => { eprintln!("Unknown tone: {s}"); std::process::exit(1); }
-        },
-    };
-
     let gamut = match gamut_name {
         "none" | "0"  => GamutCompression::None,
         "auto" | "1"  => GamutCompression::Auto,
@@ -88,11 +77,11 @@ fn main() {
     };
 
     println!("Input:  {input_path} ({width}x{height})");
-    println!("Palette: {palette_name}  Mode: {mode_name}  Tone: {tone_name}  Gamut: {gamut_name}");
+    println!("Palette: {palette_name}  Mode: {mode_name}  Gamut: {gamut_name}");
 
     let t0 = std::time::Instant::now();
     let indices = dither(&buf, &palette, &DitherOptions {
-        mode, tone, gamut, ..Default::default()
+        mode, gamut, ..Default::default()
     });
     let elapsed = t0.elapsed();
 
