@@ -11,13 +11,22 @@
         "pyproject.toml",
         "Cargo.toml",
         "src/epaper_dithering/__init__.py",
-        "/packages/javascript/package.json"
+        "/packages/javascript/package.json",
+        "/packages/javascript/src/index.ts"
       ]
     },
     "packages/rust/core": {
       "release-type": "rust",
       "component": "epaper-dithering-core",
       "package-name": "epaper-dithering-core",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false,
+      "changelog-path": "CHANGELOG.md"
+    },
+    "packages/rust/ios": {
+      "release-type": "rust",
+      "component": "epaper-dithering-ios",
+      "package-name": "epaper-dithering-ios",
       "bump-minor-pre-major": false,
       "bump-patch-for-minor-pre-major": false,
       "changelog-path": "CHANGELOG.md"

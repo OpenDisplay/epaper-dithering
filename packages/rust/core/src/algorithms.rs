@@ -2,7 +2,7 @@
 
 use crate::color_space::{srgb_channel_to_linear, srgb_fraction_to_linear};
 use crate::color_space_lab::{PaletteLab, match_pixel_oklab, rgb_to_oklab, WAB};
-use crate::palettes::Palette;
+use crate::srgb_palette::SrgbPalette;
 use rayon::prelude::*;
 
 pub use crate::kernels::{
@@ -10,9 +10,9 @@ pub use crate::kernels::{
     SIERRA_LITE, STUCKI,
 };
 
-// ── Palette setup helper ─────────────────────────────────────────────────────
+// ── SrgbPalette setup helper ─────────────────────────────────────────────────────
 
-pub(crate) fn build_palette_lab(palette: &Palette) -> (Vec<[f64; 3]>, PaletteLab) {
+pub(crate) fn build_palette_lab(palette: &SrgbPalette) -> (Vec<[f64; 3]>, PaletteLab) {
     let palette_linear: Vec<[f64; 3]> = palette
         .colors
         .iter()
@@ -35,50 +35,41 @@ pub fn error_diffusion_dither(
     pixels: &[u8],
     width: usize,
     height: usize,
-    palette: &Palette,
+    palette: &SrgbPalette,
     kernel: &Kernel,
     serpentine: bool,
 ) -> Vec<u8> {
     error_diffusion_dither_impl(pixels, width, height, palette, None, kernel, serpentine)
 }
 
-/// Error diffusion with exact canonical display-color pixels pinned.
+/// Error diffusion with snapped pixels pinned.
 ///
-/// Exact canonical pixels are already displayable, so they emit their firmware
-/// palette index directly and absorb any accumulated error instead of diffusing
-/// it into neighboring pixels.
-pub fn error_diffusion_dither_with_canonical(
+/// `snap[i]` is `Some(index)` for a pixel that requested an ink exactly: it emits that
+/// index and absorbs any accumulated error instead of diffusing it into neighbours.
+pub fn error_diffusion_dither_snapped(
     pixels: &[u8],
     width: usize,
     height: usize,
-    palette: &Palette,
-    canonical_palette: &Palette,
+    palette: &SrgbPalette,
+    snap: &[Option<u8>],
     kernel: &Kernel,
     serpentine: bool,
 ) -> Vec<u8> {
-    error_diffusion_dither_impl(
-        pixels,
-        width,
-        height,
-        palette,
-        Some(canonical_palette),
-        kernel,
-        serpentine,
-    )
+    error_diffusion_dither_impl(pixels, width, height, palette, Some(snap), kernel, serpentine)
 }
 
 fn error_diffusion_dither_impl(
     pixels: &[u8],
     width: usize,
     height: usize,
-    palette: &Palette,
-    canonical_palette: Option<&Palette>,
+    palette: &SrgbPalette,
+    snap: Option<&[Option<u8>]>,
     kernel: &Kernel,
     serpentine: bool,
 ) -> Vec<u8> {
     let (_palette_linear, palette_lab) = build_palette_lab(palette);
 
-    // Palette sRGB as f64 for error computation
+    // SrgbPalette sRGB as f64 for error computation
     let palette_srgb_f: Vec<[f64; 3]> = palette
         .colors
         .iter()
@@ -101,9 +92,8 @@ fn error_diffusion_dither_impl(
             let x = if reverse { width - 1 - xi } else { xi };
             let idx = (y * width + x) * 3;
 
-            if let Some(canonical_palette) = canonical_palette
-                && let Some(exact_idx) =
-                    exact_palette_index(&pixels[idx..idx + 3], canonical_palette)
+            if let Some(snap) = snap
+                && let Some(exact_idx) = snap[y * width + x]
             {
                 output[y * width + x] = exact_idx;
                 continue;
@@ -148,53 +138,39 @@ fn error_diffusion_dither_impl(
 
 // ── Thin wrappers ─────────────────────────────────────────────────────────────
 
-pub fn floyd_steinberg(pixels: &[u8], w: usize, h: usize, palette: &Palette, serpentine: bool) -> Vec<u8> {
+pub fn floyd_steinberg(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
     error_diffusion_dither(pixels, w, h, palette, &FLOYD_STEINBERG, serpentine)
 }
-pub fn atkinson(pixels: &[u8], w: usize, h: usize, palette: &Palette, serpentine: bool) -> Vec<u8> {
+pub fn atkinson(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
     error_diffusion_dither(pixels, w, h, palette, &ATKINSON, serpentine)
 }
-pub fn burkes(pixels: &[u8], w: usize, h: usize, palette: &Palette, serpentine: bool) -> Vec<u8> {
+pub fn burkes(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
     error_diffusion_dither(pixels, w, h, palette, &BURKES, serpentine)
 }
-pub fn stucki(pixels: &[u8], w: usize, h: usize, palette: &Palette, serpentine: bool) -> Vec<u8> {
+pub fn stucki(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
     error_diffusion_dither(pixels, w, h, palette, &STUCKI, serpentine)
 }
-pub fn sierra(pixels: &[u8], w: usize, h: usize, palette: &Palette, serpentine: bool) -> Vec<u8> {
+pub fn sierra(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
     error_diffusion_dither(pixels, w, h, palette, &SIERRA, serpentine)
 }
-pub fn sierra_lite(pixels: &[u8], w: usize, h: usize, palette: &Palette, serpentine: bool) -> Vec<u8> {
+pub fn sierra_lite(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
     error_diffusion_dither(pixels, w, h, palette, &SIERRA_LITE, serpentine)
 }
-pub fn jarvis_judice_ninke(pixels: &[u8], w: usize, h: usize, palette: &Palette, serpentine: bool) -> Vec<u8> {
+pub fn jarvis_judice_ninke(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
     error_diffusion_dither(pixels, w, h, palette, &JARVIS_JUDICE_NINKE, serpentine)
 }
 
 // ── Direct palette map (no dithering) ────────────────────────────────────────
 
-/// Returns the palette index if the RGB pixel exactly matches a palette color, or None.
-pub(crate) fn exact_palette_index(rgb: &[u8], palette: &Palette) -> Option<u8> {
-    palette
-        .colors
-        .iter()
-        .position(|&color| rgb == color)
-        .and_then(|idx| u8::try_from(idx).ok())
-}
-
-pub fn try_exact_palette_map(pixels: &[u8], canonical_palette: &Palette) -> Option<Vec<u8>> {
-    pixels
-        .par_chunks(3)
-        .map(|rgb| exact_palette_index(rgb, canonical_palette))
-        .collect()
-}
-
 /// Nearest-color mapping with no dithering. Each pixel maps independently.
-pub fn direct_map(pixels: &[u8], palette: &Palette, canonical_palette: &Palette) -> Vec<u8> {
+/// Pixels with `Some` in `snap` take that index directly.
+pub fn direct_map(pixels: &[u8], palette: &SrgbPalette, snap: Option<&[Option<u8>]>) -> Vec<u8> {
     let (_, palette_lab) = build_palette_lab(palette);
     pixels
         .par_chunks(3)
-        .map(|rgb| {
-            if let Some(idx) = exact_palette_index(rgb, canonical_palette) {
+        .enumerate()
+        .map(|(i, rgb)| {
+            if let Some(idx) = snap.and_then(|s| s[i]) {
                 return idx;
             }
 
@@ -230,7 +206,7 @@ const BAYER_4X4: [[f64; 4]; 4] = [
 /// Sparse palettes (mono + color) keep the full ±0.5 spread: their transitions are
 /// dominated by black↔white/ink decisions where the wide threshold is the tuned,
 /// tested behavior (see the issue-#27 property test).
-fn ordered_spread(palette: &Palette) -> f64 {
+fn ordered_spread(palette: &SrgbPalette) -> f64 {
     let is_grayscale =
         palette.colors.len() >= 3 && palette.colors.iter().all(|&[r, g, b]| r == g && g == b);
     if is_grayscale {
@@ -250,24 +226,20 @@ fn ordered_spread(palette: &Palette) -> f64 {
 ///
 /// The threshold amplitude is scaled by `ordered_spread` to the palette's quantization
 /// step so dense grayscale ramps are not swamped by full-range dither noise.
-pub fn ordered_dither(pixels: &[u8], width: usize, palette: &Palette) -> Vec<u8> {
+pub fn ordered_dither(pixels: &[u8], width: usize, palette: &SrgbPalette) -> Vec<u8> {
     ordered_dither_impl(pixels, width, palette, None)
 }
 
-pub fn ordered_dither_with_canonical(
-    pixels: &[u8],
-    width: usize,
-    palette: &Palette,
-    canonical_palette: &Palette,
-) -> Vec<u8> {
-    ordered_dither_impl(pixels, width, palette, Some(canonical_palette))
+/// Ordered dither with snapped pixels pinned (see [`error_diffusion_dither_snapped`]).
+pub fn ordered_dither_snapped(pixels: &[u8], width: usize, palette: &SrgbPalette, snap: &[Option<u8>]) -> Vec<u8> {
+    ordered_dither_impl(pixels, width, palette, Some(snap))
 }
 
 fn ordered_dither_impl(
     pixels: &[u8],
     width: usize,
-    palette: &Palette,
-    canonical_palette: Option<&Palette>,
+    palette: &SrgbPalette,
+    snap: Option<&[Option<u8>]>,
 ) -> Vec<u8> {
     let (_palette_linear, palette_lab) = build_palette_lab(palette);
     let spread = ordered_spread(palette);
@@ -290,9 +262,7 @@ fn ordered_dither_impl(
         .par_chunks(3)
         .enumerate()
         .map(|(i, rgb)| {
-            if let Some(canonical_palette) = canonical_palette
-                && let Some(idx) = exact_palette_index(rgb, canonical_palette)
-            {
+            if let Some(idx) = snap.and_then(|s| s[i]) {
                 return idx;
             }
 
@@ -315,7 +285,7 @@ fn ordered_dither_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::palettes::ColorScheme;
+    use crate::srgb_palette::fixtures;
 
     fn solid_image(r: u8, g: u8, b: u8, w: usize, h: usize) -> Vec<u8> {
         vec![r, g, b].into_iter().cycle().take(w * h * 3).collect()
@@ -324,7 +294,7 @@ mod tests {
     #[test]
     fn solid_white_maps_to_white() {
         let pixels = solid_image(255, 255, 255, 4, 4);
-        let out = floyd_steinberg(&pixels, 4, 4, ColorScheme::Mono.palette(), true);
+        let out = floyd_steinberg(&pixels, 4, 4, fixtures::mono(), true);
         // White palette index in Mono is 1
         assert!(out.iter().all(|&v| v == 1));
     }
@@ -332,21 +302,21 @@ mod tests {
     #[test]
     fn solid_black_maps_to_black() {
         let pixels = solid_image(0, 0, 0, 4, 4);
-        let out = floyd_steinberg(&pixels, 4, 4, ColorScheme::Mono.palette(), true);
+        let out = floyd_steinberg(&pixels, 4, 4, fixtures::mono(), true);
         assert!(out.iter().all(|&v| v == 0));
     }
 
     #[test]
     fn output_length_matches_pixels() {
         let pixels = solid_image(128, 64, 200, 10, 7);
-        let out = floyd_steinberg(&pixels, 10, 7, ColorScheme::Bwr.palette(), true);
+        let out = floyd_steinberg(&pixels, 10, 7, fixtures::bwr(), true);
         assert_eq!(out.len(), 10 * 7);
     }
 
     #[test]
     fn all_algorithms_produce_correct_length() {
         let pixels = solid_image(128, 64, 200, 10, 7);
-        let pal = ColorScheme::Bwr.palette();
+        let pal = fixtures::bwr();
         assert_eq!(burkes(&pixels, 10, 7, pal, false).len(), 70);
         assert_eq!(atkinson(&pixels, 10, 7, pal, false).len(), 70);
         assert_eq!(stucki(&pixels, 10, 7, pal, false).len(), 70);
@@ -354,14 +324,14 @@ mod tests {
         assert_eq!(sierra_lite(&pixels, 10, 7, pal, false).len(), 70);
         assert_eq!(jarvis_judice_ninke(&pixels, 10, 7, pal, false).len(), 70);
         assert_eq!(ordered_dither(&pixels, 10, pal).len(), 70);
-        assert_eq!(direct_map(&pixels, pal, pal).len(), 70);
+        assert_eq!(direct_map(&pixels, pal, None).len(), 70);
     }
 
     #[test]
     fn direct_map_pure_red_maps_to_red_in_bwr() {
         // BWR palette: index 0=black, 1=white, 2=red — pure red should map to red ink
         let pixels = vec![255u8, 0, 0];
-        let out = direct_map(&pixels, ColorScheme::Bwr.palette(), ColorScheme::Bwr.palette());
+        let out = direct_map(&pixels, fixtures::bwr(), None);
         assert_eq!(out[0], 2, "pure sRGB red should map to red ink (index 2) in BWR");
     }
 
@@ -369,7 +339,7 @@ mod tests {
     fn direct_map_pure_blue_maps_to_blue_in_bwgbry() {
         // BWGBRY palette order: 0=black, 1=white, 2=yellow, 3=red, 4=blue, 5=green
         let pixels = vec![0u8, 0, 255];
-        let out = direct_map(&pixels, ColorScheme::Bwgbry.palette(), ColorScheme::Bwgbry.palette());
+        let out = direct_map(&pixels, fixtures::bwgbry(), None);
         assert_eq!(out[0], 4, "pure sRGB blue should map to blue ink (index 4) in BWGBRY");
     }
 
@@ -382,8 +352,8 @@ mod tests {
             .cycle()
             .take(16 * 16 * 3)
             .collect();
-        let raster = floyd_steinberg(&pixels, 16, 16, ColorScheme::Mono.palette(), false);
-        let serpentine = floyd_steinberg(&pixels, 16, 16, ColorScheme::Mono.palette(), true);
+        let raster = floyd_steinberg(&pixels, 16, 16, fixtures::mono(), false);
+        let serpentine = floyd_steinberg(&pixels, 16, 16, fixtures::mono(), true);
         assert_ne!(raster, serpentine, "serpentine and raster should differ on a gradient");
     }
 
@@ -419,7 +389,7 @@ mod tests {
                 pixels.extend_from_slice(&[v, v, v]);
             }
         }
-        let out = ordered_dither(&pixels, W, ColorScheme::Mono.palette());
+        let out = ordered_dither(&pixels, W, fixtures::mono());
 
         // Count per-band horizontal transitions (adjacent columns with differing index).
         let mut transitions = [0usize; BANDS];
@@ -459,7 +429,7 @@ mod tests {
     fn ordered_dither_is_brightness_neutral_at_midpoint() {
         // Find the mono decision midpoint: the smallest gray value whose threshold-free
         // OKLab match flips from black (0) to white (1).
-        let pal = ColorScheme::Mono.palette();
+        let pal = fixtures::mono();
         let (_, pal_lab) = build_palette_lab(pal);
         let midpoint = (0u16..=255)
             .find(|&v| {
@@ -488,7 +458,7 @@ mod tests {
         // track the input ramp and exercise most of the 16 levels.
         const W: usize = 256;
         const H: usize = 4;
-        let pal = ColorScheme::Grayscale16.palette();
+        let pal = fixtures::grayscale16();
 
         let mut pixels = Vec::with_capacity(W * H * 3);
         for _ in 0..H {
@@ -533,8 +503,8 @@ mod tests {
             .cycle()
             .take(8 * 4 * 3)
             .collect();
-        let raster = floyd_steinberg(&pixels, 8, 4, ColorScheme::Mono.palette(), false);
-        let serpentine = floyd_steinberg(&pixels, 8, 4, ColorScheme::Mono.palette(), true);
+        let raster = floyd_steinberg(&pixels, 8, 4, fixtures::mono(), false);
+        let serpentine = floyd_steinberg(&pixels, 8, 4, fixtures::mono(), true);
         assert_eq!(
             &raster[0..8],
             &serpentine[0..8],

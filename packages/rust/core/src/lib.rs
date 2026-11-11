@@ -1,3 +1,9 @@
+//! Dithering for e-paper displays: an image and a palette in, palette indices out.
+//!
+//! Build a [`palette::Palette`] (from a JSON file, from measurements, or from sRGB) and
+//! call [`dither`]. The library has no built-in palettes.
+
+mod anchor;
 pub mod algorithms;
 pub mod color_space;
 pub mod color_space_lab;
@@ -7,31 +13,35 @@ pub mod dizzy;
 pub mod enums;
 pub mod error;
 pub mod kernels;
-pub mod measured_palettes;
-pub mod palettes;
+pub mod lab;
+pub mod palette;
+mod palette_file;
+pub mod srgb_palette;
 pub mod tone_map;
 pub mod types;
 
 use crate::color_space::{linear_channel_to_srgb, srgb_channel_to_linear};
 use crate::dbs::DbsParams;
-use crate::enums::{DitherMode, GamutCompression, ToneCompression};
-use crate::palettes::Palette;
+use crate::enums::DitherMode;
+use crate::palette::Palette;
+use crate::srgb_palette::SrgbPalette;
 use crate::types::ImageBuffer;
 
-/// Configuration for `dither()`. All fields have sensible defaults.
+#[cfg(test)]
+use crate::{error::DitherError, palette::PaletteEntry};
+
+/// Options for [`dither`]. All fields have sensible defaults.
 ///
 /// Construct with struct-update syntax:
 /// ```ignore
-/// dither(&img, palette, DitherConfig { mode: DitherMode::Burkes, ..Default::default() });
+/// dither(&img, &palette, &DitherOptions { mode: DitherMode::Burkes, ..Default::default() });
 /// ```
 ///
-/// Prefer `..Default::default()` over listing every field: new fields (e.g. `dbs` in 6.0.0)
-/// are breaking for exhaustive struct literals, but not for struct-update syntax.
-///
-/// Pre-processing pipeline (applied in order, each step is a no-op at its identity value):
-/// `exposure → saturation → shadows/highlights → tone → gamut → dither → dbs`.
+/// Pipeline (applied in order, each step is a no-op at its identity value):
+/// `exposure → saturation → shadows/highlights → tone → anchor → gamut → match + diffuse → dbs`.
+/// Ink snapping is decided on the original input, before any of these steps.
 #[derive(Debug, Clone, PartialEq)]
-pub struct DitherConfig {
+pub struct DitherOptions {
     /// Dithering algorithm.
     pub mode: DitherMode,
     /// Use serpentine scanning for error diffusion (alternates row direction). Ignored for
@@ -46,16 +56,23 @@ pub struct DitherConfig {
     pub shadows: f64,
     /// Highlight compression strength (upper-half S-curve). 0.0 = identity, 1.0 = strong.
     pub highlights: f64,
-    /// Dynamic-range compression. Auto = histogram-based; Fixed(s) = manual blend strength.
-    pub tone: ToneCompression,
-    /// Gamut compression. Auto = full strength on out-of-gamut; Fixed(s) = manual.
-    pub gamut: GamutCompression,
+    /// Black-point lift, 0.0 (off) to 1.0: remaps lightness onto the panel's darkest and
+    /// lightest entries, keeping hue. Brings out shadow detail at the cost of deep blacks.
+    pub tone: f64,
+    /// Gamut compression strength, 0.0 (off) to 1.0: pulls out-of-gamut colours toward the
+    /// palette's gamut before matching.
+    pub gamut: f64,
     /// Optional Direct Binary Search refinement of the dithered output (see `dbs`). Slow:
     /// seconds on a full panel, so `None` by default.
     pub dbs: Option<DbsParams>,
+    /// Map each named ink's nominal colour onto its measured appearance before matching;
+    /// colours near an ink follow, colours far from every ink are left alone.
+    pub anchor: bool,
+    /// A pixel exactly equal to a named ink's nominal takes that ink, undithered.
+    pub snap: bool,
 }
 
-impl Default for DitherConfig {
+impl Default for DitherOptions {
     fn default() -> Self {
         Self {
             mode:       DitherMode::Burkes,
@@ -64,31 +81,32 @@ impl Default for DitherConfig {
             saturation: 1.0,
             shadows:    0.0,
             highlights: 0.0,
-            tone:       ToneCompression::Fixed(0.0),
-            gamut:      GamutCompression::None,
+            tone:       0.0,
+            gamut:      0.0,
             dbs:        None,
+            anchor:     true,
+            snap:       true,
         }
     }
 }
 
 fn dispatch(
     img: &ImageBuffer,
-    p: &Palette,
-    canonical: &Palette,
+    p: &SrgbPalette,
+    snap: Option<&[Option<u8>]>,
     mode: DitherMode,
     serpentine: bool,
-    pin_exact_pixels: bool,
 ) -> Vec<u8> {
     match mode {
-        DitherMode::None => algorithms::direct_map(img.data, p, canonical),
-        DitherMode::Ordered if pin_exact_pixels => {
-            algorithms::ordered_dither_with_canonical(img.data, img.width, p, canonical)
-        }
-        DitherMode::Ordered => algorithms::ordered_dither(img.data, img.width, p),
-        DitherMode::Dizzy if pin_exact_pixels => {
-            dizzy::dizzy_dither_with_canonical(img.data, img.width, img.height, p, canonical)
-        }
-        DitherMode::Dizzy => dizzy::dizzy_dither(img.data, img.width, img.height, p),
+        DitherMode::None => algorithms::direct_map(img.data, p, snap),
+        DitherMode::Ordered => match snap {
+            Some(s) => algorithms::ordered_dither_snapped(img.data, img.width, p, s),
+            None => algorithms::ordered_dither(img.data, img.width, p),
+        },
+        DitherMode::Dizzy => match snap {
+            Some(s) => dizzy::dizzy_dither_snapped(img.data, img.width, img.height, p, s),
+            None => dizzy::dizzy_dither(img.data, img.width, img.height, p),
+        },
         DitherMode::FloydSteinberg
         | DitherMode::Burkes
         | DitherMode::Atkinson
@@ -101,78 +119,57 @@ fn dispatch(
             let kernel = mode
                 .kernel()
                 .expect("kernel-based DitherMode variants always return Some from kernel()");
-            if pin_exact_pixels {
-                algorithms::error_diffusion_dither_with_canonical(
-                    img.data,
-                    img.width,
-                    img.height,
-                    p,
-                    canonical,
-                    kernel,
-                    serpentine,
-                )
-            } else {
-                algorithms::error_diffusion_dither(
-                    img.data,
-                    img.width,
-                    img.height,
-                    p,
-                    kernel,
-                    serpentine,
-                )
+            match snap {
+                Some(s) => algorithms::error_diffusion_dither_snapped(
+                    img.data, img.width, img.height, p, s, kernel, serpentine,
+                ),
+                None => algorithms::error_diffusion_dither(img.data, img.width, img.height, p, kernel, serpentine),
             }
         }
     }
 }
 
-fn needs_preprocess(c: &DitherConfig) -> bool {
-    (c.exposure - 1.0).abs() > 1e-9
-        || (c.saturation - 1.0).abs() > 1e-9
-        || c.shadows > 0.0
-        || c.highlights > 0.0
-        || !matches!(c.tone, ToneCompression::Fixed(s) if s <= 0.0)
-        || !matches!(c.gamut, GamutCompression::None)
+fn needs_preprocess(o: &DitherOptions) -> bool {
+    (o.exposure - 1.0).abs() > 1e-9
+        || (o.saturation - 1.0).abs() > 1e-9
+        || o.shadows > 0.0
+        || o.highlights > 0.0
+        || o.tone > 0.0
+        || o.gamut > 0.0
 }
 
-/// Dither an image for e-paper display.
-///
-/// Returns palette indices (one `u8` per pixel, length = `width × height`).
-pub fn dither(img: &ImageBuffer, palette: impl AsRef<Palette>, config: DitherConfig) -> Vec<u8> {
-    let p = palette.as_ref();
-    dither_impl(img, p, p, config, false)
+/// Per pixel: the index of the ink whose nominal equals the pixel exactly, else `None`.
+/// `None` overall when the palette has no inks, so callers skip the masked paths.
+pub(crate) fn snap_mask(pixels: &[u8], palette: &Palette) -> Option<Vec<Option<u8>>> {
+    let inks: Vec<(u8, [u8; 3])> = palette.inks().map(|(i, ink)| (i, ink.nominal)).collect();
+    if inks.is_empty() {
+        return None;
+    }
+    Some(
+        pixels
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|rgb| inks.iter().find(|(_, nominal)| nominal == rgb).map(|&(i, _)| i))
+            .collect(),
+    )
 }
 
-/// Dither an image using one palette for color matching and another for exact
-/// already-displayable RGB passthrough.
-///
-/// Measured palettes should be supplied as `matching_palette`; the ideal display
-/// color scheme should be supplied as `canonical_palette`.
-pub fn dither_with_canonical(
-    img: &ImageBuffer,
-    matching_palette: impl AsRef<Palette>,
-    canonical_palette: impl AsRef<Palette>,
-    config: DitherConfig,
-) -> Vec<u8> {
-    let p = matching_palette.as_ref();
-    let canonical = canonical_palette.as_ref();
-    dither_impl(img, p, canonical, config, true)
-}
+/// Dither `img` to `palette`. Returns one palette index per pixel, row-major.
+pub fn dither(img: &ImageBuffer, palette: &Palette, options: &DitherOptions) -> Vec<u8> {
+    let p = SrgbPalette::from(palette);
+    let mask = if options.snap { snap_mask(img.data, palette) } else { None };
+    if let Some(m) = &mask
+        && let Some(all) = m.iter().copied().collect::<Option<Vec<u8>>>()
+    {
+        return all;
+    }
+    let snap = mask.as_deref();
+    let anchoring = options.anchor && anchor::is_active(palette);
 
-fn dither_impl(
-    img: &ImageBuffer,
-    p: &Palette,
-    canonical: &Palette,
-    config: DitherConfig,
-    pin_exact_pixels: bool,
-) -> Vec<u8> {
-    if !needs_preprocess(&config) {
-        if config.mode != DitherMode::None
-            && let Some(indices) = algorithms::try_exact_palette_map(img.data, canonical)
-        {
-            return indices;
-        }
-        let indices = dispatch(img, p, canonical, config.mode, config.serpentine, pin_exact_pixels);
-        return refine(img, p, canonical, indices, config.dbs, pin_exact_pixels);
+    if !needs_preprocess(options) && !anchoring {
+        let indices = dispatch(img, &p, snap, options.mode, options.serpentine);
+        return refine(img, &p, indices, options.dbs, snap);
     }
 
     // Convert sRGB bytes → linear, apply pre-processing pipeline, convert back.
@@ -188,11 +185,14 @@ fn dither_impl(
         ])
         .collect();
 
-    tone_map::apply_exposure(&mut linear, config.exposure);
-    tone_map::adjust_saturation(&mut linear, config.saturation);
-    tone_map::apply_shadows_highlights(&mut linear, config.shadows, config.highlights);
-    config.tone.apply(&mut linear, p);
-    config.gamut.apply(&mut linear, p);
+    tone_map::apply_exposure(&mut linear, options.exposure);
+    tone_map::adjust_saturation(&mut linear, options.saturation);
+    tone_map::apply_shadows_highlights(&mut linear, options.shadows, options.highlights);
+    tone_map::compress_dynamic_range(&mut linear, &p, options.tone.min(1.0));
+    if anchoring {
+        anchor::anchor_map(&mut linear, palette);
+    }
+    tone_map::gamut_compress(&mut linear, &p, options.gamut.min(1.0));
 
     let processed: Vec<u8> = linear
         .iter()
@@ -203,30 +203,22 @@ fn dither_impl(
         ])
         .collect();
 
-    let processed_img = ImageBuffer::new(&processed, img.width);
-    let indices = dispatch(&processed_img, p, canonical, config.mode, config.serpentine, pin_exact_pixels);
-    refine(&processed_img, p, canonical, indices, config.dbs, pin_exact_pixels)
+    let processed_img = ImageBuffer { data: &processed, width: img.width, height: img.height };
+    let indices = dispatch(&processed_img, &p, snap, options.mode, options.serpentine);
+    refine(&processed_img, &p, indices, options.dbs, snap)
 }
 
 /// Final pipeline step: optional DBS refinement against the (pre-processed) target image.
-/// Pixels the dispatch pinned to an exact canonical colour stay pinned.
+/// Snapped pixels stay pinned.
 fn refine(
     img: &ImageBuffer,
-    p: &Palette,
-    canonical: &Palette,
+    p: &SrgbPalette,
     mut indices: Vec<u8>,
     params: Option<DbsParams>,
-    pin_exact_pixels: bool,
+    snap: Option<&[Option<u8>]>,
 ) -> Vec<u8> {
     let Some(params) = params else { return indices };
-    let pinned: Option<Vec<bool>> = pin_exact_pixels.then(|| {
-        img.data
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .map(|rgb| algorithms::exact_palette_index(rgb, canonical).is_some())
-            .collect()
-    });
+    let pinned: Option<Vec<bool>> = snap.map(|s| s.iter().map(Option::is_some).collect());
     dbs::dbs_refine(img.data, img.width, img.height, p, &mut indices, pinned.as_deref(), &params);
     indices
 }
@@ -234,90 +226,74 @@ fn refine(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::measured_palettes::SPECTRA_7_3_6COLOR;
-    use crate::palettes::ColorScheme;
+    use crate::palette::Ink;
 
     fn pixels(rgb: [u8; 3], count: usize) -> Vec<u8> {
         std::iter::repeat_n(rgb, count).flatten().collect()
     }
 
-    #[test]
-    fn default_config_has_preprocessing_off() {
-        let config = DitherConfig::default();
-        assert!(matches!(config.tone, ToneCompression::Fixed(s) if s == 0.0));
-        assert_eq!(config.gamut, GamutCompression::None);
-        assert!(!needs_preprocess(&config));
+    fn img(data: &[u8], width: usize) -> ImageBuffer<'_> {
+        ImageBuffer::new(data, width).unwrap()
     }
 
-    /// Pins `ToneCompression::default()` and `GamutCompression::default()` to the values
-    /// `DitherConfig::default()` actually uses for those fields, so the two defaults can
-    /// never silently drift apart again (see audit finding L3).
-    #[test]
-    fn enum_defaults_match_dither_config_default() {
-        let config = DitherConfig::default();
-        assert_eq!(ToneCompression::default(), config.tone);
-        assert_eq!(GamutCompression::default(), config.gamut);
+    /// Measured Spectra 6: black, white, yellow, red, blue, green, each an ink with its ideal nominal.
+    fn spectra6() -> Palette {
+        Palette::from_json(include_str!("../../../../examples/palettes/spectra_7_3_6color.json")).unwrap()
     }
 
-    /// Proves `DitherMode::Dizzy` is actually wired to the dizzy algorithm and not
-    /// accidentally aliased to another dispatch arm: on identical non-uniform input,
-    /// its output must differ from Burkes error diffusion.
-    #[test]
-    fn dizzy_output_differs_from_burkes() {
-        let pixels: Vec<u8> = (0u8..=255)
-            .flat_map(|v| [v, v / 2, 255 - v])
-            .cycle()
-            .take(16 * 16 * 3)
-            .collect();
-        let img = ImageBuffer::new(&pixels, 16);
-
-        let burkes = dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig { mode: DitherMode::Burkes, ..Default::default() });
-        let dizzy = dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig { mode: DitherMode::Dizzy, ..Default::default() });
-
-        assert_ne!(dizzy, burkes, "dizzy dithering should differ from Burkes on non-uniform input");
+    /// The same measured colours with no ink identity: nothing snaps, nothing anchors.
+    fn spectra6_unnamed() -> Palette {
+        let entries = spectra6().entries().iter().map(|e| PaletteEntry { appearance: e.appearance, ink: None }).collect();
+        Palette::new(entries, true).unwrap()
     }
 
-    #[test]
-    fn none_uses_canonical_exact_colors_with_measured_palette() {
-        let image = pixels([255, 0, 0], 4);
-        let img = ImageBuffer::new(&image, 2);
-        let output = dither_with_canonical(
-            &img,
-            &SPECTRA_7_3_6COLOR,
-            ColorScheme::Bwgbry.palette(),
-            DitherConfig { mode: DitherMode::None, ..Default::default() },
-        );
-        assert_eq!(output, vec![3, 3, 3, 3]);
-    }
-
-    #[test]
-    fn exact_canonical_colors_bypass_error_diffusion() {
-        let image = [
-            [0, 0, 0],
-            [255, 255, 255],
-            [255, 255, 0],
-            [255, 0, 0],
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-        let img = ImageBuffer::new(&image, 2);
-        let output = dither_with_canonical(
-            &img,
-            &SPECTRA_7_3_6COLOR,
-            ColorScheme::Bwry.palette(),
-            DitherConfig { mode: DitherMode::Burkes, ..Default::default() },
-        );
-        assert_eq!(output, vec![0, 1, 2, 3]);
-    }
-
-    #[test]
-    fn exact_canonical_pixels_are_pinned_inside_mixed_error_diffusion_image() {
+    fn green_dots() -> Vec<u8> {
         let mut image = pixels([128, 128, 128], 8);
         image[0..3].copy_from_slice(&[0, 255, 0]);
         image[9..12].copy_from_slice(&[0, 255, 0]);
-        let img = ImageBuffer::new(&image, 4);
+        image
+    }
 
+    #[test]
+    fn default_options_have_preprocessing_off_and_inks_on() {
+        let o = DitherOptions::default();
+        assert!(o.anchor);
+        assert!(o.snap);
+        assert!(!needs_preprocess(&o));
+    }
+
+    #[test]
+    fn tone_and_gamut_default_to_off() {
+        let o = DitherOptions::default();
+        assert_eq!((o.tone, o.gamut), (0.0, 0.0));
+    }
+
+    #[test]
+    fn dizzy_output_differs_from_burkes() {
+        let data: Vec<u8> = (0u8..=255).flat_map(|v| [v, v / 2, 255 - v]).cycle().take(16 * 16 * 3).collect();
+        let p = spectra6_unnamed();
+        let burkes = dither(&img(&data, 16), &p, &DitherOptions { mode: DitherMode::Burkes, ..Default::default() });
+        let dizzy = dither(&img(&data, 16), &p, &DitherOptions { mode: DitherMode::Dizzy, ..Default::default() });
+        assert_ne!(dizzy, burkes);
+    }
+
+    #[test]
+    fn snap_none_mode_uses_ink_nominals() {
+        let data = pixels([255, 0, 0], 4);
+        let out = dither(&img(&data, 2), &spectra6(), &DitherOptions { mode: DitherMode::None, ..Default::default() });
+        assert_eq!(out, vec![3, 3, 3, 3]);
+    }
+
+    #[test]
+    fn snap_inks_bypass_error_diffusion() {
+        let data: Vec<u8> = [[0, 0, 0], [255, 255, 255], [255, 255, 0], [255, 0, 0]].into_iter().flatten().collect();
+        let out = dither(&img(&data, 2), &spectra6(), &DitherOptions::default());
+        assert_eq!(out, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn snap_pins_inks_inside_mixed_error_diffusion_image() {
+        let data = green_dots();
         for mode in [
             DitherMode::Burkes,
             DitherMode::FloydSteinberg,
@@ -326,81 +302,123 @@ mod tests {
             DitherMode::Sierra,
             DitherMode::SierraLite,
             DitherMode::JarvisJudiceNinke,
+            DitherMode::Dizzy,
         ] {
-            let output = dither_with_canonical(
-                &img,
-                &SPECTRA_7_3_6COLOR,
-                ColorScheme::Bwgbry.palette(),
-                DitherConfig { mode, ..Default::default() },
-            );
-            assert_eq!(output[0], 5, "{mode:?} should pin exact green at pixel 0");
-            assert_eq!(output[3], 5, "{mode:?} should pin exact green at pixel 3");
+            let out = dither(&img(&data, 4), &spectra6(), &DitherOptions { mode, ..Default::default() });
+            assert_eq!((out[0], out[3]), (5, 5), "{mode:?} should pin exact green");
         }
     }
 
     #[test]
-    fn exact_canonical_pixels_are_pinned_inside_mixed_ordered_image() {
-        let mut image = pixels([128, 128, 128], 8);
-        image[0..3].copy_from_slice(&[0, 255, 0]);
-        image[9..12].copy_from_slice(&[0, 255, 0]);
-        let img = ImageBuffer::new(&image, 4);
-
-        let output = dither_with_canonical(
-            &img,
-            &SPECTRA_7_3_6COLOR,
-            ColorScheme::Bwgbry.palette(),
-            DitherConfig { mode: DitherMode::Ordered, ..Default::default() },
-        );
-        assert_eq!(output[0], 5);
-        assert_eq!(output[3], 5);
+    fn snap_pins_inks_inside_mixed_ordered_image() {
+        let data = green_dots();
+        let out = dither(&img(&data, 4), &spectra6(), &DitherOptions { mode: DitherMode::Ordered, ..Default::default() });
+        assert_eq!((out[0], out[3]), (5, 5));
     }
 
     #[test]
-    fn exact_bypass_is_skipped_when_preprocessing_is_enabled() {
-        let image = pixels([255, 0, 0], 4);
-        let img = ImageBuffer::new(&image, 2);
-        let output = dither_with_canonical(
-            &img,
-            &SPECTRA_7_3_6COLOR,
-            ColorScheme::Bwgbry.palette(),
-            DitherConfig {
-                mode: DitherMode::Burkes,
-                tone: ToneCompression::Fixed(1.0),
-                ..Default::default()
-            },
-        );
-        assert_eq!(output.len(), 4);
+    fn snap_survives_preprocessing() {
+        let data = green_dots();
+        let o = DitherOptions { exposure: 1.3, saturation: 0.5, tone: 1.0, gamut: 1.0, ..Default::default() };
+        let out = dither(&img(&data, 4), &spectra6(), &o);
+        assert_eq!((out[0], out[3]), (5, 5));
+    }
+
+    #[test]
+    fn snap_pins_inks_under_dbs() {
+        let data = green_dots();
+        let o = DitherOptions { dbs: Some(DbsParams::default()), ..Default::default() };
+        let out = dither(&img(&data, 4), &spectra6(), &o);
+        assert_eq!((out[0], out[3]), (5, 5));
+    }
+
+    #[test]
+    fn snap_false_disables_passthrough() {
+        let data = pixels([255, 0, 0], 4);
+        let with = dither(&img(&data, 2), &spectra6(), &DitherOptions { mode: DitherMode::None, anchor: false, ..Default::default() });
+        let without = dither(&img(&data, 2), &spectra6(), &DitherOptions { mode: DitherMode::None, anchor: false, snap: false, ..Default::default() });
+        let unnamed = dither(&img(&data, 2), &spectra6_unnamed(), &DitherOptions { mode: DitherMode::None, ..Default::default() });
+        assert_eq!(with, vec![3; 4]);
+        assert_eq!(without, unnamed);
     }
 
     #[test]
     fn dbs_refinement_lowers_perceived_error() {
-        let pixels: Vec<u8> = (0..24 * 16)
+        let data: Vec<u8> = (0..24 * 16)
             .flat_map(|i| [(i % 24 * 10) as u8, (i / 24 * 16) as u8, 200 - (i % 24 * 8) as u8])
             .collect();
-        let img = ImageBuffer::new(&pixels, 24);
         let params = DbsParams::default();
-
-        let plain = dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig::default());
-        let refined = dither(&img, &SPECTRA_7_3_6COLOR, DitherConfig { dbs: Some(params), ..Default::default() });
-
-        let err = |idx: &[u8]| dbs::perceived_error(&pixels, 24, 16, &SPECTRA_7_3_6COLOR, idx, &params);
+        let p = spectra6_unnamed();
+        let plain = dither(&img(&data, 24), &p, &DitherOptions::default());
+        let refined = dither(&img(&data, 24), &p, &DitherOptions { dbs: Some(params), ..Default::default() });
+        let srgb = SrgbPalette::from(&p);
+        let err = |idx: &[u8]| dbs::perceived_error(&data, 24, 16, &srgb, idx, &params);
         assert!(err(&refined) < err(&plain), "{} !< {}", err(&refined), err(&plain));
     }
 
     #[test]
-    fn exact_canonical_pixels_stay_pinned_under_dbs() {
-        let mut image = pixels([128, 128, 128], 8);
-        image[0..3].copy_from_slice(&[0, 255, 0]);
-        image[9..12].copy_from_slice(&[0, 255, 0]);
-        let img = ImageBuffer::new(&image, 4);
+    fn tone_finds_black_and_white_by_lightness() {
+        // Same three colours in two orders: the output must be the same colours.
+        let colours = |order: &[usize]| {
+            let all = [[250u8, 250, 250], [200, 30, 30], [20, 20, 20]];
+            Palette::from_srgb(order.iter().map(|&i| (all[i], None)).collect(), false).unwrap()
+        };
+        let a = colours(&[0, 1, 2]);
+        let b = colours(&[2, 0, 1]);
+        let ramp: Vec<u8> = (0..64u8).flat_map(|v| [v * 4, v * 4, v * 4]).collect();
+        let o = DitherOptions { tone: 1.0, ..Default::default() };
+        let to_rgb = |p: &Palette, idx: Vec<u8>| idx.iter().map(|&i| p.preview_srgb()[i as usize]).collect::<Vec<_>>();
+        assert_eq!(to_rgb(&a, dither(&img(&ramp, 8), &a, &o)), to_rgb(&b, dither(&img(&ramp, 8), &b, &o)));
+    }
 
-        let output = dither_with_canonical(
-            &img,
-            &SPECTRA_7_3_6COLOR,
-            ColorScheme::Bwgbry.palette(),
-            DitherConfig { dbs: Some(DbsParams::default()), ..Default::default() },
-        );
-        assert_eq!(output[0], 5);
-        assert_eq!(output[3], 5);
+    #[test]
+    fn tone_lifts_shadows_and_is_off_by_default() {
+        let data: Vec<u8> = (0..64u8).flat_map(|v| [v, v, v]).collect();
+        let p = spectra6_unnamed();
+        let off = dither(&img(&data, 8), &p, &DitherOptions::default());
+        let on = dither(&img(&data, 8), &p, &DitherOptions { tone: 1.0, ..Default::default() });
+        assert_ne!(on, off);
+    }
+
+    #[test]
+    fn dither_mode_names_round_trip() {
+        for m in DitherMode::ALL {
+            assert_eq!(m.to_string().parse::<DitherMode>().unwrap(), m);
+        }
+        assert_eq!("floyd_steinberg".parse::<DitherMode>().unwrap(), DitherMode::FloydSteinberg);
+    }
+
+    #[test]
+    fn unknown_dither_mode_name_errors() {
+        assert_eq!("bayer".parse::<DitherMode>().unwrap_err(), DitherError::UnknownDitherMode("bayer".into()));
+    }
+
+    #[test]
+    fn image_buffer_rejects_bad_length() {
+        assert_eq!(ImageBuffer::new(&[0; 10], 3).unwrap_err(), DitherError::InvalidImage { len: 10, width: 3 });
+        assert_eq!(ImageBuffer::new(&[], 0).unwrap_err(), DitherError::InvalidImage { len: 0, width: 0 });
+    }
+
+    #[test]
+    fn anchor_option_changes_output_for_measured_inks() {
+        let data: Vec<u8> = (0..32u8).flat_map(|v| [v * 8, v * 4, 255 - v * 8]).cycle().take(16 * 16 * 3).collect();
+        let on = dither(&img(&data, 16), &spectra6(), &DitherOptions { snap: false, ..Default::default() });
+        let off = dither(&img(&data, 16), &spectra6(), &DitherOptions { snap: false, anchor: false, ..Default::default() });
+        assert_ne!(on, off, "anchoring should move colours for a measured palette");
+    }
+
+    #[test]
+    fn anchor_option_is_inert_without_inks() {
+        let data: Vec<u8> = (0..32u8).flat_map(|v| [v * 8, v * 4, 255 - v * 8]).cycle().take(16 * 16 * 3).collect();
+        let on = dither(&img(&data, 16), &spectra6_unnamed(), &DitherOptions::default());
+        let off = dither(&img(&data, 16), &spectra6_unnamed(), &DitherOptions { anchor: false, ..Default::default() });
+        assert_eq!(on, off);
+    }
+
+    #[test]
+    fn named_ink_without_snap_or_anchor_is_plain_matching() {
+        let p = Palette::from_srgb(vec![([0, 0, 0], Some(Ink { name: "black".into(), nominal: [0, 0, 0] })), ([255, 255, 255], None)], false).unwrap();
+        let data = pixels([10, 10, 10], 4);
+        assert_eq!(dither(&img(&data, 2), &p, &DitherOptions { mode: DitherMode::None, anchor: false, snap: false, ..Default::default() }), vec![0; 4]);
     }
 }

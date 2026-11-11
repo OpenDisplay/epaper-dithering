@@ -1,21 +1,8 @@
 export { ditherImage } from './core';
 export type { DbsParams, DitherOptions } from './core';
 export { DitherMode } from './enums';
-export {
-  ColorScheme,
-  getPalette,
-  getColorCount,
-  fromValue,
-  // Measured palettes
-  SPECTRA_7_3_6COLOR,
-  SPECTRA_7_3_6COLOR_V2,
-  MONO_4_26,
-  BWRY_4_2,
-  SOLUM_BWR,
-  HANSHOW_BWR,
-  HANSHOW_BWY,
-  BWRY_3_97,
-} from './palettes';
-export type { RGB, ImageBuffer, PaletteImageBuffer, ColorPalette } from './types';
+export { Palette } from './palette';
+export type { PaletteEntry, SrgbColor } from './palette';
+export type { RGB, ImageBuffer, PaletteImageBuffer } from './types';
 
-export const VERSION = '0.1.0';
+export const VERSION = '7.0.0'; // x-release-please-version

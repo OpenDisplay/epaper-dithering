@@ -8,10 +8,9 @@
 use std::path::{Path, PathBuf};
 
 use epaper_dithering_core::{
-    dither, DitherConfig,
-    enums::{DitherMode, GamutCompression, ToneCompression},
-    measured_palettes::SPECTRA_7_3_6COLOR,
-    palettes::ColorScheme,
+    dither, DitherOptions,
+    enums::DitherMode,
+    palette::Palette,
     types::ImageBuffer,
 };
 
@@ -31,6 +30,19 @@ fn reference_path(image_stem: &str, tag: &str) -> PathBuf {
         .join(format!("{image_stem}__{tag}.bin"))
 }
 
+fn example_palette(name: &str) -> Palette {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../examples/palettes").join(name);
+    Palette::from_json(&std::fs::read_to_string(&path).unwrap()).unwrap()
+}
+
+fn spectra6() -> Palette {
+    example_palette("spectra_7_3_6color.json")
+}
+
+fn mono() -> Palette {
+    example_palette("ideal_mono.json")
+}
+
 // ── Image loading ─────────────────────────────────────────────────────────────
 
 fn load_rgb(filename: &str) -> (Vec<u8>, usize, usize) {
@@ -45,19 +57,21 @@ fn load_rgb(filename: &str) -> (Vec<u8>, usize, usize) {
 
 /// Run `dither()` on `filename` and compare against (or write) the stored reference.
 ///
+/// Anchoring and snapping are off: this suite pins the algorithms themselves. Ink
+/// behaviour is covered by `tests/success.rs`.
+///
 /// `tag` identifies the combination, e.g. `"burkes_spectra6_auto"`.
 fn assert_regression(
     filename: &str,
     tag: &str,
     mode: DitherMode,
-    palette: impl AsRef<epaper_dithering_core::palettes::Palette>,
-    tone: ToneCompression,
-    gamut: GamutCompression,
+    palette: Palette,
+    gamut: f64,
 ) {
     let (pixels, w, _h) = load_rgb(filename);
-    let img = ImageBuffer::new(&pixels, w);
-    let output = dither(&img, palette, DitherConfig {
-        mode, tone, gamut, ..Default::default()
+    let img = ImageBuffer::new(&pixels, w).unwrap();
+    let output = dither(&img, &palette, &DitherOptions {
+        mode, gamut, anchor: false, snap: false, ..Default::default()
     });
 
     let stem = Path::new(filename).file_stem().unwrap().to_str().unwrap();
@@ -110,7 +124,7 @@ fn discover_images() -> Vec<String> {
 
 // ── Regression suites ─────────────────────────────────────────────────────────
 
-/// Primary path: Burkes + 6-color measured palette + auto tone & gamut.
+/// Primary path: Burkes + 6-color measured palette + full gamut compression.
 /// This is the most common real-world usage.
 #[test]
 fn burkes_spectra6_auto() {
@@ -119,9 +133,8 @@ fn burkes_spectra6_auto() {
             &img,
             "burkes_spectra6_auto",
             DitherMode::Burkes,
-            &SPECTRA_7_3_6COLOR,
-            ToneCompression::Auto,
-            GamutCompression::Auto,
+            spectra6(),
+            1.0,
         );
     }
 }
@@ -135,9 +148,8 @@ fn floyd_steinberg_mono_raw() {
             &img,
             "floyd_steinberg_mono_raw",
             DitherMode::FloydSteinberg,
-            ColorScheme::Mono,
-            ToneCompression::Fixed(0.0),
-            GamutCompression::None,
+            mono(),
+            0.0,
         );
     }
 }
@@ -151,9 +163,8 @@ fn ordered_spectra6_auto() {
             &img,
             "ordered_spectra6_auto",
             DitherMode::Ordered,
-            &SPECTRA_7_3_6COLOR,
-            ToneCompression::Auto,
-            GamutCompression::Auto,
+            spectra6(),
+            1.0,
         );
     }
 }
@@ -167,9 +178,8 @@ fn dizzy_spectra6_auto() {
             &img,
             "dizzy_spectra6_auto",
             DitherMode::Dizzy,
-            &SPECTRA_7_3_6COLOR,
-            ToneCompression::Auto,
-            GamutCompression::Auto,
+            spectra6(),
+            1.0,
         );
     }
 }
@@ -183,9 +193,8 @@ fn dizzy_mono_raw() {
             &img,
             "dizzy_mono_raw",
             DitherMode::Dizzy,
-            ColorScheme::Mono,
-            ToneCompression::Fixed(0.0),
-            GamutCompression::None,
+            mono(),
+            0.0,
         );
     }
 }

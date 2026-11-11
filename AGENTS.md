@@ -49,42 +49,51 @@ bun run lint
 bun run build                          # tsup
 ```
 
-### Cross-language gates (run before pushing enum or palette changes)
+### Dev tools (`tools/`)
 
-```bash
-python3 scripts/check_enum_parity.py                      # enum mirrors agree across Rust/Python/TS
-cd packages/rust && cargo run --example gen_ts_palettes -- --check   # generated TS palettes not drifted
-```
+Python scripts for visual comparison and docs images (`compare.py`, `pipeline.py`,
+`generate_patches.py`, `generate_docs_examples.py`, `make_dashboard_fixture.py`). Run them with the
+Python package's environment, e.g. `uv run --project packages/python python tools/compare.py`.
+Rust tuning harnesses stay in `packages/rust/core/examples/` because cargo needs them there
+(`anchor_compare`, `wab_sweep`, `wab_compare`, `dbs_compare`, `dizzy_compare`, `dither`).
 
 ## Architecture
 
 ### One core, three bindings
 
-- `packages/rust/core/` — all algorithms: error-diffusion kernels (`kernels.rs`, `algorithms.rs`), ordered dither, dizzy dither (`dizzy.rs`), OKLab color matching (`color_space_lab.rs`), tone/gamut compression (`tone_map.rs`), palettes (`palettes.rs`, `measured_palettes.rs`).
+- `packages/rust/core/` — all algorithms: error-diffusion kernels (`kernels.rs`, `algorithms.rs`), ordered dither, dizzy dither (`dizzy.rs`), OKLab color matching (`color_space_lab.rs`), tone/gamut compression (`tone_map.rs`), palettes (`palette.rs`, `palette_file.rs`, `lab.rs`), anchoring (`anchor.rs`).
 - `packages/python/src/lib.rs` — PyO3 module (`epaper_dithering._rs`); `src/epaper_dithering/` is the pure-Python wrapper (Pillow integration, enums, `.pyi` stubs).
 - `packages/rust/wasm/` — wasm-bindgen bindings; `packages/javascript/src/` is the TS wrapper.
 - `packages/rust/ios/` — standalone XCFramework build (`build-xcframework.sh`), not part of the workspace.
 
-The pre-processing pipeline order is fixed and documented on `DitherConfig` in `core/src/lib.rs`: `exposure → saturation → shadows/highlights → tone → gamut → dither`. Each step is a no-op at its identity value.
+The pre-processing pipeline order is fixed and documented on `DitherOptions` in `core/src/lib.rs`: `exposure → saturation → shadows/highlights → tone → anchor → gamut → match + diffuse → dbs`; ink snapping is decided on the original input. Each step is a no-op at its identity value.
 
-### Hand-mirrored enums are a wire contract
+### Palettes are runtime data
 
-`ColorScheme` and `DitherMode` are declared independently (no codegen) in six files: `core/src/palettes.rs`, `core/src/enums.rs`, `python/.../palettes.py`, `python/.../enums.py`, `javascript/src/palettes.ts`, `javascript/src/enums.ts`. `ColorScheme` integer values are the firmware wire contract, canonically defined by `enum ColorScheme` in the `opendisplay-protocol` repo's `opendisplay_structs.h`, which names `core/src/palettes.rs` as its designated mirror.
+There are no built-in palettes and no colour-scheme enum. A `Palette` (`core/src/palette.rs`) is an
+ordered list of entries; each has an `appearance` (CIELAB D65, **normalised so the entry named
+`white` is L\* 100, a\* = b\* = 0**; constructors reject anything else, with an error naming
+`from_absolute_lab`) and an optional `Ink { name, nominal }`. Palettes are loaded from versioned
+`epaper-palette` JSON files (`core/src/palette_file.rs`), built from absolute measurements
+(`from_absolute_lab`) or from sRGB (`from_srgb`). Example files live in `examples/palettes/`; they
+are never shipped in the crate, wheel or npm package and no API returns them.
 
-- `scripts/check_enum_parity.py` (layer 1) checks the three in-repo mirrors against each other; CI also runs layer 2 against the canonical header daily.
-- When adding or changing an enum member, update all six files.
-- If the header-parity CI job goes red, mirror the upstream header change here — never edit values just to make the check pass.
-- Some values are library-local and intentionally absent from the header (e.g. `GRAYSCALE_8` = 9); `DitherMode` has no wire representation at all.
-
-### Generated palettes
-
-`packages/javascript/src/palettes.generated.ts` is generated from the Rust palette definitions by `cargo run --example gen_ts_palettes` (run from `packages/rust/`). Never edit it by hand; after changing palettes in Rust, regenerate it. CI fails on drift via the `--check` flag.
+- Named inks drive two behaviours, both on by default: **anchoring** (`core/src/anchor.rs`: a damped local
+  correction around each ink, `1/d⁴` falloff, in CIELAB, exact at every ink; it never re-maps the whole
+  tonal range) and **snapping** (a pixel exactly equal to an ink's nominal takes that ink, decided on
+  the original input, pinned through diffusion and DBS).
+- Algorithms run on `SrgbPalette` (the clamped sRGB of each appearance, `#[doc(hidden)]`); the
+  supported API is `Palette` + `dither()`.
+- `DitherMode` is named across every binding (`"floyd_steinberg"` …); there is no integer wire value
+  and no parity script. Nothing in this library knows about OpenDisplay or any firmware.
 
 ### Color science decisions (pinned by tests — don't "simplify" them away)
 
 - Pixel↔palette matching uses weighted Cartesian OKLab distance (`dist² = dL² + Wab²·(da² + db²)`, `Wab = 1.5`) in `color_space_lab.rs`. LCH-weighted distance was rejected for an achromatic-attractor bug; hue preservation matters more than lightness because error diffusion compensates spatially for lightness but not hue. Re-tuning harness: `core/examples/wab_sweep.rs`.
 - Ordered dither applies the Bayer threshold in sRGB-fraction space, not linear (pinned by `ordered_dither_activity_is_perceptually_uniform`).
-- Measured palettes are calibrated per-display values normalized against the paper white point; they differ substantially from pure RGB.
+- Palette appearances are normalised to the panel's white. The 6.x "measured" constants were not, so the exported example files are brighter than 6.x.
+- Anchoring works in CIELAB, not OKLab: OKLab's cube root has no linear toe, so corrections near black turned single sRGB steps into visible jumps.
+- `tone` (black-point lift, lightness only) and `gamut` are opt-in 0–1 strengths with no `auto` mode. A global lift inside anchoring was tried and rejected: it washed photos out by default.
 
 ## Releases and versioning
 

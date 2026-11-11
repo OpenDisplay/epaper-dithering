@@ -1,35 +1,32 @@
 //! C-ABI FFI wrapper around `epaper-dithering-core`, intended for the iOS/Swift app.
 //!
-//! Scope is deliberately minimal — this exposes **only** the dithering step (palette
-//! matching in OKLab + error diffusion). The tone/gamut/exposure/saturation
-//! pre-processing pipeline is intentionally *not* surfaced here: the OpenDisplay iOS app
-//! keeps its own tone-compression pass in Swift for now, so it hands us pixels that are
-//! already pre-processed and we run pure matching + diffusion at `DitherConfig` defaults
-//! (all pre-processing off).
+//! Scope is deliberately minimal — this exposes **only** the dithering step (anchoring and
+//! ink snapping, palette matching in OKLab, error diffusion, optional DBS). The
+//! tone/gamut/exposure/saturation pre-processing pipeline is intentionally *not* surfaced:
+//! the OpenDisplay iOS app keeps its own tone-compression pass in Swift for now.
 //!
 //! ## Contract
 //!
-//! - **Output is caller-allocated.** The number of output indices is deterministic —
-//!   exactly `width * height`, one `u8` palette index per pixel — so Swift allocates the
-//!   buffer and we fill it. There is no allocation handed across the boundary and no free
-//!   function to call.
-//! - **Indices are into the palette you pass.** Feed the app's palette in the app's own
-//!   index order and the returned indices line up with the app's wire-format packing with
-//!   no remap. When a `canonical` palette is supplied, matching uses `matching` (e.g. a
-//!   measured palette) while already-displayable exact colors pass through via `canonical`;
-//!   the returned indices are still in `matching` order (which the app keeps index-aligned
-//!   with `canonical`).
-//! - **Panics never cross the boundary.** The body runs inside `catch_unwind`; a panic is
+//! - **Palettes are handles.** Create one from an `epaper-palette` JSON document with
+//!   [`ed_palette_from_json`] and release it with [`ed_palette_free`] exactly once. A handle
+//!   is immutable and may be shared across threads.
+//! - **Output is caller-allocated.** `ed_dither` writes exactly `width * height` palette
+//!   indices, in the palette's own entry order.
+//! - **Panics never cross the boundary.** Every body runs inside `catch_unwind`; a panic is
 //!   converted to [`ED_ERR_PANIC`].
+//! - **Options mirror the core's `DitherOptions`.** Start from
+//!   [`ed_dither_options_default`] and change only what you need.
 //! - **Errors are status codes**, never exceptions. `0` is success; negative values are the
 //!   `ED_ERR_*` constants below.
 
+use std::ffi::{c_char, CStr};
 use std::panic::{self, AssertUnwindSafe};
 
 use epaper_dithering_core::{
-    DitherConfig, dither, dither_with_canonical,
+    DitherOptions, dither,
+    dbs::DbsParams,
     enums::DitherMode,
-    palettes::Palette,
+    palette::Palette,
     types::ImageBuffer,
 };
 
@@ -39,53 +36,200 @@ pub const ED_OK: i32 = 0;
 pub const ED_ERR_NULL_POINTER: i32 = -1;
 /// `width` was zero.
 pub const ED_ERR_BAD_WIDTH: i32 = -2;
-/// `pixels_len` is not a multiple of 3, or not a whole number of `width`-pixel rows.
+/// `pixels_len` is not a whole number of `width`-pixel RGB rows.
 pub const ED_ERR_BAD_PIXELS: i32 = -3;
-/// A palette byte length was not a multiple of 3, held fewer than 2 colors, or had an
-/// out-of-range accent index.
+/// The palette JSON was not valid UTF-8, not an `epaper-palette` document, or failed
+/// validation (entry count, duplicate inks, un-normalised white, …).
 pub const ED_ERR_BAD_PALETTE: i32 = -4;
-/// `out_len` does not equal `width * height`.
+/// An output buffer has the wrong length.
 pub const ED_ERR_BAD_OUTPUT_LEN: i32 = -5;
-/// `mode_id` is not a known [`DitherMode`] discriminant.
+/// `mode` was null, not UTF-8, or not a known mode name.
 pub const ED_ERR_BAD_MODE: i32 = -6;
 /// A panic was caught inside the FFI body.
 pub const ED_ERR_PANIC: i32 = -7;
+/// `opts` asked for DBS (`dbs_max_passes > 0`) with `dbs_viewing_distance_cm` or `dbs_ppi`
+/// not finite and greater than 0.
+pub const ED_ERR_BAD_DBS: i32 = -8;
 
-/// Interpret a `*const u8` + length as a palette of RGB triples.
-///
-/// Returns `Ok(None)` when `len == 0` (meaning "no palette supplied"), `Ok(Some(palette))`
-/// for a valid palette, or `Err(code)` for a malformed one.
-fn build_palette(ptr: *const u8, len: usize, accent_idx: usize) -> Result<Option<Palette>, i32> {
-    if len == 0 {
-        return Ok(None);
-    }
-    if ptr.is_null() {
-        return Err(ED_ERR_NULL_POINTER);
-    }
-    if !len.is_multiple_of(3) {
-        return Err(ED_ERR_BAD_PALETTE);
-    }
-    // SAFETY: caller guarantees `ptr` is valid for `len` bytes; checked non-null above.
-    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
-    let colors: Vec<[u8; 3]> = bytes.as_chunks::<3>().0.to_vec();
-    if colors.len() < 2 || accent_idx >= colors.len() {
-        return Err(ED_ERR_BAD_PALETTE);
-    }
-    Ok(Some(Palette::new(colors, accent_idx)))
+/// Opaque palette handle (`ed_palette` in C).
+pub struct EdPalette {
+    inner: Palette,
 }
 
-/// Dither a flat RGB image to palette indices.
+/// Dithering options, the C mirror of the parts of `DitherOptions` this wrapper exposes.
+///
+/// Get one from [`ed_dither_options_default`] and change fields from there. Adding a field is
+/// an ABI change: bump [`ed_abi_version`] and the header together.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EdDitherOptions {
+    /// NUL-terminated mode name: "none", "burkes", "ordered", "floyd_steinberg", "atkinson",
+    /// "stucki", "sierra", "sierra_lite", "jarvis_judice_ninke" or "dizzy".
+    pub mode: *const c_char,
+    /// Serpentine scanning for error-diffusion modes.
+    pub serpentine: bool,
+    /// Map each named ink's nominal colour onto its measured appearance before matching.
+    pub anchor: bool,
+    /// A pixel exactly equal to a named ink's nominal takes that ink, undithered.
+    pub snap: bool,
+    /// Direct Binary Search refinement: upper bound on full-image passes. `0` disables DBS.
+    pub dbs_max_passes: u32,
+    /// DBS eye model: viewer-to-panel distance in centimetres. Ignored when DBS is off.
+    pub dbs_viewing_distance_cm: f64,
+    /// DBS eye model: panel pixel density in pixels per inch. Ignored when DBS is off.
+    pub dbs_ppi: f64,
+}
+
+/// Static NUL-terminated names, so `ed_dither_options_default` can hand out a pointer that
+/// stays valid forever.
+const MODE_NAMES: [(DitherMode, &CStr); 10] = [
+    (DitherMode::None, c"none"),
+    (DitherMode::Burkes, c"burkes"),
+    (DitherMode::Ordered, c"ordered"),
+    (DitherMode::FloydSteinberg, c"floyd_steinberg"),
+    (DitherMode::Atkinson, c"atkinson"),
+    (DitherMode::Stucki, c"stucki"),
+    (DitherMode::Sierra, c"sierra"),
+    (DitherMode::SierraLite, c"sierra_lite"),
+    (DitherMode::JarvisJudiceNinke, c"jarvis_judice_ninke"),
+    (DitherMode::Dizzy, c"dizzy"),
+];
+
+impl EdDitherOptions {
+    /// Translate into the core's options. `Err` carries the `ED_ERR_*` code.
+    ///
+    /// # Safety
+    /// `self.mode` must be null or point to a NUL-terminated string.
+    unsafe fn to_options(self) -> Result<DitherOptions, i32> {
+        if self.mode.is_null() {
+            return Err(ED_ERR_BAD_MODE);
+        }
+        // SAFETY: non-null, and the caller guarantees NUL termination.
+        let name = unsafe { CStr::from_ptr(self.mode) }.to_str().map_err(|_| ED_ERR_BAD_MODE)?;
+        let mode = name.parse::<DitherMode>().map_err(|_| ED_ERR_BAD_MODE)?;
+        let dbs = if self.dbs_max_passes == 0 {
+            None
+        } else {
+            let params = DbsParams {
+                viewing_distance_cm: self.dbs_viewing_distance_cm,
+                ppi: self.dbs_ppi,
+                max_passes: self.dbs_max_passes,
+            };
+            params.validate().map_err(|_| ED_ERR_BAD_DBS)?;
+            Some(params)
+        };
+        // Pre-processing intentionally left at defaults (off) — tone/gamut stay in the app.
+        Ok(DitherOptions { mode, serpentine: self.serpentine, anchor: self.anchor, snap: self.snap, dbs, ..Default::default() })
+    }
+}
+
+/// The core's defaults: mode, serpentine, anchoring and snapping from
+/// `DitherOptions::default()`, DBS off, and `DbsParams::default()`'s viewing geometry.
+#[unsafe(no_mangle)]
+pub extern "C" fn ed_dither_options_default() -> EdDitherOptions {
+    let core = DitherOptions::default();
+    let dbs = DbsParams::default();
+    let mode = MODE_NAMES.iter().find(|(m, _)| *m == core.mode).map_or(c"burkes", |(_, n)| n);
+    EdDitherOptions {
+        mode: mode.as_ptr(),
+        serpentine: core.serpentine,
+        anchor: core.anchor,
+        snap: core.snap,
+        dbs_max_passes: 0,
+        dbs_viewing_distance_cm: dbs.viewing_distance_cm,
+        dbs_ppi: dbs.ppi,
+    }
+}
+
+/// The core's default DBS pass budget (`DbsParams::default().max_passes`), for turning DBS on
+/// without hard-coding it.
+#[unsafe(no_mangle)]
+pub extern "C" fn ed_dither_options_default_dbs_passes() -> u32 {
+    DbsParams::default().max_passes
+}
+
+/// Parse an `epaper-palette` JSON document (`json`, `len` bytes, UTF-8, no NUL needed) into a
+/// new palette handle written to `*out`. On failure `*out` is set to null.
+///
+/// # Safety
+/// `json` must be valid for `len` bytes; `out` must be a valid pointer to write to.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ed_palette_from_json(json: *const c_char, len: usize, out: *mut *mut EdPalette) -> i32 {
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        if out.is_null() {
+            return ED_ERR_NULL_POINTER;
+        }
+        // SAFETY: checked non-null.
+        unsafe { *out = std::ptr::null_mut() };
+        if json.is_null() {
+            return ED_ERR_NULL_POINTER;
+        }
+        // SAFETY: caller guarantees `json` is valid for `len` bytes.
+        let bytes = unsafe { std::slice::from_raw_parts(json.cast::<u8>(), len) };
+        let Ok(text) = std::str::from_utf8(bytes) else { return ED_ERR_BAD_PALETTE };
+        match Palette::from_json(text) {
+            Ok(inner) => {
+                // SAFETY: checked non-null.
+                unsafe { *out = Box::into_raw(Box::new(EdPalette { inner })) };
+                ED_OK
+            }
+            Err(_) => ED_ERR_BAD_PALETTE,
+        }
+    }))
+    .unwrap_or(ED_ERR_PANIC)
+}
+
+/// Release a palette handle. Null is a no-op. Freeing the same handle twice is undefined
+/// behaviour.
+///
+/// # Safety
+/// `palette` must be null or a handle from [`ed_palette_from_json`] not yet freed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ed_palette_free(palette: *mut EdPalette) {
+    if !palette.is_null() {
+        // SAFETY: the caller guarantees this came from `Box::into_raw` and is freed once.
+        drop(unsafe { Box::from_raw(palette) });
+    }
+}
+
+/// Number of entries in the palette (0 for a null handle).
+///
+/// # Safety
+/// `palette` must be null or a live handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ed_palette_len(palette: *const EdPalette) -> usize {
+    // SAFETY: null or a live handle, per the contract.
+    unsafe { palette.as_ref() }.map_or(0, |p| p.inner.len())
+}
+
+/// Write each entry's sRGB preview colour (3 bytes per entry, entry order) into `out`.
+/// `out_len` must equal `3 * ed_palette_len(palette)`.
+///
+/// # Safety
+/// `palette` must be a live handle; `out` must be writable for `out_len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ed_palette_preview_rgb(palette: *const EdPalette, out: *mut u8, out_len: usize) -> i32 {
+    // SAFETY: null or a live handle, per the contract.
+    let Some(p) = (unsafe { palette.as_ref() }) else { return ED_ERR_NULL_POINTER };
+    if out.is_null() {
+        return ED_ERR_NULL_POINTER;
+    }
+    let rgb: Vec<u8> = p.inner.preview_srgb().iter().flatten().copied().collect();
+    if out_len != rgb.len() {
+        return ED_ERR_BAD_OUTPUT_LEN;
+    }
+    // SAFETY: `out` is non-null and writable for `out_len == rgb.len()` bytes.
+    unsafe { std::ptr::copy_nonoverlapping(rgb.as_ptr(), out, rgb.len()) };
+    ED_OK
+}
+
+/// Dither a flat RGB image to palette indices, optionally refined with DBS.
 ///
 /// # Parameters
 /// - `pixels` / `pixels_len`: flat sRGB bytes, `len = width * height * 3`.
 /// - `width`: image width in pixels (`> 0`).
-/// - `matching_palette` / `matching_len` / `matching_accent`: the palette matched against,
-///   in the caller's index order (`len` a multiple of 3, ≥ 2 colors). Required.
-/// - `canonical_palette` / `canonical_len` / `canonical_accent`: optional ideal-color
-///   palette for exact-pixel passthrough. Pass `canonical_len == 0` to disable (plain
-///   matching against `matching_palette`).
-/// - `mode_id`: [`DitherMode`] discriminant (0 = None … 8 = JarvisJudiceNinke).
-/// - `serpentine`: serpentine scanning for error-diffusion modes.
+/// - `palette`: a handle from [`ed_palette_from_json`]. Required.
+/// - `opts`: algorithm, scan order, inks and DBS settings; see [`EdDitherOptions`]. Required.
 /// - `out` / `out_len`: caller-allocated output, `out_len` must equal `width * height`.
 ///
 /// # Returns
@@ -93,238 +237,258 @@ fn build_palette(ptr: *const u8, len: usize, accent_idx: usize) -> Result<Option
 /// (and `out` is left untouched).
 ///
 /// # Safety
-/// All pointers must either be null (where documented as optional) or valid for their
-/// stated lengths for the duration of the call. `out` must be writable for `out_len` bytes.
+/// All pointers must be valid for their stated lengths for the duration of the call;
+/// `opts->mode` must be a NUL-terminated string.
 #[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn ed_dither(
     pixels: *const u8,
     pixels_len: usize,
     width: usize,
-    matching_palette: *const u8,
-    matching_len: usize,
-    matching_accent: usize,
-    canonical_palette: *const u8,
-    canonical_len: usize,
-    canonical_accent: usize,
-    mode_id: u8,
-    serpentine: bool,
+    palette: *const EdPalette,
+    opts: *const EdDitherOptions,
     out: *mut u8,
     out_len: usize,
 ) -> i32 {
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        if pixels.is_null() || out.is_null() {
+        if pixels.is_null() || out.is_null() || opts.is_null() || palette.is_null() {
             return ED_ERR_NULL_POINTER;
         }
         if width == 0 {
             return ED_ERR_BAD_WIDTH;
         }
-        if !pixels_len.is_multiple_of(3) || !(pixels_len / 3).is_multiple_of(width) {
-            return ED_ERR_BAD_PIXELS;
-        }
-        let pixel_count = pixels_len / 3;
-        if out_len != pixel_count {
+        // SAFETY: validated non-null; the caller guarantees `pixels_len` bytes.
+        let pixel_bytes = unsafe { std::slice::from_raw_parts(pixels, pixels_len) };
+        let Ok(img) = ImageBuffer::new(pixel_bytes, width) else { return ED_ERR_BAD_PIXELS };
+        if out_len != img.width * img.height {
             return ED_ERR_BAD_OUTPUT_LEN;
         }
-
-        let mode = match DitherMode::try_from(mode_id) {
-            Ok(m) => m,
-            Err(_) => return ED_ERR_BAD_MODE,
-        };
-
-        let matching = match build_palette(matching_palette, matching_len, matching_accent) {
-            Ok(Some(p)) => p,
-            // A matching palette is required — treat "none supplied" as malformed.
-            Ok(None) => return ED_ERR_BAD_PALETTE,
+        // SAFETY: validated non-null; the caller guarantees a valid struct and mode string.
+        let options = match unsafe { (*opts).to_options() } {
+            Ok(o) => o,
             Err(code) => return code,
         };
-        let canonical = match build_palette(canonical_palette, canonical_len, canonical_accent) {
-            Ok(c) => c,
-            Err(code) => return code,
-        };
-
-        // SAFETY: validated non-null and length above.
-        let pixel_bytes = unsafe { std::slice::from_raw_parts(pixels, pixels_len) };
-        let img = ImageBuffer::new(pixel_bytes, width);
-
-        // Pre-processing intentionally left at defaults (off) — tone/gamut stay in the app.
-        let config = DitherConfig { mode, serpentine, ..Default::default() };
-
-        let indices = match canonical {
-            Some(canon) => dither_with_canonical(&img, &matching, &canon, config),
-            None => dither(&img, &matching, config),
-        };
-
-        debug_assert_eq!(indices.len(), pixel_count);
-        // SAFETY: `out` validated non-null and `out_len == pixel_count == indices.len()`.
-        unsafe {
-            std::ptr::copy_nonoverlapping(indices.as_ptr(), out, indices.len());
-        }
+        // SAFETY: validated non-null; the caller guarantees a live handle.
+        let palette = unsafe { &(*palette).inner };
+        let indices = dither(&img, palette, &options);
+        // SAFETY: `out` validated non-null and `out_len == indices.len()`.
+        unsafe { std::ptr::copy_nonoverlapping(indices.as_ptr(), out, indices.len()) };
         ED_OK
     }));
-
     result.unwrap_or(ED_ERR_PANIC)
 }
 
-/// ABI version of this wrapper. Bump when the exported signature changes so the Swift side
+/// ABI version of this wrapper. Bump when the exported surface changes so the Swift side
 /// can assert compatibility at load time.
+///
+/// - 1: `ed_dither(…, mode_id, serpentine, out, out_len)`.
+/// - 2: options moved into [`EdDitherOptions`] (adds DBS); `ed_dither_options_default*` added.
+/// - 3: palettes are handles from `epaper-palette` JSON (`ed_palette_*`); modes are names;
+///   `anchor` and `snap` options; the canonical palette arguments are gone.
 #[unsafe(no_mangle)]
 pub extern "C" fn ed_abi_version() -> u32 {
-    1
+    3
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::CStr;
 
-    /// Solid-red 2×2 against a black/white/red palette (app order) must map every pixel to
-    /// index 2 (red), exercising the exact-color bypass through the FFI.
+    const BWR_JSON: &str = r##"{"format":"epaper-palette","version":1,"entries":[
+        {"appearance":[0.0,0.0,0.0],"name":"black","nominal":"#000000"},
+        {"appearance":[100.0,0.0,0.0],"name":"white","nominal":"#ffffff"},
+        {"appearance":[53.24,80.09,67.2],"name":"red","nominal":"#ff0000"}]}"##;
+
+    fn palette(json: &str) -> *mut EdPalette {
+        let mut handle = std::ptr::null_mut();
+        let code = unsafe { ed_palette_from_json(json.as_ptr().cast(), json.len(), &mut handle) };
+        assert_eq!(code, ED_OK);
+        handle
+    }
+
+    fn opts(mode: &'static CStr) -> EdDitherOptions {
+        EdDitherOptions { mode: mode.as_ptr(), ..ed_dither_options_default() }
+    }
+
+    /// Call `ed_dither`; returns (status, output).
+    fn run(pixels: &[u8], width: usize, p: *const EdPalette, o: &EdDitherOptions) -> (i32, Vec<u8>) {
+        let mut out = vec![0u8; pixels.len() / 3];
+        let code = unsafe { ed_dither(pixels.as_ptr(), pixels.len(), width, p, o, out.as_mut_ptr(), out.len()) };
+        (code, out)
+    }
+
+    /// A smooth gradient so error diffusion (and DBS) actually have something to do.
+    fn gradient(width: usize, height: usize) -> Vec<u8> {
+        let mut pixels = Vec::with_capacity(width * height * 3);
+        for y in 0..height {
+            for x in 0..width {
+                let v = ((x + y) * 255 / (width + height - 2)) as u8;
+                pixels.extend_from_slice(&[v, v / 2, 255 - v]);
+            }
+        }
+        pixels
+    }
+
+    #[test]
+    fn defaults_mirror_the_core() {
+        let o = ed_dither_options_default();
+        let core = DitherOptions::default();
+        let dbs = DbsParams::default();
+        let mode = unsafe { CStr::from_ptr(o.mode) }.to_str().unwrap();
+        assert_eq!(mode, core.mode.to_string());
+        assert_eq!(o.serpentine, core.serpentine);
+        assert_eq!((o.anchor, o.snap), (core.anchor, core.snap));
+        assert_eq!(o.dbs_max_passes, 0, "DBS is opt-in");
+        assert_eq!(o.dbs_viewing_distance_cm, dbs.viewing_distance_cm);
+        assert_eq!(o.dbs_ppi, dbs.ppi);
+        assert_eq!(ed_dither_options_default_dbs_passes(), dbs.max_passes);
+    }
+
     #[test]
     fn solid_red_maps_to_red_index() {
+        let p = palette(BWR_JSON);
         let pixels: Vec<u8> = std::iter::repeat_n([255u8, 0, 0], 4).flatten().collect();
-        let palette: [u8; 9] = [0, 0, 0, 255, 255, 255, 255, 0, 0]; // black, white, red
-        let mut out = [0u8; 4];
-        let code = unsafe {
-            ed_dither(
-                pixels.as_ptr(),
-                pixels.len(),
-                2,
-                palette.as_ptr(),
-                palette.len(),
-                2,
-                std::ptr::null(),
-                0,
-                0,
-                DitherMode::Burkes as u8,
-                true,
-                out.as_mut_ptr(),
-                out.len(),
-            )
-        };
+        let (code, out) = run(&pixels, 2, p, &opts(c"burkes"));
+        unsafe { ed_palette_free(p) };
         assert_eq!(code, ED_OK);
         assert_eq!(out, [2, 2, 2, 2]);
     }
 
-    /// The FFI must produce byte-identical output to calling `core::dither` directly —
-    /// this is the whole point of the wrapper (no logic of its own).
     #[test]
     fn ffi_matches_core_dither() {
-        // A small gradient so error diffusion actually does something.
-        let width = 4usize;
-        let height = 4usize;
-        let mut pixels = Vec::with_capacity(width * height * 3);
-        for i in 0..(width * height) {
-            let v = (i * 16) as u8;
-            pixels.extend_from_slice(&[v, v, v]);
-        }
-        let palette_bytes: [u8; 6] = [0, 0, 0, 255, 255, 255]; // black, white
-        let palette = Palette::new(vec![[0, 0, 0], [255, 255, 255]], 1);
-
-        let img = ImageBuffer::new(&pixels, width);
-        let expected = dither(
-            &img,
-            &palette,
-            DitherConfig { mode: DitherMode::FloydSteinberg, serpentine: true, ..Default::default() },
-        );
-
-        let mut out = vec![0u8; width * height];
-        let code = unsafe {
-            ed_dither(
-                pixels.as_ptr(),
-                pixels.len(),
-                width,
-                palette_bytes.as_ptr(),
-                palette_bytes.len(),
-                1,
-                std::ptr::null(),
-                0,
-                0,
-                DitherMode::FloydSteinberg as u8,
-                true,
-                out.as_mut_ptr(),
-                out.len(),
-            )
-        };
+        let (width, height) = (16, 12);
+        let pixels = gradient(width, height);
+        let core_palette = Palette::from_json(BWR_JSON).unwrap();
+        let img = ImageBuffer::new(&pixels, width).unwrap();
+        let expected = dither(&img, &core_palette, &DitherOptions { mode: DitherMode::FloydSteinberg, ..Default::default() });
+        let p = palette(BWR_JSON);
+        let (code, out) = run(&pixels, width, p, &opts(c"floyd_steinberg"));
+        unsafe { ed_palette_free(p) };
         assert_eq!(code, ED_OK);
         assert_eq!(out, expected);
     }
 
     #[test]
+    fn ffi_matches_core_dither_with_dbs() {
+        let (width, height) = (24, 16);
+        let pixels = gradient(width, height);
+        let params = DbsParams { viewing_distance_cm: 30.0, ppi: 100.0, max_passes: 4 };
+        let img = ImageBuffer::new(&pixels, width).unwrap();
+        let expected = dither(&img, &Palette::from_json(BWR_JSON).unwrap(), &DitherOptions { dbs: Some(params), ..Default::default() });
+        let p = palette(BWR_JSON);
+        let o = EdDitherOptions { dbs_max_passes: 4, dbs_viewing_distance_cm: 30.0, dbs_ppi: 100.0, ..opts(c"burkes") };
+        let (code, out) = run(&pixels, width, p, &o);
+        let (_, plain) = run(&pixels, width, p, &opts(c"burkes"));
+        unsafe { ed_palette_free(p) };
+        assert_eq!(code, ED_OK);
+        assert_eq!(out, expected);
+        assert_ne!(out, plain, "DBS should change at least one pixel of a gradient");
+    }
+
+    #[test]
+    fn anchor_and_snap_switches_reach_the_core() {
+        let pixels: Vec<u8> = std::iter::repeat_n([255u8, 0, 0], 4).flatten().collect();
+        let img = ImageBuffer::new(&pixels, 2).unwrap();
+        let core_palette = Palette::from_json(BWR_JSON).unwrap();
+        let expected = dither(&img, &core_palette, &DitherOptions { anchor: false, snap: false, mode: DitherMode::None, ..Default::default() });
+        let p = palette(BWR_JSON);
+        let o = EdDitherOptions { anchor: false, snap: false, ..opts(c"none") };
+        let (code, out) = run(&pixels, 2, p, &o);
+        unsafe { ed_palette_free(p) };
+        assert_eq!(code, ED_OK);
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn dbs_geometry_validated_only_when_enabled() {
+        let pixels = gradient(8, 8);
+        let p = palette(BWR_JSON);
+        let off = EdDitherOptions { dbs_ppi: 0.0, dbs_viewing_distance_cm: f64::NAN, ..opts(c"burkes") };
+        assert_eq!(run(&pixels, 8, p, &off).0, ED_OK);
+        for (distance, ppi) in [(0.0, 127.0), (40.0, -1.0), (f64::INFINITY, 127.0), (40.0, f64::NAN)] {
+            let on = EdDitherOptions { dbs_max_passes: 1, dbs_viewing_distance_cm: distance, dbs_ppi: ppi, ..opts(c"burkes") };
+            assert_eq!(run(&pixels, 8, p, &on).0, ED_ERR_BAD_DBS, "{distance} cm, {ppi} ppi");
+        }
+        unsafe { ed_palette_free(p) };
+    }
+
+    #[test]
     fn rejects_bad_output_len() {
-        let pixels = [0u8; 12]; // 4 px
-        let palette: [u8; 6] = [0, 0, 0, 255, 255, 255];
-        let mut out = [0u8; 3]; // wrong: should be 4
-        let code = unsafe {
-            ed_dither(
-                pixels.as_ptr(),
-                pixels.len(),
-                2,
-                palette.as_ptr(),
-                palette.len(),
-                1,
-                std::ptr::null(),
-                0,
-                0,
-                DitherMode::Burkes as u8,
-                true,
-                out.as_mut_ptr(),
-                out.len(),
-            )
-        };
+        let p = palette(BWR_JSON);
+        let pixels = [0u8; 12];
+        let mut out = [0u8; 3];
+        let code = unsafe { ed_dither(pixels.as_ptr(), pixels.len(), 2, p, &opts(c"burkes"), out.as_mut_ptr(), out.len()) };
+        unsafe { ed_palette_free(p) };
         assert_eq!(code, ED_ERR_BAD_OUTPUT_LEN);
     }
 
     #[test]
-    fn rejects_null_pixels() {
+    fn rejects_bad_pixels() {
+        let p = palette(BWR_JSON);
+        let (code, _) = run(&[0u8; 7], 2, p, &opts(c"burkes"));
+        unsafe { ed_palette_free(p) };
+        assert_eq!(code, ED_ERR_BAD_PIXELS);
+    }
+
+    #[test]
+    fn rejects_null_pixels_palette_and_options() {
+        let p = palette(BWR_JSON);
         let mut out = [0u8; 4];
-        let palette: [u8; 6] = [0, 0, 0, 255, 255, 255];
-        let code = unsafe {
-            ed_dither(
-                std::ptr::null(),
-                12,
-                2,
-                palette.as_ptr(),
-                palette.len(),
-                1,
-                std::ptr::null(),
-                0,
-                0,
-                DitherMode::Burkes as u8,
-                true,
-                out.as_mut_ptr(),
-                out.len(),
-            )
+        let pixels = [0u8; 12];
+        let o = opts(c"burkes");
+        let codes = unsafe {
+            [
+                ed_dither(std::ptr::null(), 12, 2, p, &o, out.as_mut_ptr(), out.len()),
+                ed_dither(pixels.as_ptr(), 12, 2, std::ptr::null(), &o, out.as_mut_ptr(), out.len()),
+                ed_dither(pixels.as_ptr(), 12, 2, p, std::ptr::null(), out.as_mut_ptr(), out.len()),
+            ]
         };
+        unsafe { ed_palette_free(p) };
+        assert_eq!(codes, [ED_ERR_NULL_POINTER; 3]);
+    }
+
+    #[test]
+    fn rejects_unknown_or_null_mode() {
+        let p = palette(BWR_JSON);
+        let pixels = [0u8; 12];
+        assert_eq!(run(&pixels, 2, p, &opts(c"bayer")).0, ED_ERR_BAD_MODE);
+        let null_mode = EdDitherOptions { mode: std::ptr::null(), ..ed_dither_options_default() };
+        assert_eq!(run(&pixels, 2, p, &null_mode).0, ED_ERR_BAD_MODE);
+        unsafe { ed_palette_free(p) };
+    }
+
+    #[test]
+    fn rejects_invalid_palette_json() {
+        let mut handle = std::ptr::null_mut();
+        let bad = "{\"format\":\"epaper-palette\",\"version\":1,\"entries\":[]}";
+        let code = unsafe { ed_palette_from_json(bad.as_ptr().cast(), bad.len(), &mut handle) };
+        assert_eq!(code, ED_ERR_BAD_PALETTE);
+        assert!(handle.is_null(), "no handle on failure");
+        let code = unsafe { ed_palette_from_json(std::ptr::null(), 3, &mut handle) };
         assert_eq!(code, ED_ERR_NULL_POINTER);
     }
 
     #[test]
-    fn rejects_unknown_mode() {
-        let pixels = [0u8; 12];
-        let palette: [u8; 6] = [0, 0, 0, 255, 255, 255];
-        let mut out = [0u8; 4];
-        let code = unsafe {
-            ed_dither(
-                pixels.as_ptr(),
-                pixels.len(),
-                2,
-                palette.as_ptr(),
-                palette.len(),
-                1,
-                std::ptr::null(),
-                0,
-                0,
-                99,
-                true,
-                out.as_mut_ptr(),
-                out.len(),
-            )
-        };
-        assert_eq!(code, ED_ERR_BAD_MODE);
+    fn palette_reports_length_and_preview() {
+        let p = palette(BWR_JSON);
+        let mut rgb = [0u8; 9];
+        let (len, code) = unsafe { (ed_palette_len(p), ed_palette_preview_rgb(p, rgb.as_mut_ptr(), rgb.len())) };
+        let short = unsafe { ed_palette_preview_rgb(p, rgb.as_mut_ptr(), 8) };
+        unsafe { ed_palette_free(p) };
+        assert_eq!(len, 3);
+        assert_eq!(code, ED_OK);
+        assert_eq!(&rgb[..6], &[0, 0, 0, 255, 255, 255]);
+        assert_eq!(short, ED_ERR_BAD_OUTPUT_LEN);
+    }
+
+    /// Double free is undefined behaviour and documented as such; freeing NULL is a no-op.
+    #[test]
+    fn freeing_null_is_a_no_op() {
+        unsafe { ed_palette_free(std::ptr::null_mut()) };
     }
 
     #[test]
-    fn abi_version_is_one() {
-        assert_eq!(ed_abi_version(), 1);
+    fn abi_version_is_three() {
+        assert_eq!(ed_abi_version(), 3);
     }
 }

@@ -231,7 +231,6 @@
     .slider-val.muted { color: var(--muted); }
 
     /* Compression section hidden when not applicable */
-    #compressionSection { display: none; }
 
     .sub-group-label {
       font-size: 9px;
@@ -553,27 +552,20 @@
       <div class="field">
         <div class="group-label">Color Scheme</div>
         <select id="schemeSelect">
-          <optgroup label="Standard">
-            <option value="MONO">MONO — 2 color</option>
-            <option value="BWR">BWR — black/white/red</option>
-            <option value="BWY">BWY — black/white/yellow</option>
-            <option value="BWRY">BWRY — 4 color</option>
-            <option value="BWGBRY" selected>BWGBRY — Spectra 6</option>
-            <option value="GRAYSCALE_4">GRAYSCALE 4</option>
-            <option value="GRAYSCALE_16">GRAYSCALE 16</option>
-            <option value="SEVEN_COLOR">SEVEN COLOR — Spectra/ACeP 7</option>
-            <option value="BWGBRY_SPLIT">BWGBRY SPLIT — Spectra 6, split planes</option>
-            <option value="GRAYSCALE_8">GRAYSCALE 8 — e.g. Inkplate 10 (not a firmware value)</option>
+          <optgroup label="Ideal (examples/palettes)">
+            <option value="ideal_mono">Ideal mono</option>
+            <option value="ideal_bwr">Ideal BWR</option>
+            <option value="ideal_bwy">Ideal BWY</option>
+            <option value="ideal_bwry">Ideal BWRY</option>
+            <option value="ideal_bwgbry">Ideal BWGBRY (Spectra 6)</option>
+            <option value="ideal_grayscale4">Ideal grayscale 4</option>
+            <option value="ideal_grayscale16">Ideal grayscale 16</option>
+            <option value="ideal_seven_color">Ideal 7-colour</option>
+            <option value="ideal_grayscale8">Ideal grayscale 8</option>
           </optgroup>
-          <optgroup label="Measured Palettes">
-            <option value="SPECTRA_7_3_6COLOR">Spectra 7.3" 6-color</option>
-            <option value="SPECTRA_7_3_6COLOR_V2">Spectra 7.3" 6-color v2</option>
-            <option value="BWRY_3_97">BWRY 3.97" 800×480</option>
-            <option value="MONO_4_26">Mono 4.26"</option>
-            <option value="BWRY_4_2">BWRY 4.2"</option>
-            <option value="SOLUM_BWR">Solum BWR</option>
-            <option value="HANSHOW_BWR">Hanshow BWR</option>
-            <option value="HANSHOW_BWY">Hanshow BWY</option>
+          <optgroup label="Measured (examples/palettes)">
+            <option value="spectra_7_3_6color" selected>Spectra 7.3" 6-colour</option>
+            <option value="spectra_7_3_6color_v2">Spectra 7.3" 6-colour v2</option>
           </optgroup>
         </select>
       </div>
@@ -597,7 +589,7 @@
 
     </div>
 
-    <!-- Serpentine + tone compression -->
+    <!-- Serpentine -->
     <div>
       <div class="group-label">Options</div>
       <div class="toggle-row">
@@ -634,28 +626,14 @@
       </div>
     </div>
 
-    <!-- Compression controls (measured palettes only) -->
+    <!-- Tone and gamut (opt-in) -->
     <div id="compressionSection">
-      <div class="group-label">Tone Compression</div>
-      <div class="toggle-row">
-        <span>Auto levels</span>
-        <label class="toggle">
-          <input type="checkbox" id="toneAutoToggle">
-          <span class="track"></span>
-        </label>
-      </div>
+      <div class="group-label">Black-point lift (tone)</div>
       <div class="slider-row">
         <input type="range" id="toneSlider" min="0" max="100" value="0" step="5">
-        <span class="slider-val" id="toneVal">0%</span>
+        <span class="slider-val muted" id="toneVal">0%</span>
       </div>
-      <div class="sub-group-label">Gamut Compression</div>
-      <div class="toggle-row">
-        <span>Auto gamut</span>
-        <label class="toggle">
-          <input type="checkbox" id="gamutAutoToggle">
-          <span class="track"></span>
-        </label>
-      </div>
+      <div class="group-label">Gamut Compression</div>
       <div class="slider-row">
         <input type="range" id="gamutSlider" min="0" max="100" value="0" step="5">
         <span class="slider-val" id="gamutVal">0%</span>
@@ -718,42 +696,20 @@
 </div>
 
 <script type="module">
-import {
-  ditherImage,
-  ColorScheme,
-  DitherMode,
-  SPECTRA_7_3_6COLOR,
-  SPECTRA_7_3_6COLOR_V2,
-  BWRY_3_97,
-  MONO_4_26,
-  BWRY_4_2,
-  SOLUM_BWR,
-  HANSHOW_BWR,
-  HANSHOW_BWY,
-} from './dist/index.js';
+import { ditherImage, DitherMode, Palette } from './dist/index.js';
 
-// ── Scheme / mode lookup maps ────────────────────────────────────
+// ── Palette / mode lookup ────────────────────────────────────────
+// Palettes are the repo's example files; `bun run dev` serves the repo root so they resolve.
 
-const SCHEMES = {
-  MONO:             ColorScheme.MONO,
-  BWR:              ColorScheme.BWR,
-  BWY:              ColorScheme.BWY,
-  BWRY:             ColorScheme.BWRY,
-  BWGBRY:           ColorScheme.BWGBRY,
-  GRAYSCALE_4:      ColorScheme.GRAYSCALE_4,
-  GRAYSCALE_16:     ColorScheme.GRAYSCALE_16,
-  SEVEN_COLOR:      ColorScheme.SEVEN_COLOR,
-  BWGBRY_SPLIT:     ColorScheme.BWGBRY_SPLIT,
-  GRAYSCALE_8:      ColorScheme.GRAYSCALE_8,
-  SPECTRA_7_3_6COLOR,
-  SPECTRA_7_3_6COLOR_V2,
-  BWRY_3_97,
-  MONO_4_26,
-  BWRY_4_2,
-  SOLUM_BWR,
-  HANSHOW_BWR,
-  HANSHOW_BWY,
-};
+const paletteCache = new Map();
+async function loadPalette(name) {
+  if (!paletteCache.has(name)) {
+    const res = await fetch(`/examples/palettes/${name}.json`);
+    if (!res.ok) throw new Error(`cannot load palette ${name}: HTTP ${res.status}`);
+    paletteCache.set(name, Palette.fromJson(await res.text()));
+  }
+  return paletteCache.get(name);
+}
 
 const MODES = {
   NONE:              DitherMode.NONE,
@@ -780,10 +736,8 @@ const schemeSelect    = document.getElementById('schemeSelect');
 const modeSelect      = document.getElementById('modeSelect');
 const serpentine      = document.getElementById('serpentineToggle');
 const compressionSection = document.getElementById('compressionSection');
-const toneAutoToggle  = document.getElementById('toneAutoToggle');
 const toneSlider      = document.getElementById('toneSlider');
 const toneVal         = document.getElementById('toneVal');
-const gamutAutoToggle = document.getElementById('gamutAutoToggle');
 const gamutSlider     = document.getElementById('gamutSlider');
 const gamutVal        = document.getElementById('gamutVal');
 const exposureSlider   = document.getElementById('exposureSlider');
@@ -827,22 +781,12 @@ function onSettingChange() {
 
 // ── Compression helpers ──────────────────────────────────────────
 
-function isMeasuredPalette() {
-  return typeof SCHEMES[schemeSelect.value] !== 'number';
-}
-
-function updateCompressionSection() {
-  compressionSection.style.display = isMeasuredPalette() ? 'block' : 'none';
-}
-
-function getToneCompression() {
-  if (!isMeasuredPalette()) return 0.0;
-  return toneAutoToggle.checked ? 'auto' : toneSlider.value / 100;
-}
-
 function getGamutCompression() {
-  if (!isMeasuredPalette()) return 0.0;
-  return gamutAutoToggle.checked ? 'auto' : gamutSlider.value / 100;
+  return gamutSlider.value / 100;
+}
+
+function getTone() {
+  return toneSlider.value / 100;
 }
 
 // ── Pre-dither helpers ───────────────────────────────────────────
@@ -860,21 +804,19 @@ function runDither() {
   const schemeKey = schemeSelect.value;
   const modeKey   = modeSelect.value;
   const useSerpentine = serpentine.checked;
-  const toneComp  = getToneCompression();
   const gamutComp = getGamutCompression();
 
-  const scheme = SCHEMES[schemeKey];
   const mode   = MODES[modeKey];
 
   setStatus('working', 'processing…');
   algoBadge.textContent = modeKey.replace(/_/g, '-');
 
-  requestAnimationFrame(() => {
+  loadPalette(schemeKey).then((palette) => requestAnimationFrame(() => {
     const t0 = performance.now();
 
     const result = ditherImage(
       { width: currentImageData.width, height: currentImageData.height, data: currentImageData.data },
-      scheme,
+      palette,
       {
         mode,
         serpentine: useSerpentine,
@@ -882,7 +824,7 @@ function runDither() {
         saturation: getSaturation(),
         shadows:    getShadows(),
         highlights: getHighlights(),
-        tone:  toneComp,
+        tone:  getTone(),
         gamut: gamutComp,
       },
     );
@@ -918,7 +860,7 @@ function runDither() {
       : `${(elapsed / 1000).toFixed(2)} s`;
 
     setStatus('ready', `${result.width}×${result.height} · ${elapsed.toFixed(0)}ms`);
-  });
+  })).catch((err) => setStatus('error', String(err)));
 }
 
 // ── Image loading ────────────────────────────────────────────────
@@ -953,7 +895,6 @@ function loadFile(file) {
       statSize.textContent = `${img.naturalWidth}×${img.naturalHeight}`;
       document.title = `Dither Lab — ${file.name}`;
 
-      updateCompressionSection();
       runDither();
     };
     img.src = e.target.result;
@@ -972,29 +913,16 @@ function setStatus(type, text) {
 
 uploadZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
-schemeSelect.addEventListener('change', () => { updateCompressionSection(); onSettingChange(); });
+schemeSelect.addEventListener('change', onSettingChange);
 modeSelect.addEventListener('change', onSettingChange);
 serpentine.addEventListener('change', onSettingChange);
-toneAutoToggle.addEventListener('change', () => {
-  const isAuto = toneAutoToggle.checked;
-  toneSlider.disabled = isAuto;
-  toneVal.textContent = isAuto ? 'auto' : `${toneSlider.value}%`;
-  toneVal.className   = 'slider-val' + (isAuto ? ' muted' : '');
-  onSettingChange();
+gamutSlider.addEventListener('input', () => {
+  gamutVal.textContent = `${gamutSlider.value}%`;
+  runDither();
 });
 toneSlider.addEventListener('input', () => {
   toneVal.textContent = `${toneSlider.value}%`;
-  runDither();
-});
-gamutAutoToggle.addEventListener('change', () => {
-  const isAuto = gamutAutoToggle.checked;
-  gamutSlider.disabled = isAuto;
-  gamutVal.textContent = isAuto ? 'auto' : `${gamutSlider.value}%`;
-  gamutVal.className   = 'slider-val' + (isAuto ? ' muted' : '');
-  onSettingChange();
-});
-gamutSlider.addEventListener('input', () => {
-  gamutVal.textContent = `${gamutSlider.value}%`;
+  toneVal.className   = 'slider-val' + (toneSlider.value === '0' ? ' muted' : '');
   runDither();
 });
 

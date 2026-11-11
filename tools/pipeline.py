@@ -2,21 +2,19 @@
 """Pipeline visualization: saves one image per dithering step for inspection.
 
 Usage:
-    uv run scripts/pipeline.py [options] [image1.jpg image2.jpg ...]
+    uv run --project packages/python python tools/pipeline.py [options] [image1.jpg ...]
 
 Options:
-    --tc auto|0|0.5|1.0     Tone compression  (default: 0)
-    --gc auto|0|0.5|1.0     Gamut compression (default: 0)
-    --palette SPECTRA_V2|SPECTRA_V1|BWRY_3_97|...  (default: SPECTRA_V2)
+    --gc 0|0.5|1.0          Gamut compression strength (default: 0)
+    --palette spectra_7_3_6color_v2|spectra_7_3_6color  (default: spectra_7_3_6color_v2)
     --mode BURKES|FLOYD_STEINBERG|ATKINSON|...      (default: BURKES)
 
-Output: pipeline_out/pipeline_<name>_tc<tc>_gc<gc>.png — a vertical strip:
+Output: pipeline_out/pipeline_<name>_gc<gc>.png — a vertical strip:
     1. Input (sRGB)
     2. After sRGB→linear   + luminance histogram
-    3. After tone compression + luminance histogram
-    4. After gamut compression | OKLab movement heatmap
-    5. Direct palette map (no error diffusion)
-    6. Final dithered output
+    3. After gamut compression | OKLab movement heatmap
+    4. Direct palette map (no error diffusion; includes anchoring)
+    5. Final dithered output (includes anchoring)
 
 Defaults to marienplatz.jpg if no image paths given.
 """
@@ -24,15 +22,13 @@ Defaults to marienplatz.jpg if no image paths given.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import epaper_dithering as _lib
 import epaper_dithering._rs as _rs
+import example_palettes
 import numpy as np
-from epaper_dithering import DitherMode
+from epaper_dithering import DitherMode, DitherOptions, Palette, dither_image
 from PIL import Image, ImageDraw, ImageFont
 
 # ── Color-space helpers (self-contained; the Rust core owns the canonical math) ──
@@ -51,13 +47,9 @@ def linear_to_srgb(a: np.ndarray) -> np.ndarray:
     return np.clip(s * 255.0, 0, 255).astype(np.uint8)
 
 
-def get_palette_colors(palette: _lib.ColorPalette) -> list[tuple[int, int, int]]:
-    """Ordered sRGB colors of a measured palette."""
-    return list(palette.colors.values())
-
-
-def _palette_bytes(palette: _lib.ColorPalette) -> bytes:
-    return bytes(c for rgb in get_palette_colors(palette) for c in rgb)
+def get_palette_colors(palette: Palette) -> list[tuple[int, int, int]]:
+    """Preview sRGB colours of a palette, in entry order."""
+    return palette.preview_rgb()
 
 
 def rgb_to_lab(px: np.ndarray) -> np.ndarray:
@@ -76,16 +68,7 @@ HIST_H = 80
 _WR, _WG, _WB = 0.2126729, 0.7151522, 0.0721750
 
 # ── Available palettes ────────────────────────────────────────────────────────
-PALETTES: dict[str, _lib.ColorPalette] = {
-    "SPECTRA_V2": _lib.SPECTRA_7_3_6COLOR_V2,
-    "SPECTRA_V1": _lib.SPECTRA_7_3_6COLOR,
-    "BWRY_3_97": _lib.BWRY_3_97,
-    "BWRY_4_2": _lib.BWRY_4_2,
-    "MONO_4_26": _lib.MONO_4_26,
-    "SOLUM_BWR": _lib.SOLUM_BWR,
-    "HANSHOW_BWR": _lib.HANSHOW_BWR,
-    "HANSHOW_BWY": _lib.HANSHOW_BWY,
-}
+PALETTES: dict[str, Palette] = {name.lower(): p for name, p in example_palettes.measured()}
 
 # ── Available dither modes ────────────────────────────────────────────────────
 MODES: dict[str, DitherMode] = {m.name: m for m in DitherMode}
@@ -94,10 +77,8 @@ MODES: dict[str, DitherMode] = {m.name: m for m in DitherMode}
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def parse_compression(val: str) -> float | str:
-    """Parse 'auto', '0', '0.5', '1.0' → "auto" or float."""
-    if val.lower() == "auto":
-        return "auto"
+def parse_compression(val: str) -> float:
+    """Parse a 0.0–1.0 strength."""
     return float(val)
 
 
@@ -176,30 +157,17 @@ def gamut_heatmap(before: np.ndarray, after: np.ndarray) -> Image.Image:
     return Image.fromarray(rgb, "RGB")
 
 
-def _run_step(fn, pixels_linear: np.ndarray, palette_bytes: bytes, strength: float | None) -> np.ndarray:
+def _run_step(fn, pixels_linear: np.ndarray, palette: Palette, strength: float | None) -> np.ndarray:
     flat = np.ascontiguousarray(pixels_linear, dtype=np.float64).reshape(-1).tolist()
-    out = fn(flat, palette_bytes, strength)
+    out = fn(flat, palette._inner, strength)  # pylint: disable=protected-access
     return np.array(out, dtype=np.float64).reshape(pixels_linear.shape)
 
 
-def apply_tc(pixels_linear: np.ndarray, palette_bytes: bytes, tc: float | str) -> tuple[np.ndarray, str]:
-    if tc == 0.0:
-        return pixels_linear, "disabled"
-    strength = None if tc == "auto" else float(tc)
-    result = _run_step(_rs.tone_compress, pixels_linear, palette_bytes, strength)
-    if tc == "auto":
-        changed = not np.allclose(result, pixels_linear)
-        return result, "applied" if changed else "SKIPPED (image fits display range)"
-    return result, f"strength={tc:.2g}"
-
-
-def apply_gc(pixels_linear: np.ndarray, palette_bytes: bytes, gc: float | str) -> tuple[np.ndarray, str]:
+def apply_gc(pixels_linear: np.ndarray, palette: Palette, gc: float) -> tuple[np.ndarray, str]:
     if gc == 0.0:
         return pixels_linear, "disabled"
-    # gamut_compress: None → full strength (auto), else fixed strength.
-    strength = None if gc == "auto" else float(gc)
-    result = _run_step(_rs.gamut_compress, pixels_linear, palette_bytes, strength)
-    return result, "auto" if gc == "auto" else f"strength={gc:.2g}"
+    result = _run_step(_rs.gamut_compress, pixels_linear, palette, gc)
+    return result, f"strength={gc:.2g}"
 
 
 # ── Main per-image function ───────────────────────────────────────────────────
@@ -207,10 +175,9 @@ def apply_gc(pixels_linear: np.ndarray, palette_bytes: bytes, gc: float | str) -
 
 def run(
     image_path: Path,
-    palette: _lib.ColorPalette,
+    palette: Palette,
     palette_name: str,
-    tc: float | str,
-    gc: float | str,
+    gc: float,
     mode: DitherMode,
     out_path: Path,
 ) -> None:
@@ -218,7 +185,6 @@ def run(
     font = load_font(13)
 
     palette_srgb = get_palette_colors(palette)
-    palette_bytes = _palette_bytes(palette)
     palette_linear = srgb_to_linear(np.array(palette_srgb, dtype=np.float64))
     black_Y = float(_WR * palette_linear[0, 0] + _WG * palette_linear[0, 1] + _WB * palette_linear[0, 2])
     white_Y = float(_WR * palette_linear[1, 0] + _WG * palette_linear[1, 1] + _WB * palette_linear[1, 2])
@@ -238,23 +204,12 @@ def run(
         font,
     )
 
-    # ── Step 3: Tone compression ───────────────────────────────────────────────
-    pixels_tc, tc_note = apply_tc(pixels_linear, palette_bytes, tc)
-    Y3 = lum(pixels_tc)
-    p2_3, p98_3 = float(np.percentile(Y3, 2)), float(np.percentile(Y3, 98))
-    panel3 = with_histogram(to_pil(pixels_tc), Y3, black_Y, white_Y, font)
-    panel3 = add_label(
-        panel3,
-        f"3. Tone compression [tc={fmt(tc)} — {tc_note}]  (p2={p2_3:.3f}  p98={p98_3:.3f})",
-        font,
-    )
-
-    # ── Step 4: Gamut compression ─────────────────────────────────────────────
-    pixels_gc, gc_note = apply_gc(pixels_tc, palette_bytes, gc)
-    n_moved = int(np.sum(np.any(np.abs(pixels_gc - pixels_tc) > 1e-5, axis=-1)))
+    # ── Step 3: Gamut compression ─────────────────────────────────────────────
+    pixels_gc, gc_note = apply_gc(pixels_linear, palette, gc)
+    n_moved = int(np.sum(np.any(np.abs(pixels_gc - pixels_linear) > 1e-5, axis=-1)))
     pct_moved = 100.0 * n_moved / (WIDTH * HEIGHT)
 
-    heatmap = gamut_heatmap(pixels_tc, pixels_gc)
+    heatmap = gamut_heatmap(pixels_linear, pixels_gc)
     half_w = WIDTH // 2
     side = Image.new("RGB", (WIDTH, HEIGHT))
     side.paste(to_pil(pixels_gc).resize((half_w, HEIGHT), Image.LANCZOS), (0, 0))
@@ -264,22 +219,22 @@ def run(
     d.text((half_w + 4, 4), f"heatmap: {pct_moved:.1f}% pixels moved", fill=(255, 130, 80), font=font)
     panel4 = add_label(
         side,
-        f"4. Gamut compression [gc={fmt(gc)} — {gc_note}]  {n_moved:,} px / {pct_moved:.1f}% affected  |  heatmap",
+        f"3. Gamut compression [gc={fmt(gc)} — {gc_note}]  {n_moved:,} px / {pct_moved:.1f}% affected  |  heatmap",
         font,
     )
 
     # ── Step 5: Direct palette map ────────────────────────────────────────────
-    direct = _lib.dither_image(src, palette, mode=DitherMode.NONE, tone=tc, gamut=gc)
+    direct = dither_image(src, palette, DitherOptions(mode=DitherMode.NONE, gamut=gc))
     panel5 = add_label(
-        direct.convert("RGB"), f"5. Direct palette map (no error diffusion)  tc={fmt(tc)}  gc={fmt(gc)}", font
+        direct.convert("RGB"), f"4. Direct palette map (no error diffusion)  gc={fmt(gc)}", font
     )
 
     # ── Step 6: Final output ──────────────────────────────────────────────────
-    final = _lib.dither_image(src, palette, mode=mode, tone=tc, gamut=gc)
-    panel6 = add_label(final.convert("RGB"), f"6. Final: {mode.name}  tc={fmt(tc)}  gc={fmt(gc)}", font)
+    final = dither_image(src, palette, DitherOptions(mode=mode, gamut=gc))
+    panel6 = add_label(final.convert("RGB"), f"5. Final: {mode.name}  gc={fmt(gc)}", font)
 
     # ── Assemble vertical strip ───────────────────────────────────────────────
-    panels = [panel1, panel2, panel3, panel4, panel5, panel6]
+    panels = [panel1, panel2, panel4, panel5, panel6]
     total_h = sum(p.height for p in panels)
     sheet = Image.new("RGB", (WIDTH, total_h), (10, 10, 10))
     y = 0
@@ -294,30 +249,30 @@ def run(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Pipeline visualization for epaper dithering.")
     parser.add_argument("images", nargs="*", help="Image paths (default: marienplatz.jpg)")
-    parser.add_argument("--tc", default="0", help="Tone compression: auto|0|0.5|1.0 (default: 0)")
-    parser.add_argument("--gc", default="0", help="Gamut compression: auto|0|0.5|1.0 (default: 0)")
-    parser.add_argument("--palette", default="SPECTRA_V2", choices=list(PALETTES), help="Palette (default: SPECTRA_V2)")
+    parser.add_argument("--gc", default="0", help="Gamut compression strength 0.0–1.0 (default: 0)")
+    parser.add_argument(
+        "--palette", default="spectra_7_3_6color_v2", choices=list(PALETTES), help="Example palette name"
+    )
     parser.add_argument("--mode", default="BURKES", choices=list(MODES), help="Dither mode (default: BURKES)")
     args = parser.parse_args()
 
-    tc = parse_compression(args.tc)
     gc = parse_compression(args.gc)
     palette = PALETTES[args.palette]
     mode = MODES[args.mode]
 
-    here = Path(__file__).parent.parent
+    here = example_palettes.ROOT / "packages/python"
     image_paths = [here / p for p in args.images] if args.images else [here / "marienplatz.jpg"]
     out_dir = here / "pipeline_out"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    suffix = f"_tc{fmt(tc)}_gc{fmt(gc)}_{args.palette}"
+    suffix = f"_gc{fmt(gc)}_{args.palette}"
     for img_path in image_paths:
         if not img_path.exists():
             print(f"  skip (not found): {img_path}")
             continue
         out_path = out_dir / f"pipeline_{img_path.stem}{suffix}.png"
-        print(f"Processing {img_path.name}  (tc={fmt(tc)}  gc={fmt(gc)}  palette={args.palette}  mode={args.mode})...")
-        run(img_path, palette, args.palette, tc, gc, mode, out_path)
+        print(f"Processing {img_path.name}  (gc={fmt(gc)}  palette={args.palette}  mode={args.mode})...")
+        run(img_path, palette, args.palette, gc, mode, out_path)
 
 
 if __name__ == "__main__":

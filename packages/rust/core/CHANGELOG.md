@@ -1,5 +1,26 @@
 # Changelog
 
+## [7.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v6.0.0...epaper-dithering-core-v7.0.0) (2026-11-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* tone and gamut take numbers from 0.0 to 1.0 only; the GamutCompression enum and the "auto"/"off" values are removed.
+* **core:** ColorScheme, measured_palettes, dither_with_canonical, DitherConfig and DitherMode integer conversion are removed. Load palettes from epaper-palette files instead.
+
+### Features
+
+* **core:** add epaper-palette JSON format and export the built-in catalog as example files ([80af93b](https://github.com/OpenDisplay/epaper-dithering/commit/80af93b80a6a5b6117e7370888357e7096a5cb3e))
+* **core:** add validated Palette type with CIELAB appearance and ink identity ([7c78aac](https://github.com/OpenDisplay/epaper-dithering/commit/7c78aac69fe44af9d290c16e8891829d9a003e48))
+* **core:** anchor ink nominals onto measured appearances before matching ([7a01c7d](https://github.com/OpenDisplay/epaper-dithering/commit/7a01c7d5f30c1296e3af4c5f90ac8c8bab37c543))
+* **core:** dither against runtime Palette; remove ColorScheme, built-in catalog and canonical palettes ([9bd3d2d](https://github.com/OpenDisplay/epaper-dithering/commit/9bd3d2d12f1fb45eb046828544fbc634c8c3d02f))
+* make tone and gamut opt-in strengths; anchoring no longer lifts shadows ([cc80cd8](https://github.com/OpenDisplay/epaper-dithering/commit/cc80cd8c8ad07f56b8bcd3995797416a082879db))
+
+
+### Bug Fixes
+
+* **core:** keep anchoring monotonic for any set of named inks; reject non-finite appearances ([e959f1a](https://github.com/OpenDisplay/epaper-dithering/commit/e959f1a9bdbf08c270a1325deee70b191d035a65))
+
 ## [6.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v5.0.0...epaper-dithering-core-v6.0.0) (2026-10-07)
 
 
