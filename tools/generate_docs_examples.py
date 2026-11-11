@@ -1,18 +1,22 @@
-"""Generate example images for README documentation."""
+"""Generate example images for README documentation (written to docs/examples/).
 
-from pathlib import Path
+    uv run --project packages/python python tools/generate_docs_examples.py
+"""
+
 from PIL import Image, ImageDraw, ImageFont
-from epaper_dithering import dither_image, ColorScheme, DitherMode, SPECTRA_7_3_6COLOR_V2
+import example_palettes
+from epaper_dithering import DitherMode, DitherOptions, dither_image
 
-FIXTURES = Path(__file__).parent.parent.parent / "packages/rust/core/tests/fixtures/images"
-OUT = Path(__file__).parent
+FIXTURES = example_palettes.ROOT / "packages/rust/core/tests/fixtures/images"
+OUT = example_palettes.ROOT / "docs/examples"
+SPECTRA_7_3_6COLOR_V2 = example_palettes.load("spectra_7_3_6color_v2")
 
 def load(name: str) -> Image.Image:
     return Image.open(FIXTURES / name).convert("RGB")
 
 
 def dithered_rgb(img: Image.Image, palette, mode: DitherMode) -> Image.Image:
-    return dither_image(img, palette, mode=mode).convert("RGB")
+    return dither_image(img, palette, DitherOptions(mode=mode)).convert("RGB")
 
 
 def label(img: Image.Image, text: str, size: int = 20) -> Image.Image:
@@ -71,14 +75,14 @@ def grid(cells: list[list[Image.Image]]) -> Image.Image:
 
 print("Generating frankfurt night before/after...")
 frankfurt_orig = Image.open(FIXTURES / "frankfurt_nacht.png").convert("RGB")
-frankfurt_no_pre = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
-                                mode=DitherMode.BURKES, tone=0.0, gamut=0.0).convert("RGB")
-frankfurt_auto   = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
-                                mode=DitherMode.BURKES, tone="auto", gamut="auto").convert("RGB")
+frankfurt_default = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
+                                 DitherOptions(mode=DitherMode.BURKES)).convert("RGB")
+frankfurt_lifted  = dither_image(frankfurt_orig, SPECTRA_7_3_6COLOR_V2,
+                                 DitherOptions(mode=DitherMode.BURKES, tone=1.0)).convert("RGB")
 
-p1 = label(frankfurt_orig,   "Original")
-p2 = label(frankfurt_no_pre, "Spectra 6-color · Burkes · no preprocessing")
-p3 = label(frankfurt_auto,   "Spectra 6-color · Burkes · auto tone + gamut")
+p1 = label(frankfurt_orig,    "Original")
+p2 = label(frankfurt_default, "Spectra 6-color · Burkes · defaults")
+p3 = label(frankfurt_lifted,  "Spectra 6-color · Burkes · tone 1.0 (black-point lift)")
 
 hstack([p1, p2, p3]).save(OUT / "frankfurt_before_after.png")
 
@@ -117,14 +121,14 @@ print("Generating color schemes grid...")
 src2 = load("river.png")
 
 SCHEMES = [
-    (ColorScheme.MONO,       "Mono"),
-    (ColorScheme.BWR,        "BWR"),
-    (ColorScheme.BWY,        "BWY"),
-    (ColorScheme.BWRY,       "BWRY"),
-    (ColorScheme.BWGBRY,     "BWGBRY (Spectra 6)"),
-    (ColorScheme.GRAYSCALE_4, "Grayscale 4"),
-    (ColorScheme.GRAYSCALE_16,"Grayscale 16"),
-    (ColorScheme.SEVEN_COLOR, "7-color (Spectra/ACeP)"),
+    (example_palettes.load("ideal_mono"),        "Mono"),
+    (example_palettes.load("ideal_bwr"),         "BWR"),
+    (example_palettes.load("ideal_bwy"),         "BWY"),
+    (example_palettes.load("ideal_bwry"),        "BWRY"),
+    (example_palettes.load("ideal_bwgbry"),      "BWGBRY (Spectra 6)"),
+    (example_palettes.load("ideal_grayscale4"),  "Grayscale 4"),
+    (example_palettes.load("ideal_grayscale16"), "Grayscale 16"),
+    (example_palettes.load("ideal_seven_color"), "7-color (Spectra/ACeP)"),
 ]
 
 scheme_cells = []
@@ -141,9 +145,9 @@ grid(scheme_cells).save(OUT / "color_schemes_grid.png")
 
 print("Generating DBS comparison...")
 src3 = load("river.png")
-dbs_kwargs = {"mode": DitherMode.BURKES, "tone": "auto", "gamut": "auto"}
-burkes = dither_image(src3, SPECTRA_7_3_6COLOR_V2, **dbs_kwargs).convert("RGB")
-refined = dither_image(src3, SPECTRA_7_3_6COLOR_V2, dbs=True, **dbs_kwargs).convert("RGB")
+base = DitherOptions(mode=DitherMode.BURKES, gamut=1.0)
+burkes = dither_image(src3, SPECTRA_7_3_6COLOR_V2, base).convert("RGB")
+refined = dither_image(src3, SPECTRA_7_3_6COLOR_V2, DitherOptions(**{**base.__dict__, "dbs": True})).convert("RGB")
 
 # Sky, clouds and treeline: smooth gradients plus edges.
 CROP = (230, 60, 430, 180)

@@ -1,0 +1,215 @@
+{
+ "_comment": "Measured on a 2.9in GDEY029F51H panel from a hand-held photo of a 4x4 swatch grid (row-major, raw panel codes, no dithering), 2026-11-06. The photo was white-balanced in camera; Lab is converted from its sRGB directly (D65), with NO per-entry normalisation, so white is L*68. Sampled at inset 0.3 of each cell; active area x514-1022 y453-1611 of a 1506x2000 image.",
+ "mode": "colour16",
+ "source": "photo, camera white balance",
+ "entries": [
+  {
+   "index": 0,
+   "codes": [
+    2,
+    0,
+    0
+   ],
+   "lab": [
+    30.47,
+    8.7,
+    4.58
+   ]
+  },
+  {
+   "index": 1,
+   "codes": [
+    1,
+    1,
+    1
+   ],
+   "lab": [
+    68.26,
+    8.33,
+    5.98
+   ]
+  },
+  {
+   "index": 2,
+   "codes": [
+    2,
+    1,
+    1
+   ],
+   "lab": [
+    63.18,
+    20.51,
+    68.64
+   ]
+  },
+  {
+   "index": 3,
+   "codes": [
+    3,
+    1,
+    1
+   ],
+   "lab": [
+    35.44,
+    44.96,
+    28.61
+   ]
+  },
+  {
+   "index": 4,
+   "codes": [
+    0,
+    1,
+    1
+   ],
+   "lab": [
+    48.56,
+    40.35,
+    35.69
+   ]
+  },
+  {
+   "index": 5,
+   "codes": [
+    1,
+    0,
+    3
+   ],
+   "lab": [
+    55.19,
+    12.28,
+    8.89
+   ]
+  },
+  {
+   "index": 6,
+   "codes": [
+    1,
+    2,
+    1
+   ],
+   "lab": [
+    49.58,
+    4.63,
+    1.68
+   ]
+  },
+  {
+   "index": 7,
+   "codes": [
+    2,
+    0,
+    2
+   ],
+   "lab": [
+    58.36,
+    14.88,
+    27.81
+   ]
+  },
+  {
+   "index": 8,
+   "codes": [
+    2,
+    1,
+    3
+   ],
+   "lab": [
+    38.65,
+    4.9,
+    27.66
+   ]
+  },
+  {
+   "index": 9,
+   "codes": [
+    2,
+    3,
+    1
+   ],
+   "lab": [
+    15.58,
+    4.44,
+    6.18
+   ]
+  },
+  {
+   "index": 10,
+   "codes": [
+    3,
+    1,
+    2
+   ],
+   "lab": [
+    53.87,
+    26.5,
+    44.04
+   ]
+  },
+  {
+   "index": 11,
+   "codes": [
+    0,
+    2,
+    1
+   ],
+   "lab": [
+    31.7,
+    30.73,
+    21.84
+   ]
+  },
+  {
+   "index": 12,
+   "codes": [
+    0,
+    3,
+    1
+   ],
+   "lab": [
+    22.34,
+    23.08,
+    15.52
+   ]
+  },
+  {
+   "index": 13,
+   "codes": [
+    3,
+    2,
+    1
+   ],
+   "lab": [
+    31.93,
+    32.5,
+    21.81
+   ]
+  },
+  {
+   "index": 14,
+   "codes": [
+    0,
+    1,
+    0
+   ],
+   "lab": [
+    3.19,
+    4.55,
+    1.38
+   ]
+  },
+  {
+   "index": 15,
+   "codes": [
+    3,
+    0,
+    1
+   ],
+   "lab": [
+    8.79,
+    15.46,
+    7.74
+   ]
+  }
+ ]
+}

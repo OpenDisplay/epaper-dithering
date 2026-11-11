@@ -1,0 +1,26 @@
+{
+  "format": "epaper-palette",
+  "version": 1,
+  "measured": false,
+  "source": "epaper-dithering 6.x built-in ideal mono",
+  "entries": [
+    {
+      "appearance": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "name": "black",
+      "nominal": "#000000"
+    },
+    {
+      "appearance": [
+        100.0,
+        0.0,
+        0.0
+      ],
+      "name": "white",
+      "nominal": "#ffffff"
+    }
+  ]
+}

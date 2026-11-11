@@ -1,28 +1,22 @@
-/**
- * Dithering algorithm modes
- * Values match firmware conventions (0-9)
- */
+/** Dithering algorithms. Values are the names the core accepts. */
 export enum DitherMode {
   /**
    * Direct nearest-color mapping with no error diffusion. Intended for
-   * already-quantized graphics only. On limited palettes (especially BWR),
-   * continuous-tone photos or large flat mid-tone areas can map to an
-   * unexpected ink (e.g. a mid-gray region rendered as solid red); use an
-   * error-diffusion mode (e.g. FLOYD_STEINBERG, BURKES) for photographic input.
+   * already-quantized graphics only; use an error-diffusion mode for photos.
    */
-  NONE = 0,
-  BURKES = 1,
-  ORDERED = 2,
-  FLOYD_STEINBERG = 3,
-  ATKINSON = 4,
-  STUCKI = 5,
-  SIERRA = 6,
-  SIERRA_LITE = 7,
-  JARVIS_JUDICE_NINKE = 8,
+  NONE = 'none',
+  BURKES = 'burkes',
+  ORDERED = 'ordered',
+  FLOYD_STEINBERG = 'floyd_steinberg',
+  ATKINSON = 'atkinson',
+  STUCKI = 'stucki',
+  SIERRA = 'sierra',
+  SIERRA_LITE = 'sierra_lite',
+  JARVIS_JUDICE_NINKE = 'jarvis_judice_ninke',
   /**
    * Error diffusion with pseudo-random traversal instead of a raster scan,
    * diffusing error only to not-yet-quantized neighbours. Produces no
    * directional structure. `serpentine` is ignored: there is no scan direction.
    */
-  DIZZY = 9,
+  DIZZY = 'dizzy',
 }

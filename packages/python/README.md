@@ -8,7 +8,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json&style=flat-square)](https://github.com/astral-sh/ruff)
 [![mypy](https://img.shields.io/badge/mypy-strict-blue?style=flat-square)](https://mypy.readthedocs.io/)
 
-Dithering algorithms optimized for e-ink/e-paper displays with limited color palettes.
+Dithering for e-ink/e-paper displays: an image and your panel's palette in, palette indices out.
 
 ## Installation
 
@@ -22,289 +22,218 @@ pip install epaper-dithering
 
 ## Features
 
-- **Rust Core**: All dithering runs in a compiled Rust extension — fast enough for 800×480 images in ~30ms
-- **Perceptually Correct**: Weighted Cartesian OKLab color matching — preserves hue without the achromatic-attractor bug that plagues LCH-weighted approaches
-- **10 Dithering Algorithms**: From simple ordered dithering to high-quality Jarvis-Judice-Ninke
-- **10 Color Schemes**: Support for mono, 3-color, 4-color, 6-color, 7-color, and grayscale e-paper displays
-- **Pre-dither Adjustments**: Per-image exposure, saturation, shadows, highlights, dynamic-range compression, and gamut compression — all orthogonal knobs you can mix freely
-- **Serpentine Scanning**: Reduces directional artifacts in error diffusion (enabled by default)
-- **DBS Refinement**: Optional Direct Binary Search pass that optimizes the dithered pixels against a model of the eye (slower: ~0.3 s per 800×480 panel on a multi-core machine)
-- **RGBA Support**: Automatic compositing on white background for transparent images
+- **Rust core**: all dithering runs in a compiled Rust extension, about 30 ms for an 800×480 image.
+- **Palettes are data**: describe your panel in an `epaper-palette` JSON file (or build one in code). The library ships no built-in palettes, so any panel works, including per-unit measurements.
+- **Requested inks stay solid**: a pixel that asks for an ink (e.g. `#000000` text on a dashboard) comes out as that ink, undithered, even though the panel's real black is lighter than `#000000`.
+- **Perceptually correct matching**: weighted Cartesian OKLab, which preserves hue without the achromatic-attractor bug of LCH-weighted approaches.
+- **10 dithering algorithms**, from ordered dithering to Jarvis-Judice-Ninke and Dizzy.
+- **Pre-dither adjustments**: exposure, saturation, shadows, highlights and gamut compression.
+- **DBS refinement**: an optional Direct Binary Search pass that optimises the result for how it is perceived at a given viewing distance.
+- **RGBA support**: transparent areas are composited on white.
 
 ## Quick Start
 
 ```python
 from PIL import Image
-from epaper_dithering import dither_image, ColorScheme, DitherMode
+from epaper_dithering import DitherOptions, Palette, dither_image
 
-# Load your image
-image = Image.open("photo.jpg")
-
-# Apply dithering for a black/white/red display
-dithered = dither_image(image, ColorScheme.BWR, mode=DitherMode.FLOYD_STEINBERG)
-
-# Save result
-dithered.save("output.png")
-```
-
-All arguments after `color_scheme` are keyword-only:
-
-```python
-dither_image(
-    image, palette,
-    *,
-    mode=DitherMode.BURKES,    # algorithm
-    serpentine=True,           # alternate row scan direction
-    exposure=1.0,              # linear-RGB multiplier (1.0 = no change)
-    saturation=1.0,            # OKLab saturation (1.0 = no change, 0.0 = grayscale)
-    shadows=0.0,               # shadow lift, S-curve lower half
-    highlights=0.0,            # highlight compression, S-curve upper half
-    tone="auto",               # dynamic-range compression: "auto" | 0.0–1.0
-    gamut="auto",              # gamut compression: "auto" | 0.0–1.0
-    dbs=None,                  # DBS refinement: None | True | DbsParams(...)
-)
-```
-
-## Supported Color Schemes
-
-- **MONO** - Black and white (1-bit)
-- **BWR** - Black, white, red (3-color)
-- **BWY** - Black, white, yellow (3-color)
-- **BWRY** - Black, white, yellow, red (4-color)
-- **BWGBRY** - Black, white, yellow, red, blue, green (6-color Spectra)
-- **GRAYSCALE_4** - 4-level grayscale (2-bit)
-- **SEVEN_COLOR** - 7-color Spectra/ACeP (BWGBRY + orange)
-- **BWGBRY_SPLIT** - Spectra 6, split left/right plane packing (dual-CS panels)
-- **GRAYSCALE_16** - 16-level grayscale (4-bit, e.g. Waveshare 6" HD)
-- **GRAYSCALE_8** - 8-level grayscale (3-bit, e.g. Inkplate 10). Library-local value 9 — NOT a firmware wire value; never send it to a device as `color_scheme`.
-
-## Dithering Algorithms
-
-| Algorithm | Quality | Speed | Best For |
-|-----------|---------|-------|----------|
-| NONE | Lowest | Fastest | Testing, simple graphics |
-| ORDERED | Low | Very Fast | Patterns, textures |
-| SIERRA_LITE | Medium | Fast | Quick results |
-| BURKES | Good | Medium | General purpose (default) |
-| FLOYD_STEINBERG | Good | Medium | Popular standard |
-| SIERRA | High | Medium | Balanced quality |
-| ATKINSON | Good | Medium | High contrast, artistic |
-| STUCKI | Very High | Slow | Maximum quality |
-| JARVIS_JUDICE_NINKE | Highest | Slowest | Smooth gradients |
-| DIZZY | Good | Medium | Error diffusion with pseudo-random traversal — no directional structure. Ignores `serpentine`. Algorithm by [Liam Appelbe](https://liamappelbe.medium.com/dizzy-dithering-2ae76dbceba1) |
-
-## Usage Examples
-
-### Basic Usage
-
-```python
-from PIL import Image
-from epaper_dithering import dither_image, ColorScheme, DitherMode
-
+palette = Palette.load("my_panel.json")  # see "Palettes" below
 img = Image.open("photo.jpg")
 
-result = dither_image(img, ColorScheme.BWR, mode=DitherMode.FLOYD_STEINBERG)
+result = dither_image(img, palette)  # defaults
+result = dither_image(img, palette, DitherOptions(mode="floyd_steinberg"))  # pick an algorithm
 result.save("dithered.png")
 ```
 
-### All Color Schemes
+`dither_image` returns a palette-mode (`"P"`) image: each pixel is an index into your palette, and
+the image's PIL palette holds each entry's preview colour (what the panel shows).
+
+## Palettes
+
+A palette is an ordered list of entries. The position of an entry is the index written to the
+output, so list entries in the order your display driver expects.
+
+Each entry has:
+
+| Field | Meaning |
+|---|---|
+| `appearance` | How the colour looks on the panel, as CIELAB (D65) `(L*, a*, b*)`, **normalised so the panel's white is L\* 100, a\* = b\* = 0**. |
+| `name` *(optional)* | Ink identity, e.g. `"black"`. Only for pure inks; in-between mixes leave it unset. |
+| `nominal` *(with `name`)* | The colour that requests this ink, e.g. `"#ff0000"`. |
+
+and the palette has a `measured` flag and an optional `source` note (metadata only).
+
+### Loading a palette file
 
 ```python
-# Black and white only
-dithered = dither_image(img, ColorScheme.MONO)
+from epaper_dithering import Palette
 
-# Black, white, and red (common for e-paper tags)
-dithered = dither_image(img, ColorScheme.BWR)
-
-# Grayscale (4 levels)
-dithered = dither_image(img, ColorScheme.GRAYSCALE_4)
-
-# 6-color display (Spectra)
-dithered = dither_image(img, ColorScheme.BWGBRY)
+palette = Palette.load("examples/palettes/spectra_7_3_6color.json")
+palette.index_of("red")  # 3
+palette.preview_rgb()  # [(r, g, b), ...] what the panel shows, per entry
 ```
 
-### Advanced Options
+The repository's [`examples/palettes/`](../../examples/palettes/) folder has starting points: the
+idealised 6.x schemes (`ideal_bwr.json`, `ideal_bwry.json`, …) and measured palettes for several real
+panels. They are not part of the package; copy the one you need.
 
-#### Serpentine Scanning
+The file format:
 
-By default, error diffusion algorithms use serpentine scanning (alternating scan direction per row) to reduce directional artifacts and "worm" patterns. You can disable this for raster scanning:
-
-```python
-# Default: serpentine scanning (recommended for best quality)
-result = dither_image(img, ColorScheme.BWR, mode=DitherMode.FLOYD_STEINBERG, serpentine=True)
-
-# Disable serpentine for raster scanning (left-to-right only)
-result = dither_image(img, ColorScheme.BWR, mode=DitherMode.FLOYD_STEINBERG, serpentine=False)
+```json
+{
+  "format": "epaper-palette",
+  "version": 1,
+  "measured": true,
+  "source": "who measured it, how, when",
+  "entries": [
+    { "appearance": [100.0, 0.0, 0.0], "name": "white", "nominal": "#ffffff" },
+    { "appearance": [18.2, 1.1, -0.4], "name": "black", "nominal": "#000000" },
+    { "appearance": [52.0, 8.9, 2.1] }
+  ]
+}
 ```
 
-Note: The `serpentine` parameter only affects error diffusion algorithms (Floyd-Steinberg, Burkes, Atkinson, Sierra, Sierra Lite, Stucki, Jarvis-Judice-Ninke). It has no effect on NONE and ORDERED modes.
+### Building a palette from measurements
 
-#### Tone Compression (Dynamic Range)
-
-E-paper displays can't reproduce the full luminance range of digital images. Pure white on a display is much darker than (255, 255, 255), and pure black is lighter than (0, 0, 0). Without tone compression, dithering tries to represent unreachable brightness levels, causing large accumulated errors and noisy output.
-
-Tone compression remaps image luminance to the display's actual range before dithering. Based on [`fast_compress_dynamic_range()`](https://github.com/aitjcize/esp32-photoframe) from esp32-photoframe by aitjcize. It is off by default (`tone=0.0`) and only applies when using measured `ColorPalette` instances:
-
-- **`0.0` / `"off"`** (default): Disable tone compression.
-- **`"auto"`**: Analyze the image histogram and remap its actual luminance range to the display range. Maximizes contrast by stretching only the used range.
-- **`0.0-1.0`**: Fixed linear compression strength. `1.0` maps the full [0,1] range to the display range.
+Measurements are usually absolute: paper white comes out at L\* 60–80, not 100. Give them to
+`from_absolute_lab` together with the index of the white entry; it adapts every entry so white
+becomes exactly L\* 100, a\* = b\* = 0:
 
 ```python
-from epaper_dithering import dither_image, SPECTRA_7_3_6COLOR, DitherMode
+from epaper_dithering import Palette, PaletteEntry
 
-# Default: tone compression off
-result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.FLOYD_STEINBERG)
-
-# Auto tone compression
-result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.FLOYD_STEINBERG, tone="auto")
-
-# Fixed linear compression
-result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.FLOYD_STEINBERG, tone=1.0)
-
-# Disable tone compression explicitly
-result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.FLOYD_STEINBERG, tone="off")
+palette = Palette.from_absolute_lab(
+    [
+        PaletteEntry((68.26, 8.33, 5.98), name="white", nominal="#ffffff"),
+        PaletteEntry((3.19, 4.55, 1.38), name="black", nominal="#000000"),
+        PaletteEntry((35.44, 44.96, 28.61), name="red", nominal="#ff0000"),
+        PaletteEntry((49.58, 4.63, 1.68)),  # an unnamed mix
+    ],
+    white_index=0,
+    measured=True,
+)
+print(palette.to_json())  # save it as a palette file
 ```
 
-Note: `tone` has no effect when using theoretical `ColorScheme` palettes (e.g., `ColorScheme.BWR`), since their black/white values already span the full range.
+`Palette(entries)` itself never guesses: if the entry named `white` is more than ΔE 0.5 from
+L\* 100, it raises `PaletteError` and tells you to use `from_absolute_lab`. Palettes without a
+`white` entry are taken as already normalised. If you only have sRGB values, use
+`Palette.from_srgb([((r, g, b), name, nominal), ...])`; it normalises to the `white` ink if there is
+one.
 
-#### Gamut Compression
+`PaletteError` (a `ValueError`) is also raised for fewer than 2 or more than 256 entries, appearances
+that are not finite, duplicate
+ink names or nominals, and malformed or unsupported files.
 
-Some images contain highly saturated colors that a limited palette simply cannot reproduce (e.g. vivid purple on a BWGBRY display). Without gamut compression, the ditherer tries to mix palette colors to approximate the hue — often producing muddy results. Gamut compression pre-blends out-of-gamut pixels toward the nearest palette color before dithering, giving error diffusion a better starting point.
+### How named inks behave
+
+Real inks are never pure: a panel's black might measure L\* 10, its red a dull brick. Two options,
+both on by default, make sure colours that *ask for* an ink get it:
+
+- **Snapping** (`snap=True`): a pixel exactly equal to an ink's `nominal` takes that ink, undithered,
+  and neither receives nor passes on dithering error. This is decided on the original image, so it
+  still holds when you also adjust exposure or tone for a photo in the same image.
+- **Anchoring** (`anchor=True`): before matching, colours near each ink are mapped so the ink's
+  nominal lands exactly on its appearance; the correction fades with distance, so near-ink colours
+  and anti-aliased edges follow smoothly while colours far from every ink (most of a photo) are left
+  alone. Anchoring does not re-map the image's tonal range; that is the opt-in `tone` option.
+
+Unnamed entries (the mixes of a 16-colour mode, say) take part in dithering but are never targets of
+either.
+
+## Options
 
 ```python
-# Default: gamut compression off
-result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.BURKES)
+from epaper_dithering import DbsParams, DitherMode, DitherOptions
 
-# Auto gamut compression
-result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.BURKES, gamut="auto")
-
-# Fixed strength (0.7–0.9 recommended for very saturated images)
-result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.BURKES, gamut=0.8)
-
-# Disable
-result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.BURKES, gamut="off")
+options = DitherOptions(
+    mode=DitherMode.BURKES,  # or a name: "burkes"
+    serpentine=True,
+    exposure=1.0,  # linear-RGB multiplier, 2.0 = +1 stop
+    saturation=1.0,  # OKLab chroma multiplier, 0.0 = greyscale
+    shadows=0.0,  # shadow lift, 0.0–1.0
+    highlights=0.0,  # highlight compression, 0.0–1.0
+    tone=0.0,  # black-point lift, 0.0 (off) to 1.0
+    gamut=0.0,  # gamut compression, 0.0 (off) to 1.0
+    dbs=None,  # None/False, True (defaults), or DbsParams(...)
+    anchor=True,
+    snap=True,
+)
 ```
 
-Note: `gamut` also has no effect for theoretical `ColorScheme` palettes.
+Pipeline order: `exposure → saturation → shadows/highlights → tone → anchor → gamut → match + diffuse → dbs`.
+`tone` and `gamut` are off by default, so nothing re-maps a photo's tonal range unless you ask.
+`tone` lifts the black point: it remaps lightness onto the panel's darkest and lightest colours,
+keeping hue, which brings out shadow detail at the cost of deep blacks. `gamut` pulls out-of-gamut
+colours toward the palette's gamut before matching.
 
-#### DBS Refinement
+### Dithering algorithms
 
-Direct Binary Search (DBS) runs after dithering and improves the result directly: it repeatedly changes pixels to other inks, or swaps them with neighbours, whenever that lowers the error *as perceived* through a model of the eye — sharp for brightness, blurrier for colour, scaled to your viewing distance and panel resolution. It typically cuts visible tone and colour error noticeably, at the cost of runtime (about 0.3 s per 800×480 panel on a multi-core machine, versus ~30 ms for plain dithering). The dither call releases the GIL, so other threads keep running meanwhile.
+| Algorithm | Quality | Speed | Best For |
+|-----------|---------|-------|----------|
+| `none` | Lowest | Fastest | Already-quantised graphics |
+| `ordered` | Low | Very Fast | Patterns, textures |
+| `sierra_lite` | Medium | Fast | Quick results |
+| `burkes` | Good | Medium | General purpose (default) |
+| `floyd_steinberg` | Good | Medium | Popular standard |
+| `sierra` | High | Medium | Balanced quality |
+| `atkinson` | Good | Medium | High contrast, artistic |
+| `stucki` | Very High | Slow | Maximum quality |
+| `jarvis_judice_ninke` | Highest | Slowest | Smooth gradients |
+| `dizzy` | Good | Medium | Pseudo-random traversal, no directional structure; ignores `serpentine`. Algorithm by [Liam Appelbe](https://liamappelbe.medium.com/dizzy-dithering-2ae76dbceba1) |
+
+`none` maps each pixel to its nearest colour without diffusion. On limited palettes a flat mid-tone
+can land on an unexpected ink (a mid-grey area rendering as solid red), so use an error-diffusion
+mode for photos.
+
+### DBS refinement
+
+Direct Binary Search runs after dithering and repeatedly changes pixels to other inks, or swaps them
+with neighbours, whenever that lowers the error as perceived through a model of the eye at your
+viewing distance and panel resolution. It is slower (about 0.3 s per 800×480 panel on a multi-core
+machine, versus ~30 ms) and releases the GIL while it runs. Snapped pixels are never changed.
 
 ```python
-from epaper_dithering import DbsParams
+from epaper_dithering import DbsParams, DitherOptions
 
 # Default viewing geometry: 40 cm from a ~127 ppi panel (7.3" 800×480)
-result = dither_image(img, SPECTRA_7_3_6COLOR, dbs=True)
+result = dither_image(img, palette, DitherOptions(dbs=True))
 
-# Match your setup: a wall-mounted 13.3" panel viewed from 1.5 m
-result = dither_image(img, SPECTRA_7_3_6COLOR, dbs=DbsParams(viewing_distance_cm=150, ppi=150))
+# A wall-mounted 13.3" panel viewed from 1.5 m
+result = dither_image(img, palette, DitherOptions(dbs=DbsParams(viewing_distance_cm=150, ppi=150)))
 ```
 
-`max_passes` (default 10) caps the number of refinement passes; most of the improvement happens in the first few. Pixels pinned to exact display colors (see below) are never changed by DBS.
+## Migrating from 6.x
 
-`DitherMode.NONE` performs direct nearest-color mapping without error diffusion or ordered dithering. It is intended for already-quantized graphics, not continuous-tone photos: because there is no error diffusion, on limited palettes (especially BWR) a continuous-tone image or a large flat mid-tone area can map to an unexpected ink — for example, a solid mid-gray region can render as solid red. Use an error-diffusion mode (e.g. `FLOYD_STEINBERG`, `BURKES`) for photographic input. For built-in measured palettes, pure canonical display colors such as `(255, 0, 0)` map directly to the corresponding firmware palette index even though matching uses measured display RGB values.
+7.0 is a clean break: the library no longer knows about any firmware or ships any palette.
 
-For built-in measured palettes, exact canonical display colors are also protected in ordered and error-diffusion modes when pre-processing is off: an image made entirely of display colors is returned as a direct palette-index map, and exact display-color pixels inside a mixed image keep their canonical index instead of being rematched to the measured RGB palette. Pre-processing runs before that exact-pixel check, so explicit `tone="auto"`/`gamut="auto"` or other adjustments may intentionally alter those pixels first.
+| 6.x | 7.x |
+|---|---|
+| `dither_image(img, ColorScheme.BWR)` | `dither_image(img, Palette.load(".../ideal_bwr.json"))` |
+| `SPECTRA_7_3_6COLOR`, `SPECTRA_7_3_6COLOR_V2` | `examples/palettes/spectra_7_3_6color*.json`; the other 6.x "measured" constants were unmeasured placeholders and are gone |
+| `ColorPalette(colors={...}, accent=...)` | `Palette.from_srgb([...])`, or better `Palette.from_absolute_lab([...])` from your measurements |
+| keyword options (`mode=`, `dbs=` …) | `DitherOptions(mode=..., dbs=...)` |
+| `tone="auto"`, `gamut="auto"`, `"off"` | numbers only: `tone`/`gamut` are 0.0 (off) to 1.0; `tone` now lifts lightness only, keeping hue |
+| `DitherMode.BURKES == 1` | `DitherMode.BURKES == "burkes"` |
+| exact "canonical" colours pass through | named inks with a `nominal` snap (and anchor) |
 
-#### Per-Image Tonal Adjustments
+The 6.x measured constants were relative to the camera, not to the panel's white. The exported
+files are normalised to white, so the same panel now renders brighter; set `tone` if you want the
+6.x-style shadow lift.
 
-`exposure`, `saturation`, `shadows`, and `highlights` let you tweak the image *before* tone/gamut compression. Each is independent — set just the ones you want. All default to identity (no effect).
+Colours are now judged relative to the panel's own white. On panels whose yellow ink is nearly as
+light as their white (such as Spectra 6), warm mid-tones like orange shift toward red compared with
+6.x. With error diffusion this reads as orange; `none` (direct map) on photos shows it most, since it
+must pick a single ink.
 
-```python
-# Brighten and boost saturation for vivid output
-result = dither_image(img, SPECTRA_7_3_6COLOR, exposure=1.3, saturation=1.4)
+## Measuring a panel
 
-# Lift shadows on a dark image
-result = dither_image(img, SPECTRA_7_3_6COLOR, shadows=0.5)
+1. Show full-screen colour patches on the panel (`tools/generate_patches.py` in the repo makes them).
+2. Photograph them in even, consistent light.
+3. Sample and average each patch, and convert to CIELAB.
+4. Build the palette with `Palette.from_absolute_lab`, naming the pure inks.
 
-# Compress highlights on an overexposed image
-result = dither_image(img, SPECTRA_7_3_6COLOR, highlights=0.7)
-
-# Combine for a "vivid photo" look
-result = dither_image(img, SPECTRA_7_3_6COLOR, exposure=1.1, saturation=1.3, shadows=0.3, highlights=0.5)
-```
-
-Pipeline order: `exposure → saturation → shadows/highlights → tone → gamut → dither`.
-
-#### RGBA Images
-
-Images with transparency (RGBA mode) are automatically composited on a white background, matching the typical appearance of e-paper displays:
-
-```python
-# RGBA images are handled automatically
-rgba_img = Image.open("transparent.png")  # Has alpha channel
-result = dither_image(rgba_img, ColorScheme.BWR)
-# Transparent areas become white
-```
-
-## Measured Display Colors
-
-For the most accurate dithering, use measured RGB values from your specific e-paper display instead of theoretical pure RGB colors.
-
-### Why Measure?
-
-E-paper displays use reflective technology, making colors **30-87% darker** than pure RGB:
-- Pure RGB White: (255, 255, 255)  →  Real display: ~(180-200, 180-200, 180-200)
-- Pure RGB Red: (255, 0, 0)  →  Real display: ~(115-125, 10-20, 0-10)
-
-Using measured values ensures dithered images match your display's actual appearance.
-
-### Using Pre-defined Measured Palettes
-
-The library includes measured palettes for common displays:
-
-```python
-from epaper_dithering import dither_image, SPECTRA_7_3_6COLOR, DitherMode
-
-# Use measured palette for Spectra 7.3" 6-color display
-result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.FLOYD_STEINBERG)
-```
-
-**Available measured palettes:**
-- `SPECTRA_7_3_6COLOR` - 7.3" Spectra™ 6-color (BWGBRY), v1 measurement
-- `SPECTRA_7_3_6COLOR_V2` - 7.3" Spectra™ 6-color (BWGBRY), v2 measurement (recommended)
-- `MONO_4_26` - 4.26" Monochrome
-- `BWRY_4_2` - 4.2" BWRY
-- `BWRY_3_97` - 3.97" BWRY
-- `SOLUM_BWR` - Solum BWR
-- `HANSHOW_BWR` - Hanshow BWR
-- `HANSHOW_BWY` - Hanshow BWY
-
-See [CALIBRATION.md](docs/CALIBRATION.md) for measuring your specific display.
-
-### Creating Custom Measured Palettes
-
-Measure your display and create a custom palette:
-
-```python
-from epaper_dithering import dither_image, ColorPalette, DitherMode
-
-# Your measured RGB values
-my_display = ColorPalette(
-    colors={
-        "black": (5, 5, 5),  # Measured from your display
-        "white": (185, 190, 180),  # Much darker than (255,255,255)
-        "red": (120, 15, 5),  # Much darker than (255,0,0)
-    },
-    accent="red",
-)
-
-# Use it directly
-result = dither_image(img, my_display, mode=DitherMode.FLOYD_STEINBERG)
-```
-
-Built-in measured palettes store the canonical firmware `ColorScheme` they are based on. Custom measured palettes may omit it; in that case direct mapping and exact-color bypass use the custom measured RGB values.
-
-### Measurement Quick Start
-
-1. **Display full-screen color patches** on your e-paper
-2. **Photograph** in consistent lighting (avoid shadows/reflections)
-3. **Sample RGB values** from center using photo editor
-4. **Average 5+ samples** per color
-5. **Create ColorPalette** with measured values
-
-See [docs/CALIBRATION.md](docs/CALIBRATION.md) for detailed measurement procedures, including camera calibration, colorimeter usage, and validation techniques.
+See [docs/CALIBRATION.md](docs/CALIBRATION.md) for the full procedure.
 
 ## Development
 
@@ -318,17 +247,11 @@ uv run maturin develop --release
 # Run tests
 uv run pytest tests/ -v
 
-# Run tests with coverage
-uv run pytest tests/ --cov=src/epaper_dithering
-
-# Lint
-uv run ruff check src/ tests/
-
-# Type check
-uv run mypy src/epaper_dithering
+# Lint and type-check
+uv run prek run --all-files --config .pre-commit-config.yaml
 ```
 
 ## Credits
 
-Measured color calibration techniques and reference measurements inspired by:
+Measured colour calibration techniques and reference measurements inspired by:
 - [esp32-photoframe](https://github.com/aitjcize/esp32-photoframe) by aitjcize - Measured palette methodology, dynamic range compression algorithm, and reference values for Waveshare 7.3" displays

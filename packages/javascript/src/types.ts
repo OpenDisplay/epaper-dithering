@@ -26,13 +26,3 @@ export interface PaletteImageBuffer {
   indices: Uint8Array; // Palette index per pixel
   palette: RGB[]; // Available colors
 }
-
-/**
- * Color palette definition
- */
-export interface ColorPalette {
-  readonly colors: Record<string, RGB>;
-  readonly accent: string;
-  /** Canonical firmware color scheme value, if this is a measured palette. */
-  readonly scheme?: number;
-}

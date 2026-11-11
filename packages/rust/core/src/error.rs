@@ -1,21 +1,21 @@
 use std::fmt;
 
-/// Errors from converting an untrusted integer discriminant into a core enum.
-///
-/// NOT the crate-wide error type: other modules define their own where the failure is a
-/// different category (e.g. `composite::InvalidRgbaLength`, a typed struct that carries the
-/// offending `len`). Deliberately kept separate rather than collapsed into one enum.
-#[derive(Debug, PartialEq)]
+/// Errors from untrusted dithering inputs: an image buffer of the wrong size or an
+/// unknown mode name. Palette problems are [`crate::palette::PaletteError`].
+#[derive(Debug, Clone, PartialEq)]
 pub enum DitherError {
-    UnknownColorScheme(u8),
-    UnknownDitherMode(u8),
+    /// `len` is not `width × height × 3` for any height, or `width` is zero.
+    InvalidImage { len: usize, width: usize },
+    UnknownDitherMode(String),
 }
 
 impl fmt::Display for DitherError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DitherError::UnknownColorScheme(v) => write!(f, "unknown color scheme: {v}"),
-            DitherError::UnknownDitherMode(v) => write!(f, "unknown dither mode: {v}"),
+            DitherError::InvalidImage { len, width } => {
+                write!(f, "pixel buffer of {len} bytes is not width ({width}) × height × 3 RGB")
+            }
+            DitherError::UnknownDitherMode(v) => write!(f, "unknown dither mode: {v:?}"),
         }
     }
 }
@@ -27,9 +27,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn display_unknown_scheme() {
-        let e = DitherError::UnknownColorScheme(42);
-        let msg = e.to_string();
-        assert!(msg.contains("42"), "message should include the bad value: {msg}");
+    fn display_names_the_bad_mode() {
+        let msg = DitherError::UnknownDitherMode("bayer".into()).to_string();
+        assert!(msg.contains("bayer"), "message should include the bad value: {msg}");
     }
 }

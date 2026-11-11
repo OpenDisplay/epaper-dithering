@@ -9,13 +9,17 @@
 use epaper_dithering_core::{
     color_space::srgb_channel_to_linear,
     color_space_lab::rgb_to_oklab,
-    dither, dither_with_canonical,
-    enums::{DitherMode, GamutCompression, ToneCompression},
-    measured_palettes::SPECTRA_7_3_6COLOR,
-    palettes::{ColorScheme, Palette},
+    dither,
+    enums::DitherMode,
+    palette::Palette,
     types::ImageBuffer,
-    DitherConfig,
+    DitherOptions,
 };
+
+fn example_palette(name: &str) -> Palette {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../examples/palettes").join(name);
+    Palette::from_json(&std::fs::read_to_string(path).expect("read palette")).expect("valid palette")
+}
 
 const BLOCK: usize = 4;
 
@@ -50,7 +54,7 @@ fn block_delta_e(a: &[u8], b: &[u8], width: usize, height: usize) -> f64 {
 fn to_rgb(indices: &[u8], palette: &Palette) -> Vec<u8> {
     indices
         .iter()
-        .flat_map(|&i| palette.colors[i as usize])
+        .flat_map(|&i| palette.preview_srgb()[i as usize])
         .collect()
 }
 
@@ -80,29 +84,22 @@ fn main() {
         let (w, h) = img.dimensions();
         let (w, h) = (w as usize, h as usize);
         let src = img.into_raw();
-        let buf = ImageBuffer::new(&src, w);
+        let buf = ImageBuffer::new(&src, w).expect("whole RGB buffer");
 
+        let spectra6 = example_palette("spectra_7_3_6color.json");
+        let mono = example_palette("ideal_mono.json");
         for (pal_name, is_measured) in [("spectra6", true), ("mono", false)] {
             for (mi, (mode_name, mode)) in modes.iter().enumerate() {
                 let (indices, out_palette): (Vec<u8>, &Palette) = if is_measured {
-                    let cfg = DitherConfig {
+                    let o = DitherOptions {
                         mode: *mode,
-                        tone: ToneCompression::Auto,
-                        gamut: GamutCompression::Auto,
+                        gamut: 1.0,
                         ..Default::default()
                     };
-                    (
-                        dither_with_canonical(
-                            &buf,
-                            &SPECTRA_7_3_6COLOR,
-                            ColorScheme::Bwgbry.palette(),
-                            cfg,
-                        ),
-                        &SPECTRA_7_3_6COLOR,
-                    )
+                    (dither(&buf, &spectra6, &o), &spectra6)
                 } else {
-                    let cfg = DitherConfig { mode: *mode, ..Default::default() };
-                    (dither(&buf, ColorScheme::Mono.palette(), cfg), ColorScheme::Mono.palette())
+                    let o = DitherOptions { mode: *mode, ..Default::default() };
+                    (dither(&buf, &mono, &o), &mono)
                 };
 
                 let rgb = to_rgb(&indices, out_palette);

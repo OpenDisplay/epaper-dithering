@@ -2,13 +2,24 @@
 
 import threading
 import time
+from pathlib import Path
 
 import epaper_dithering._rs as _rs
 import numpy as np
 import pytest
-from epaper_dithering import ColorScheme, DitherMode, dither_image
+from epaper_dithering import DitherMode, DitherOptions, Palette, dither_image
 from epaper_dithering.core import _to_rgb_bytes
 from PIL import Image
+
+EXAMPLES = Path(__file__).resolve().parents[3] / "examples/palettes"
+
+
+def example(name: str) -> Palette:
+    return Palette.load(EXAMPLES / f"{name}.json")
+
+
+IDEAL_NAMES = ["mono", "bwr", "bwy", "bwry", "bwgbry", "grayscale4", "grayscale16", "seven_color", "grayscale8"]
+SPECTRA_7_3_6COLOR = example("spectra_7_3_6color")
 
 
 class TestDitheringAlgorithms:
@@ -17,7 +28,7 @@ class TestDitheringAlgorithms:
     @pytest.mark.parametrize("mode", list(DitherMode))
     def test_all_modes_produce_valid_output(self, small_test_image, mode):
         """Test each dithering mode produces valid palette image."""
-        result = dither_image(small_test_image, ColorScheme.BWR, mode=mode)
+        result = dither_image(small_test_image, example("ideal_bwr"), DitherOptions(mode=mode))
 
         assert result.mode == "P", f"Output should be palette mode, got {result.mode}"
         assert result.size == small_test_image.size, "Output size should match input"
@@ -25,29 +36,20 @@ class TestDitheringAlgorithms:
         palette = result.getpalette()
         assert palette is not None, "Output should have a palette"
 
-    @pytest.mark.parametrize("scheme", list(ColorScheme))
-    def test_all_color_schemes(self, small_test_image, scheme):
-        """Test each color scheme works correctly."""
-        result = dither_image(small_test_image, scheme, mode=DitherMode.BURKES)
-
-        assert result.mode == "P"
-        palette = result.getpalette()
-        assert len(palette) >= scheme.color_count * 3, "Palette should contain all scheme colors"
-
     def test_output_image_type(self, small_test_image):
         """Test output is PIL Image."""
-        result = dither_image(small_test_image, ColorScheme.MONO, mode=DitherMode.FLOYD_STEINBERG)
+        result = dither_image(small_test_image, example("ideal_mono"), DitherOptions(mode=DitherMode.FLOYD_STEINBERG))
         assert isinstance(result, Image.Image)
 
     def test_rgba_input_handling(self):
         """Test RGBA images are handled correctly."""
         rgba_img = Image.new("RGBA", (10, 10), color=(128, 128, 128, 255))
-        result = dither_image(rgba_img, ColorScheme.BWR, mode=DitherMode.BURKES)
+        result = dither_image(rgba_img, example("ideal_bwr"), DitherOptions(mode=DitherMode.BURKES))
 
         assert result.mode == "P"
         assert result.size == rgba_img.size
 
-    @pytest.mark.parametrize("scheme", list(ColorScheme))
+    @pytest.mark.parametrize("scheme", IDEAL_NAMES)
     def test_output_contains_only_valid_indices(self, scheme):
         """All output pixels must be valid palette indices.
 
@@ -62,10 +64,11 @@ class TestDitheringAlgorithms:
                 b = 128
                 pixels[x, y] = (r, g, b)
 
-        result = dither_image(gradient, scheme, mode=DitherMode.FLOYD_STEINBERG)
+        palette_obj = example(f"ideal_{scheme}")
+        result = dither_image(gradient, palette_obj, DitherOptions(mode=DitherMode.FLOYD_STEINBERG))
         result_pixels = np.array(result)
         max_idx = result_pixels.max()
-        assert max_idx < scheme.color_count, f"{scheme.name}: pixel index {max_idx} >= color count {scheme.color_count}"
+        assert max_idx < len(palette_obj), f"{scheme}: pixel index {max_idx} >= color count {len(palette_obj)}"
 
 
 class TestBufferValidation:
@@ -78,18 +81,18 @@ class TestBufferValidation:
         # 10x10 RGB image = 300 bytes; claim a height that does not match.
         pixels = bytes(10 * 10 * 3)
         with pytest.raises(ValueError):
-            _rs.dither_image(pixels, 10, 11, scheme_id=ColorScheme.MONO.value)
+            _rs.dither_image(pixels, 10, 11, example("ideal_mono")._inner)
 
     def test_matching_dimensions_succeed(self):
         """The correct width/height is accepted."""
         import epaper_dithering._rs as _rs
 
         pixels = bytes(10 * 10 * 3)
-        indices = _rs.dither_image(pixels, 10, 10, scheme_id=ColorScheme.MONO.value)
+        indices = _rs.dither_image(pixels, 10, 10, example("ideal_mono")._inner)
         assert len(indices) == 10 * 10
 
     def test_bytearray_pixels_still_extract(self):
-        """`pixels` (and `palette_bytes`) must still accept `bytearray`, not just `bytes`.
+        """`pixels` must still accept `bytearray`, not just `bytes`.
 
         `dither_image` takes `PyBackedBytes` now (needed to release the GIL during the
         dither), and `PyBackedBytes::extract` supports both `PyBytes` and `PyByteArray`.
@@ -97,12 +100,15 @@ class TestBufferValidation:
         import epaper_dithering._rs as _rs
 
         pixels = bytearray(10 * 10 * 3)
-        indices = _rs.dither_image(pixels, 10, 10, scheme_id=ColorScheme.MONO.value)
+        indices = _rs.dither_image(pixels, 10, 10, example("ideal_mono")._inner)
         assert len(indices) == 10 * 10
 
-        palette_bytes = bytearray(b"\x00\x00\x00\xff\xff\xff")
-        indices = _rs.dither_image(pixels, 10, 10, palette_bytes=palette_bytes, accent_idx=0)
-        assert len(indices) == 10 * 10
+    def test_ragged_buffer_raises_value_error(self):
+        """A buffer that isn't whole RGB rows is an error, never a panic."""
+        import epaper_dithering._rs as _rs
+
+        with pytest.raises(ValueError):
+            _rs.dither_image(bytes(7), 2, 1, example("ideal_mono")._inner)
 
 
 class TestColorScience:
@@ -115,7 +121,7 @@ class TestColorScience:
             for y in range(64):
                 gradient.putpixel((x, y), (x, x, x))
 
-        result = dither_image(gradient, ColorScheme.GRAYSCALE_4, mode=DitherMode.FLOYD_STEINBERG)
+        result = dither_image(gradient, example("ideal_grayscale4"), DitherOptions(mode=DitherMode.FLOYD_STEINBERG))
 
         histogram = result.histogram()[:4]
 
@@ -127,7 +133,7 @@ class TestColorScience:
     def test_alpha_composites_on_white(self):
         """Test RGBA images composite on white background, not black."""
         rgba_white = Image.new("RGBA", (10, 10), (255, 255, 255, 128))
-        result_white = dither_image(rgba_white, ColorScheme.MONO, mode=DitherMode.NONE)
+        result_white = dither_image(rgba_white, example("ideal_mono"), DitherOptions(mode=DitherMode.NONE))
         histogram_white = result_white.histogram()
 
         assert histogram_white[1] > histogram_white[0], (
@@ -135,7 +141,7 @@ class TestColorScience:
         )
 
         rgba_transparent = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
-        result_transparent = dither_image(rgba_transparent, ColorScheme.MONO, mode=DitherMode.NONE)
+        result_transparent = dither_image(rgba_transparent, example("ideal_mono"), DitherOptions(mode=DitherMode.NONE))
         histogram_transparent = result_transparent.histogram()
 
         assert histogram_transparent[1] == 100, (
@@ -151,8 +157,12 @@ class TestColorScience:
                 gray_value = int(x * 255 / 99)
                 pixels[x, y] = (gray_value, gray_value, gray_value)
 
-        result_serpentine = dither_image(gradient, ColorScheme.MONO, mode=DitherMode.FLOYD_STEINBERG, serpentine=True)
-        result_raster = dither_image(gradient, ColorScheme.MONO, mode=DitherMode.FLOYD_STEINBERG, serpentine=False)
+        result_serpentine = dither_image(
+            gradient, example("ideal_mono"), DitherOptions(mode=DitherMode.FLOYD_STEINBERG, serpentine=True)
+        )
+        result_raster = dither_image(
+            gradient, example("ideal_mono"), DitherOptions(mode=DitherMode.FLOYD_STEINBERG, serpentine=False)
+        )
 
         assert result_serpentine.mode == "P"
         assert result_raster.mode == "P"
@@ -167,15 +177,15 @@ class TestColorScience:
         """Test that dithering produces identical output on repeated runs."""
         img = Image.new("RGB", (50, 50), (128, 128, 128))
 
-        result1 = dither_image(img, ColorScheme.BWR, mode=DitherMode.FLOYD_STEINBERG)
-        result2 = dither_image(img, ColorScheme.BWR, mode=DitherMode.FLOYD_STEINBERG)
+        result1 = dither_image(img, example("ideal_bwr"), DitherOptions(mode=DitherMode.FLOYD_STEINBERG))
+        result2 = dither_image(img, example("ideal_bwr"), DitherOptions(mode=DitherMode.FLOYD_STEINBERG))
 
         assert np.array_equal(np.array(result1), np.array(result2)), "Dithering should be deterministic"
 
     def test_ordered_dithering_uses_threshold_correctly(self):
         """Test ordered dithering produces reasonable distribution."""
         gray = Image.new("RGB", (16, 16), (186, 186, 186))
-        result = dither_image(gray, ColorScheme.MONO, mode=DitherMode.ORDERED)
+        result = dither_image(gray, example("ideal_mono"), DitherOptions(mode=DitherMode.ORDERED))
 
         pixels = list(result.get_flattened_data())
 
@@ -203,147 +213,58 @@ class TestColorScience:
         ]
 
         for mode in error_diffusion_modes:
-            result_true = dither_image(img, ColorScheme.MONO, mode=mode, serpentine=True)
+            result_true = dither_image(img, example("ideal_mono"), DitherOptions(mode=mode, serpentine=True))
             assert result_true.mode == "P", f"{mode.name} should work with serpentine=True"
 
-            result_false = dither_image(img, ColorScheme.MONO, mode=mode, serpentine=False)
+            result_false = dither_image(img, example("ideal_mono"), DitherOptions(mode=mode, serpentine=False))
             assert result_false.mode == "P", f"{mode.name} should work with serpentine=False"
 
 
-class TestToneCompression:
-    """Test dynamic range compression with measured palettes."""
-
-    def test_tone_compression_with_measured_palette(self):
-        """Tone compression should run and produce valid output with measured palette."""
-        from epaper_dithering import SPECTRA_7_3_6COLOR
-
-        img = Image.new("RGB", (20, 20), (200, 200, 200))
-        result = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.FLOYD_STEINBERG, tone=1.0)
-
-        assert result.mode == "P"
-        assert result.size == (20, 20)
+class TestToneAndGamut:
+    """Tone (black-point lift) and gamut compression: opt-in strengths from 0.0 to 1.0."""
 
     @pytest.mark.parametrize("mode", list(DitherMode))
-    def test_tone_compression_all_modes(self, mode):
-        """Tone compression should work with all dithering modes."""
-        from epaper_dithering import SPECTRA_7_3_6COLOR
-
-        img = Image.new("RGB", (10, 10), (128, 128, 128))
-        result = dither_image(img, SPECTRA_7_3_6COLOR, mode=mode, tone=1.0)
+    def test_full_strength_all_modes(self, mode):
+        img = Image.new("RGB", (10, 10), (128, 64, 200))
+        result = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=mode, tone=1.0, gamut=1.0))
 
         assert result.mode == "P"
         assert result.size == (10, 10)
 
-    def test_tone_compression_zero_matches_no_compression(self):
-        """tone=0.0 should produce same result as without compression."""
-        from epaper_dithering import SPECTRA_7_3_6COLOR
-
-        img = Image.new("RGB", (20, 20), (128, 128, 128))
-        result_zero = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.NONE, tone=0.0)
-        # With ColorScheme (not measured), compression is always skipped
-        result_scheme = dither_image(img, ColorScheme.BWGBRY, mode=DitherMode.NONE, tone=1.0)
-
-        # Both should produce valid palette output
-        assert result_zero.mode == "P"
-        assert result_scheme.mode == "P"
-
-    def test_tone_compression_skipped_for_color_scheme(self):
-        """Tone compression should be skipped for theoretical ColorScheme."""
-        img = Image.new("RGB", (20, 20), (128, 128, 128))
-
-        # These should produce identical output since ColorScheme bypasses compression
-        result_tc0 = dither_image(img, ColorScheme.MONO, mode=DitherMode.NONE, tone=0.0)
-        result_tc1 = dither_image(img, ColorScheme.MONO, mode=DitherMode.NONE, tone=1.0)
-        result_auto = dither_image(img, ColorScheme.MONO, mode=DitherMode.NONE, tone="auto")
-
-        assert np.array_equal(np.array(result_tc0), np.array(result_tc1)), (
-            "Tone compression should have no effect on theoretical ColorScheme"
-        )
-        assert np.array_equal(np.array(result_tc0), np.array(result_auto)), (
-            "Auto tone compression should have no effect on theoretical ColorScheme"
-        )
-
-    @pytest.mark.parametrize("mode", list(DitherMode))
-    def test_auto_tone_compression_all_modes(self, mode):
-        """Auto tone compression should produce valid output for all modes."""
-        from epaper_dithering import SPECTRA_7_3_6COLOR
-
-        img = Image.new("RGB", (10, 10), (128, 128, 128))
-        result = dither_image(img, SPECTRA_7_3_6COLOR, mode=mode, tone="auto", gamut="auto")
-
-        assert result.mode == "P"
-        assert result.size == (10, 10)
-
-    def test_default_tone_gamut_match_off_aliases(self):
-        """tone/gamut default to off, and 'off' is the string alias for 0.0."""
-        from epaper_dithering import SPECTRA_7_3_6COLOR
-
-        img = Image.new("RGB", (16, 16), (128, 128, 128))
-        result_default = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.BURKES)
-        result_zero = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.BURKES, tone=0.0, gamut=0.0)
-        result_off = dither_image(img, SPECTRA_7_3_6COLOR, mode=DitherMode.BURKES, tone="off", gamut="off")
+    def test_both_default_to_off(self):
+        img = Image.new("RGB", (16, 16), (128, 64, 200))
+        result_default = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES))
+        result_zero = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(mode=DitherMode.BURKES, tone=0.0, gamut=0.0))
 
         assert np.array_equal(np.array(result_default), np.array(result_zero))
-        assert np.array_equal(np.array(result_default), np.array(result_off))
 
-    def test_tone_compression_changes_measured_output(self):
-        """Tone compression should change the output for measured palettes."""
-        from epaper_dithering import SPECTRA_7_3_6COLOR
+    def test_tone_lifts_shadows(self):
+        dark = Image.new("RGB", (32, 32), (12, 12, 12))
+        off = dither_image(dark, SPECTRA_7_3_6COLOR)
+        on = dither_image(dark, SPECTRA_7_3_6COLOR, DitherOptions(tone=1.0))
+        black = SPECTRA_7_3_6COLOR.index_of("black")
+        assert list(off.get_flattened_data()).count(black) > list(on.get_flattened_data()).count(black)
 
-        # Use a gradient to see meaningful differences
-        gradient = Image.new("RGB", (50, 50))
-        pixels = gradient.load()
-        for y in range(50):
-            for x in range(50):
-                v = int(x * 255 / 49)
-                pixels[x, y] = (v, v, v)
-
-        result_off = dither_image(gradient, SPECTRA_7_3_6COLOR, mode=DitherMode.FLOYD_STEINBERG, tone=0.0)
-        result_on = dither_image(gradient, SPECTRA_7_3_6COLOR, mode=DitherMode.FLOYD_STEINBERG, tone=1.0)
-
-        assert not np.array_equal(np.array(result_off), np.array(result_on)), (
-            "Tone compression should produce different output than no compression"
-        )
-
-
-class TestToneAutoRegression:
-    """Regression: auto tone mapping must not NaN-collapse bilevel images.
-
-    A crisp bilevel frame (pure-white background, a few percent pure-black
-    pixels, no antialiasing — exactly what a UI renderer produces) drove the
-    log-skew strength epsilon-negative; (-x).powf(1.4) is NaN, which poisoned
-    every pixel and made the nearest-palette search return index 0 for the
-    whole frame: an all-black display instead of white with text.
-    """
-
-    def test_bilevel_white_image_survives_auto_tone(self):
-        from epaper_dithering import ColorPalette
-
-        # Measured-style palette whose paper white is well below sRGB white, so
-        # the auto tone compression actually engages for a pure-white image.
-        palette = ColorPalette(
-            colors={"black": (30, 30, 30), "white": (200, 200, 200)},
-            accent="black",
-            scheme=ColorScheme.MONO,
-        )
+    def test_white_frame_stays_white_on_a_palette_below_srgb_white(self):
+        # Unnamed palette whose lightest entry is well below sRGB white: white still maps there,
+        # and a few black pixels must not drag the frame down.
+        palette = Palette.from_srgb([((30, 30, 30), None, None), ((200, 200, 200), None, None)])
         img = Image.new("RGB", (100, 100), (255, 255, 255))
-        # 3% pure black — enough that the 2nd-percentile luminance is 0.0.
         for x in range(100):
             for y in range(3):
                 img.putpixel((x, y), (0, 0, 0))
 
-        result = dither_image(img, palette, mode=DitherMode.NONE, tone="auto")
+        result = dither_image(img, palette, DitherOptions(mode=DitherMode.NONE))
 
-        white_pixels = list(result.getdata()).count(1)
-        assert white_pixels > 9000, (
-            f"expected a mostly-white result, got {white_pixels} white pixels — auto tone collapsed the frame"
-        )
+        pixels = list(result.get_flattened_data())
+        assert pixels.count(1) == 9700
+        assert pixels.count(0) == 300
 
 
 class TestGilRelease:
     """`dither_image` must not hold the GIL for the whole rayon-parallel dither.
 
-    Audit H2: `dither_image`/`tone_compress`/`gamut_compress` used to run their
+    Audit H2: `dither_image`/`gamut_compress` used to run their
     rayon-parallel work with the GIL held. Because the GIL is process-global,
     calling this from an executor thread (as Home Assistant's `drawcustom`
     pipeline does) stalled the whole event loop for the duration of the dither.
@@ -389,7 +310,7 @@ class TestGilRelease:
         points.
 
         Measured on the reference machine, calling `_rs.dither_image` directly
-        with a single call on a 3200x1920 image (tone="auto", gamut="auto"),
+        with a single call on a 3200x1920 image (full gamut compression),
         3 trials each:
           - GIL held (fix reverted):    1-2 samples,  ~0.68s wall
           - GIL released (fix applied): 34-37 samples, ~0.70s wall
@@ -397,12 +318,7 @@ class TestGilRelease:
         case and well below the released case, so it should not flake on a
         loaded CI runner.
         """
-        from epaper_dithering import SPECTRA_7_3_6COLOR, _rs
-
-        palette_colors = list(SPECTRA_7_3_6COLOR.colors.values())
-        palette_bytes = bytes(c for rgb in palette_colors for c in rgb)
-        accent_idx = list(SPECTRA_7_3_6COLOR.colors.keys()).index(SPECTRA_7_3_6COLOR.accent)
-        scheme_id = SPECTRA_7_3_6COLOR.scheme.value if SPECTRA_7_3_6COLOR.scheme is not None else None
+        palette = SPECTRA_7_3_6COLOR._inner
 
         # 3200x1920 (4x linear scale of the display's 800x480) makes a single
         # call run long enough (~0.7s locally) to collect a comfortable margin
@@ -418,17 +334,14 @@ class TestGilRelease:
                 pixels,
                 width,
                 height,
-                scheme_id=scheme_id,
-                palette_bytes=palette_bytes,
-                accent_idx=accent_idx,
-                mode_id=int(DitherMode.BURKES),
+                palette,
+                mode=str(DitherMode.BURKES),
                 serpentine=True,
                 exposure=1.0,
                 saturation=1.0,
                 shadows=0.0,
                 highlights=0.0,
-                tone=None,  # "auto"
-                gamut=None,  # "auto"
+                gamut=1.0,
             )
             done.set()
 
@@ -543,19 +456,20 @@ class TestCompositeRgba:
 
 
 class TestDizzy:
-    """Dizzy dithering (DitherMode 9) must match the Rust reference byte for byte."""
+    """Dizzy dithering must match the Rust reference byte for byte."""
 
     def test_cross_language_reference_vector(self):
         img = Image.new("RGB", (4, 4))
         img.putdata([(x * 60 + y * 5,) * 3 for y in range(4) for x in range(4)])
-        out = dither_image(img, ColorScheme.BWR, mode=DitherMode.DIZZY)
+        # Snapping off: the vector pins the raw algorithm, shared with Rust and JavaScript.
+        out = dither_image(img, example("ideal_bwr"), DitherOptions(mode=DitherMode.DIZZY, snap=False))
         # Frozen literals, identical to the Rust and JavaScript suites.
         assert list(out.getdata()) == [0, 0, 1, 0, 0, 2, 2, 1, 0, 1, 1, 1, 0, 0, 2, 1]
 
     def test_is_deterministic(self):
         img = Image.new("RGB", (16, 16), (128, 128, 128))
-        a = dither_image(img, ColorScheme.BWR, mode=DitherMode.DIZZY)
-        b = dither_image(img, ColorScheme.BWR, mode=DitherMode.DIZZY)
+        a = dither_image(img, example("ideal_bwr"), DitherOptions(mode=DitherMode.DIZZY))
+        b = dither_image(img, example("ideal_bwr"), DitherOptions(mode=DitherMode.DIZZY))
         assert list(a.getdata()) == list(b.getdata())
 
 
@@ -576,20 +490,19 @@ class TestDbs:
     """Direct Binary Search refinement (`dbs=`)."""
 
     def test_changes_output_for_measured_palette(self):
-        from epaper_dithering import SPECTRA_7_3_6COLOR
 
         img = _color_gradient()
         plain = dither_image(img, SPECTRA_7_3_6COLOR)
-        refined = dither_image(img, SPECTRA_7_3_6COLOR, dbs=True)
+        refined = dither_image(img, SPECTRA_7_3_6COLOR, DitherOptions(dbs=True))
 
         assert refined.mode == "P"
         assert refined.size == plain.size
         assert refined.tobytes() != plain.tobytes()
 
-    def test_changes_output_for_color_scheme(self):
+    def test_changes_output_for_ideal_palette(self):
         img = _color_gradient()
-        plain = dither_image(img, ColorScheme.BWR)
-        refined = dither_image(img, ColorScheme.BWR, dbs=True)
+        plain = dither_image(img, example("ideal_bwr"))
+        refined = dither_image(img, example("ideal_bwr"), DitherOptions(dbs=True))
         assert refined.tobytes() != plain.tobytes()
 
     def test_true_means_default_params(self):
@@ -597,22 +510,25 @@ class TestDbs:
 
         img = _color_gradient()
         assert (
-            dither_image(img, ColorScheme.BWR, dbs=True).tobytes()
-            == dither_image(img, ColorScheme.BWR, dbs=DbsParams()).tobytes()
+            dither_image(img, example("ideal_bwr"), DitherOptions(dbs=True)).tobytes()
+            == dither_image(img, example("ideal_bwr"), DitherOptions(dbs=DbsParams())).tobytes()
         )
 
     @pytest.mark.parametrize("off", [None, False])
     def test_off_values_match_plain_dither(self, off):
         img = _color_gradient()
-        assert dither_image(img, ColorScheme.BWR, dbs=off).tobytes() == dither_image(img, ColorScheme.BWR).tobytes()
+        assert (
+            dither_image(img, example("ideal_bwr"), DitherOptions(dbs=off)).tobytes()
+            == dither_image(img, example("ideal_bwr")).tobytes()
+        )
 
     def test_params_are_passed_through(self):
         """Viewing geometry sets the eye-model blur width, so it must change the result."""
         from epaper_dithering import DbsParams
 
         img = _color_gradient()
-        near = dither_image(img, ColorScheme.BWR, dbs=DbsParams(viewing_distance_cm=15.0))
-        far = dither_image(img, ColorScheme.BWR, dbs=DbsParams(viewing_distance_cm=150.0))
+        near = dither_image(img, example("ideal_bwr"), DitherOptions(dbs=DbsParams(viewing_distance_cm=15.0)))
+        far = dither_image(img, example("ideal_bwr"), DitherOptions(dbs=DbsParams(viewing_distance_cm=150.0)))
         assert near.tobytes() != far.tobytes()
 
     def test_zero_passes_matches_plain_dither(self):
@@ -620,8 +536,8 @@ class TestDbs:
 
         img = _color_gradient()
         assert (
-            dither_image(img, ColorScheme.BWR, dbs=DbsParams(max_passes=0)).tobytes()
-            == dither_image(img, ColorScheme.BWR).tobytes()
+            dither_image(img, example("ideal_bwr"), DitherOptions(dbs=DbsParams(max_passes=0))).tobytes()
+            == dither_image(img, example("ideal_bwr")).tobytes()
         )
 
     @pytest.mark.parametrize(
@@ -636,10 +552,10 @@ class TestDbs:
 
     def test_rejects_non_params_values(self):
         with pytest.raises(TypeError):
-            dither_image(_color_gradient(), ColorScheme.BWR, dbs=10)  # type: ignore[arg-type]
+            dither_image(_color_gradient(), example("ideal_bwr"), DitherOptions(dbs=10))  # type: ignore[arg-type]
 
     def test_binding_validates_geometry(self):
         """The Rust binding reports bad geometry as ValueError instead of panicking."""
         pixels, width, height = _to_rgb_bytes(_color_gradient(8, 8))
         with pytest.raises(ValueError, match="ppi"):
-            _rs.dither_image(pixels, width, height, scheme_id=1, dbs_passes=10, dbs_ppi=0.0)
+            _rs.dither_image(pixels, width, height, example("ideal_bwr")._inner, dbs_passes=10, dbs_ppi=0.0)

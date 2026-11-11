@@ -46,7 +46,7 @@
 use rayon::prelude::*;
 
 use crate::color_space::srgb_channel_to_linear;
-use crate::palettes::Palette;
+use crate::srgb_palette::SrgbPalette;
 
 // Kolpatzik & Bouman (1992) exponential CSF decay constants, W(f) ∝ exp(−α·f), f in cycles/degree.
 // Luminance: Näsänen's α(L) = 1 / (0.525·ln L + 3.91) at L = 11 cd/m² ≈ 0.193.
@@ -145,8 +145,8 @@ fn eye_blurs(params: &DbsParams) -> [Kernel2D; 2] {
     [lum, chroma]
 }
 
-/// Palette inks and target pixels in YyCxCz.
-fn to_yycxcz(pixels: &[u8], width: usize, height: usize, palette: &Palette) -> (Vec<[f64; 3]>, Vec<[f64; 3]>) {
+/// SrgbPalette inks and target pixels in YyCxCz.
+fn to_yycxcz(pixels: &[u8], width: usize, height: usize, palette: &SrgbPalette) -> (Vec<[f64; 3]>, Vec<[f64; 3]>) {
     assert_eq!(pixels.len(), width * height * 3, "pixel buffer size mismatch");
     let inks = palette.colors.iter().map(|&c| srgb_to_yycxcz(c)).collect();
     let target = pixels.par_chunks_exact(3).map(|c| srgb_to_yycxcz([c[0], c[1], c[2]])).collect();
@@ -443,7 +443,7 @@ pub fn dbs_refine(
     pixels: &[u8],
     width: usize,
     height: usize,
-    palette: &Palette,
+    palette: &SrgbPalette,
     indices: &mut [u8],
     pinned: Option<&[bool]>,
     params: &DbsParams,
@@ -542,7 +542,7 @@ pub fn perceived_error(
     pixels: &[u8],
     width: usize,
     height: usize,
-    palette: &Palette,
+    palette: &SrgbPalette,
     indices: &[u8],
     params: &DbsParams,
 ) -> f64 {
@@ -581,8 +581,7 @@ pub fn perceived_error(
 mod tests {
     use super::*;
     use crate::algorithms::{error_diffusion_dither, BURKES};
-    use crate::measured_palettes::SPECTRA_7_3_6COLOR;
-    use crate::palettes::ColorScheme;
+    use crate::srgb_palette::fixtures;
     use approx::assert_relative_eq;
 
     /// Smooth colour gradient: enough structure that Burkes leaves room for improvement.
@@ -598,7 +597,7 @@ mod tests {
         px
     }
 
-    fn burkes(px: &[u8], w: usize, h: usize, palette: &Palette) -> Vec<u8> {
+    fn burkes(px: &[u8], w: usize, h: usize, palette: &SrgbPalette) -> Vec<u8> {
         error_diffusion_dither(px, w, h, palette, &BURKES, true)
     }
 
@@ -623,7 +622,7 @@ mod tests {
 
     #[test]
     fn perceived_error_is_zero_when_halftone_equals_target() {
-        let palette = &SPECTRA_7_3_6COLOR;
+        let palette = crate::srgb_palette::fixtures::spectra6();
         let indices: Vec<u8> = (0..24).map(|i| (i % palette.colors.len()) as u8).collect();
         let px: Vec<u8> = indices.iter().flat_map(|&i| palette.colors[i as usize]).collect();
         let e = perceived_error(&px, 6, 4, palette, &indices, &DbsParams::default());
@@ -632,7 +631,7 @@ mod tests {
 
     #[test]
     fn perceived_error_is_positive_for_a_mismatched_halftone() {
-        let palette = ColorScheme::Mono.palette();
+        let palette = fixtures::mono();
         let px = vec![128u8; 8 * 8 * 3];
         let indices = vec![0u8; 64]; // all black for a mid-grey target
         assert!(perceived_error(&px, 8, 8, palette, &indices, &DbsParams::default()) > 0.0);
@@ -642,7 +641,7 @@ mod tests {
     fn refine_reduces_perceived_error() {
         let (w, h) = (32, 24);
         let px = gradient(w, h);
-        let palette = &SPECTRA_7_3_6COLOR;
+        let palette = crate::srgb_palette::fixtures::spectra6();
         let params = DbsParams::default();
         let mut idx = burkes(&px, w, h, palette);
         let before = perceived_error(&px, w, h, palette, &idx, &params);
@@ -662,7 +661,7 @@ mod tests {
     fn reported_errors_match_direct_computation() {
         for (w, h) in [(32, 24), (200, 150)] {
             let px = gradient(w, h);
-            let palette = &SPECTRA_7_3_6COLOR;
+            let palette = crate::srgb_palette::fixtures::spectra6();
             let params = DbsParams::default();
             let mut idx = burkes(&px, w, h, palette);
             let before = perceived_error(&px, w, h, palette, &idx, &params);
@@ -681,7 +680,7 @@ mod tests {
     fn converged_result_is_a_local_minimum() {
         let (w, h) = (10, 8);
         let px = gradient(w, h);
-        let palette = &SPECTRA_7_3_6COLOR;
+        let palette = crate::srgb_palette::fixtures::spectra6();
         let params = DbsParams { max_passes: 200, ..Default::default() };
         let mut idx = burkes(&px, w, h, palette);
 
@@ -711,7 +710,7 @@ mod tests {
     fn pinned_pixels_never_change() {
         let (w, h) = (32, 24);
         let px = gradient(w, h);
-        let palette = &SPECTRA_7_3_6COLOR;
+        let palette = crate::srgb_palette::fixtures::spectra6();
         let mut idx = burkes(&px, w, h, palette);
         let pinned: Vec<bool> = (0..w * h).map(|i| i % 3 == 0).collect();
         let original = idx.clone();
@@ -731,7 +730,7 @@ mod tests {
     fn flat_grey_reaches_linear_light_coverage() {
         let (w, h) = (48, 48);
         let px = vec![188u8; w * h * 3];
-        let palette = ColorScheme::Mono.palette();
+        let palette = fixtures::mono();
         let white = palette.colors.iter().position(|&c| c == [255, 255, 255]).unwrap() as u8;
         let mut idx = burkes(&px, w, h, palette);
 
@@ -747,7 +746,7 @@ mod tests {
     fn result_is_independent_of_thread_count() {
         let (w, h) = (200, 150);
         let px = gradient(w, h);
-        let palette = &SPECTRA_7_3_6COLOR;
+        let palette = crate::srgb_palette::fixtures::spectra6();
         let init = burkes(&px, w, h, palette);
         let run = |threads: usize| {
             let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
@@ -765,7 +764,7 @@ mod tests {
     fn zero_passes_leaves_indices_untouched() {
         let (w, h) = (16, 12);
         let px = gradient(w, h);
-        let palette = &SPECTRA_7_3_6COLOR;
+        let palette = crate::srgb_palette::fixtures::spectra6();
         let mut idx = burkes(&px, w, h, palette);
         let original = idx.clone();
         let stats = dbs_refine(&px, w, h, palette, &mut idx, None, &DbsParams { max_passes: 0, ..Default::default() });

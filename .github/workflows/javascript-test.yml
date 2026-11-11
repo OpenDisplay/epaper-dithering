@@ -8,14 +8,12 @@ on:
       - 'packages/rust/wasm/**'
       - 'packages/rust/core/**'
       - '.github/workflows/javascript-test.yml'
-      - 'scripts/check_enum_parity.py'
   pull_request:
     paths:
       - 'packages/javascript/**'
       - 'packages/rust/wasm/**'
       - 'packages/rust/core/**'
       - '.github/workflows/javascript-test.yml'
-      - 'scripts/check_enum_parity.py'
   workflow_dispatch:
 
 defaults:
@@ -29,10 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Enum parity
-        working-directory: .
-        run: python3 scripts/check_enum_parity.py
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -40,10 +34,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/rust
-
-      - name: Palette codegen drift check (idealized + measured)
-        working-directory: packages/rust
-        run: cargo run --example gen_ts_palettes -- --check
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
