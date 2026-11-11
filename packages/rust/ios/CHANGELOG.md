@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-ios-v1.0.1...epaper-dithering-ios-v2.0.0) (2026-11-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ios:** ed_dither's matching/canonical palette arguments and the numeric mode_id are removed.
+
+### Features
+
+* **ios:** palette handles and named modes in the C ABI ([4a3b349](https://github.com/OpenDisplay/epaper-dithering/commit/4a3b349dc38daddadbbae444b318f981b665b351))
+
 ## [1.0.1](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-ios-v1.0.0...epaper-dithering-ios-v1.0.1) (2026-11-09)
 
 

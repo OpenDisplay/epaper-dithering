@@ -1,5 +1,29 @@
 # Changelog
 
+## [7.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-v6.1.1...epaper-dithering-v7.0.0) (2026-11-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* tone and gamut take numbers from 0.0 to 1.0 only; the GamutCompression enum and the "auto"/"off" values are removed.
+* **python:** ColorScheme, ColorPalette, the measured palette constants and the flat keyword arguments of dither_image are removed.
+
+### Features
+
+* make tone and gamut opt-in strengths; anchoring no longer lifts shadows ([cc80cd8](https://github.com/OpenDisplay/epaper-dithering/commit/cc80cd8c8ad07f56b8bcd3995797416a082879db))
+* **python:** Palette and DitherOptions API; remove ColorScheme and built-in palettes ([9a0296c](https://github.com/OpenDisplay/epaper-dithering/commit/9a0296c20752dbef056b420017d24a2b264becdd))
+
+
+### Bug Fixes
+
+* **core:** keep anchoring monotonic for any set of named inks; reject non-finite appearances ([e959f1a](https://github.com/OpenDisplay/epaper-dithering/commit/e959f1a9bdbf08c270a1325deee70b191d035a65))
+
+
+### Documentation
+
+* note the warm-tone shift in the 6.x migration guide ([d6c3249](https://github.com/OpenDisplay/epaper-dithering/commit/d6c32492cc3b15df3e07fc5613f351cf075dea6a))
+* rewrite READMEs around runtime palettes, with a 6.x migration guide ([48b355e](https://github.com/OpenDisplay/epaper-dithering/commit/48b355e6b203424abd8b4366a3cf994351d785f6))
+
 ## [6.1.1](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-v6.1.0...epaper-dithering-v6.1.1) (2026-10-07)
 
 
