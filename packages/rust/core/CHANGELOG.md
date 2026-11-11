@@ -6,7 +6,6 @@
 ### ⚠ BREAKING CHANGES
 
 * tone and gamut take numbers from 0.0 to 1.0 only; the GamutCompression enum and the "auto"/"off" values are removed.
-* the tone option (DitherOptions.tone / ToneCompression, Python tone=, JS tone) and the tone_map dynamic-range functions are removed.
 * **core:** ColorScheme, measured_palettes, dither_with_canonical, DitherConfig and DitherMode integer conversion are removed. Load palettes from epaper-palette files instead.
 
 ### Features
@@ -16,7 +15,6 @@
 * **core:** anchor ink nominals onto measured appearances before matching ([7a01c7d](https://github.com/OpenDisplay/epaper-dithering/commit/7a01c7d5f30c1296e3af4c5f90ac8c8bab37c543))
 * **core:** dither against runtime Palette; remove ColorScheme, built-in catalog and canonical palettes ([9bd3d2d](https://github.com/OpenDisplay/epaper-dithering/commit/9bd3d2d12f1fb45eb046828544fbc634c8c3d02f))
 * make tone and gamut opt-in strengths; anchoring no longer lifts shadows ([cc80cd8](https://github.com/OpenDisplay/epaper-dithering/commit/cc80cd8c8ad07f56b8bcd3995797416a082879db))
-* replace tone compression with black-point compensation in anchoring ([4dddf94](https://github.com/OpenDisplay/epaper-dithering/commit/4dddf94acb8d45af7f2a525f022ebc02ec3919c4))
 
 
 ### Bug Fixes
