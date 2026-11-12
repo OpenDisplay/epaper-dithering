@@ -1,12 +1,9 @@
 use epaper_dithering_core::{
-    color_space_lab::rgb_to_oklab,
     composite::composite_rgba_on_white,
     dbs::DbsParams,
     dither,
     enums::DitherMode,
     palette::{Ink, Lab, Palette, PaletteEntry},
-    srgb_palette::SrgbPalette,
-    tone_map,
     types::ImageBuffer,
     DitherOptions,
 };
@@ -26,17 +23,23 @@ fn palette_err(e: impl ToString) -> PyErr {
     PaletteError::new_err(e.to_string())
 }
 
-fn entry_from_tuple(i: usize, ((l, a, b), name, nominal): EntryTuple) -> PyResult<PaletteEntry> {
-    let ink = match (name, nominal) {
-        (Some(name), Some((r, g, bl))) => Some(Ink { name, nominal: [r, g, bl] }),
-        (None, None) => None,
-        _ => return Err(palette_err(format!("entry {i}: an ink needs both a name and a nominal colour"))),
-    };
-    Ok(PaletteEntry { appearance: Lab { l, a, b }, ink })
+/// An ink is a name and a nominal colour together; entry `i` having only one is an error.
+fn ink_from(i: usize, name: Option<String>, nominal: Option<(u8, u8, u8)>) -> PyResult<Option<Ink>> {
+    match (name, nominal) {
+        (Some(name), Some((r, g, b))) => Ok(Some(Ink { name, nominal: [r, g, b] })),
+        (None, None) => Ok(None),
+        _ => Err(palette_err(format!("entry {i}: an ink needs both a name and a nominal colour"))),
+    }
 }
 
 fn entries_from_tuples(entries: Vec<EntryTuple>) -> PyResult<Vec<PaletteEntry>> {
-    entries.into_iter().enumerate().map(|(i, e)| entry_from_tuple(i, e)).collect()
+    entries
+        .into_iter()
+        .enumerate()
+        .map(|(i, ((l, a, b), name, nominal))| {
+            Ok(PaletteEntry { appearance: Lab { l, a, b }, ink: ink_from(i, name, nominal)? })
+        })
+        .collect()
 }
 
 /// A validated palette. Construct through the `epaper_dithering.Palette` wrapper.
@@ -72,14 +75,7 @@ impl PyPalette {
         let colors = colors
             .into_iter()
             .enumerate()
-            .map(|(i, ((r, g, b), name, nominal))| {
-                let ink = match (name, nominal) {
-                    (Some(name), Some((nr, ng, nb))) => Some(Ink { name, nominal: [nr, ng, nb] }),
-                    (None, None) => None,
-                    _ => return Err(palette_err(format!("colour {i}: an ink needs both a name and a nominal colour"))),
-                };
-                Ok(([r, g, b], ink))
-            })
+            .map(|(i, ((r, g, b), name, nominal))| Ok(([r, g, b], ink_from(i, name, nominal)?)))
             .collect::<PyResult<Vec<_>>>()?;
         Palette::from_srgb(colors, measured).map(|inner| Self { inner }).map_err(palette_err)
     }
@@ -210,54 +206,11 @@ fn composite_rgba<'py>(py: Python<'py>, rgba: PyBackedBytes) -> PyResult<Bound<'
     Ok(PyBytes::new(py, &rgb))
 }
 
-// ── Pipeline stages for developer tooling (tools/pipeline.py) ────────────────────
-//
-// Not part of the public Python API. Input/output are flat linear-RGB f64.
-
-fn to_linear_pixels(pixels: &[f64]) -> PyResult<Vec<[f64; 3]>> {
-    if !pixels.len().is_multiple_of(3) {
-        return Err(PyValueError::new_err("pixel buffer length must be a multiple of 3"));
-    }
-    Ok(pixels.as_chunks::<3>().0.to_vec())
-}
-
-fn flatten(pixels: Vec<[f64; 3]>) -> Vec<f64> {
-    pixels.into_iter().flatten().collect()
-}
-
-/// Gamut compression on a linear-RGB buffer. `strength=None` → full strength (1.0).
-#[pyfunction]
-#[pyo3(signature = (pixels, palette, strength=None))]
-fn gamut_compress(py: Python<'_>, pixels: Vec<f64>, palette: &PyPalette, strength: Option<f64>) -> PyResult<Vec<f64>> {
-    let mut px = to_linear_pixels(&pixels)?;
-    let srgb = SrgbPalette::from(&palette.inner);
-    let s = strength.unwrap_or(1.0);
-    if s > 0.0 {
-        py.detach(|| tone_map::gamut_compress(&mut px, &srgb, s));
-    }
-    Ok(flatten(px))
-}
-
-/// Convert a flat linear-RGB f64 buffer to flat OKLab f64 (L, a, b per pixel).
-#[pyfunction]
-fn rgb_to_oklab_buffer(pixels: Vec<f64>) -> PyResult<Vec<f64>> {
-    let px = to_linear_pixels(&pixels)?;
-    Ok(px
-        .into_iter()
-        .flat_map(|[r, g, b]| {
-            let lab = rgb_to_oklab(r, g, b);
-            [lab.l, lab.a, lab.b]
-        })
-        .collect())
-}
-
 #[pymodule]
 fn _rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPalette>()?;
     m.add("PaletteError", m.py().get_type::<PaletteError>())?;
     m.add_function(wrap_pyfunction!(dither_image, m)?)?;
     m.add_function(wrap_pyfunction!(composite_rgba, m)?)?;
-    m.add_function(wrap_pyfunction!(gamut_compress, m)?)?;
-    m.add_function(wrap_pyfunction!(rgb_to_oklab_buffer, m)?)?;
     Ok(())
 }
