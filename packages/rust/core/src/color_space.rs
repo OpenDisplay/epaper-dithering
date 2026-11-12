@@ -3,6 +3,12 @@ pub fn srgb_channel_to_linear(value: u8) -> f64 {
     srgb_fraction_to_linear(value as f64 / 255.0)
 }
 
+/// `srgb_channel_to_linear` for every byte value, so per-pixel code indexes a table instead of
+/// calling `powf`. The entries are the function's own results, so lookups are exact.
+pub(crate) fn srgb_to_linear_lut() -> [f64; 256] {
+    std::array::from_fn(|v| srgb_channel_to_linear(v as u8))
+}
+
 /// Continuous sRGB fraction [0.0–1.0] → linear [0.0–1.0]. Same gamma curve as
 /// `srgb_channel_to_linear` but operates on continuous input — useful when sub-byte
 /// precision is needed (e.g. ordered dither perturbs pixels in sRGB-fraction space
