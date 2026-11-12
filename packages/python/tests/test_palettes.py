@@ -119,7 +119,7 @@ class TestOptions:
         palette = example("ideal_mono")
         by_name = dither_image(small_test_image, palette, DitherOptions(mode="floyd_steinberg"))
         by_enum = dither_image(small_test_image, palette, DitherOptions(mode=DitherMode.FLOYD_STEINBERG))
-        assert list(by_name.getdata()) == list(by_enum.getdata())
+        assert list(by_name.get_flattened_data()) == list(by_enum.get_flattened_data())
 
     def test_non_numeric_gamut_raises_type_error(self, small_test_image):
         with pytest.raises(TypeError, match="gamut must be a number"):
@@ -154,11 +154,11 @@ class TestDitherImage:
         image = Image.open(SUCCESS / "images/success/dashboard_photo.png").convert("RGB")
         out = dither_image(image, palette)
         black = palette.index_of("black")
-        for src, idx in zip(image.getdata(), out.getdata(), strict=True):
+        for src, idx in zip(image.get_flattened_data(), out.get_flattened_data(), strict=True):
             if src == (0, 0, 0):
                 assert idx == black
 
     def test_rgba_composited_on_white(self):
         image = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
         out = dither_image(image, example("ideal_mono"), DitherOptions(mode="none"))
-        assert set(out.getdata()) == {1}
+        assert set(out.get_flattened_data()) == {1}
