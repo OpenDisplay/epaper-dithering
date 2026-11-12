@@ -20,6 +20,7 @@ create_exception!(_rs, PaletteError, PyValueError, "A palette was rejected (inva
 
 /// An entry as it crosses the boundary: (appearance L*a*b*, ink name, ink nominal sRGB).
 type EntryTuple = ((f64, f64, f64), Option<String>, Option<(u8, u8, u8)>);
+type SrgbEntryTuple = ((u8, u8, u8), Option<String>, Option<(u8, u8, u8)>);
 
 fn palette_err(e: impl ToString) -> PyErr {
     PaletteError::new_err(e.to_string())
@@ -67,7 +68,7 @@ impl PyPalette {
 
     #[staticmethod]
     #[pyo3(signature = (colors, measured=false))]
-    fn from_srgb(colors: Vec<((u8, u8, u8), Option<String>, Option<(u8, u8, u8)>)>, measured: bool) -> PyResult<Self> {
+    fn from_srgb(colors: Vec<SrgbEntryTuple>, measured: bool) -> PyResult<Self> {
         let colors = colors
             .into_iter()
             .enumerate()
