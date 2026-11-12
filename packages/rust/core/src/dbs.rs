@@ -46,6 +46,7 @@
 use rayon::prelude::*;
 
 use crate::color_space::srgb_channel_to_linear;
+use crate::lab::{D65, SRGB_TO_XYZ};
 use crate::srgb_palette::SrgbPalette;
 
 // Kolpatzik & Bouman (1992) exponential CSF decay constants, W(f) ∝ exp(−α·f), f in cycles/degree.
@@ -54,20 +55,13 @@ use crate::srgb_palette::SrgbPalette;
 const ALPHA_LUM: f64 = 0.193;
 const ALPHA_CHROMA: f64 = 0.419;
 
-/// Linear sRGB → CIE XYZ (D65), IEC 61966-2-1.
-const SRGB_TO_XYZ: [[f64; 3]; 3] = [
-    [0.412_456_4, 0.357_576_1, 0.180_437_5],
-    [0.212_672_9, 0.715_152_2, 0.072_175_0],
-    [0.019_333_9, 0.119_192_0, 0.950_304_1],
-];
-
 /// sRGB bytes → YyCxCz: `Yy = 116·Y/Yn`, `Cx = 500·(X/Xn − Y/Yn)`, `Cz = 200·(Y/Yn − Z/Zn)`.
 /// The white point is sRGB white, so (255, 255, 255) maps to zero chroma. Measured palettes
 /// are normalised to paper white, which therefore lands at the same point.
 fn srgb_to_yycxcz(rgb: [u8; 3]) -> [f64; 3] {
     let lin = rgb.map(srgb_channel_to_linear);
     let [x, y, z] = SRGB_TO_XYZ.map(|row| row[0] * lin[0] + row[1] * lin[1] + row[2] * lin[2]);
-    let [xn, yn, zn] = SRGB_TO_XYZ.map(|row| row[0] + row[1] + row[2]);
+    let [xn, yn, zn] = D65;
     [116.0 * y / yn, 500.0 * (x / xn - y / yn), 200.0 * (y / yn - z / zn)]
 }
 

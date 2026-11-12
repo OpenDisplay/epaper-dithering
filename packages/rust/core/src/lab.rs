@@ -12,14 +12,14 @@ pub struct Lab {
 
 /// D65 reference white in XYZ: the row sums of `SRGB_TO_XYZ`, so sRGB white maps to
 /// exactly L\* 100, a\* = b\* = 0.
-const D65: [f64; 3] = [
+pub(crate) const D65: [f64; 3] = [
     SRGB_TO_XYZ[0][0] + SRGB_TO_XYZ[0][1] + SRGB_TO_XYZ[0][2],
     SRGB_TO_XYZ[1][0] + SRGB_TO_XYZ[1][1] + SRGB_TO_XYZ[1][2],
     SRGB_TO_XYZ[2][0] + SRGB_TO_XYZ[2][1] + SRGB_TO_XYZ[2][2],
 ];
 
-// Linear sRGB → XYZ (D65), IEC 61966-2-1.
-const SRGB_TO_XYZ: [[f64; 3]; 3] = [
+// Linear sRGB → XYZ (D65), IEC 61966-2-1. The middle row is relative luminance.
+pub(crate) const SRGB_TO_XYZ: [[f64; 3]; 3] = [
     [0.412_456_4, 0.357_576_1, 0.180_437_5],
     [0.212_672_9, 0.715_152_2, 0.072_175_0],
     [0.019_333_9, 0.119_192_0, 0.950_304_1],
@@ -87,14 +87,12 @@ pub fn lab_to_linear(lab: Lab) -> [f64; 3] {
 
 /// 8-bit sRGB → CIELAB.
 pub fn srgb_to_lab(rgb: [u8; 3]) -> Lab {
-    let linear = rgb.map(srgb_channel_to_linear);
-    xyz_to_lab(mul(&SRGB_TO_XYZ, linear))
+    linear_to_lab(rgb.map(srgb_channel_to_linear))
 }
 
 /// CIELAB → 8-bit sRGB, clamping out-of-gamut colours.
 pub fn lab_to_srgb(lab: Lab) -> [u8; 3] {
-    let linear = mul(&invert(&SRGB_TO_XYZ), lab_to_xyz(lab));
-    linear.map(|c| linear_channel_to_srgb(c.clamp(0.0, 1.0)))
+    lab_to_linear(lab).map(|c| linear_channel_to_srgb(c.clamp(0.0, 1.0)))
 }
 
 /// CIE76 colour difference.

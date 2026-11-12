@@ -12,20 +12,8 @@ pub use crate::kernels::{
 
 // ── SrgbPalette setup helper ─────────────────────────────────────────────────────
 
-pub(crate) fn build_palette_lab(palette: &SrgbPalette) -> (Vec<[f64; 3]>, PaletteLab) {
-    let palette_linear: Vec<[f64; 3]> = palette
-        .colors
-        .iter()
-        .map(|&[r, g, b]| {
-            [
-                srgb_channel_to_linear(r),
-                srgb_channel_to_linear(g),
-                srgb_channel_to_linear(b),
-            ]
-        })
-        .collect();
-    let palette_lab = PaletteLab::from_linear_rgb(&palette_linear);
-    (palette_linear, palette_lab)
+pub(crate) fn build_palette_lab(palette: &SrgbPalette) -> PaletteLab {
+    PaletteLab::from_linear_rgb(&palette.linear())
 }
 
 // ── Main function ─────────────────────────────────────────────────────────────
@@ -67,7 +55,7 @@ fn error_diffusion_dither_impl(
     kernel: &Kernel,
     serpentine: bool,
 ) -> Vec<u8> {
-    let (_palette_linear, palette_lab) = build_palette_lab(palette);
+    let palette_lab = build_palette_lab(palette);
 
     // SrgbPalette sRGB as f64 for error computation
     let palette_srgb_f: Vec<[f64; 3]> = palette
@@ -165,7 +153,7 @@ pub fn jarvis_judice_ninke(pixels: &[u8], w: usize, h: usize, palette: &SrgbPale
 /// Nearest-color mapping with no dithering. Each pixel maps independently.
 /// Pixels with `Some` in `snap` take that index directly.
 pub fn direct_map(pixels: &[u8], palette: &SrgbPalette, snap: Option<&[Option<u8>]>) -> Vec<u8> {
-    let (_, palette_lab) = build_palette_lab(palette);
+    let palette_lab = build_palette_lab(palette);
     pixels
         .par_chunks(3)
         .enumerate()
@@ -241,7 +229,7 @@ fn ordered_dither_impl(
     palette: &SrgbPalette,
     snap: Option<&[Option<u8>]>,
 ) -> Vec<u8> {
-    let (_palette_linear, palette_lab) = build_palette_lab(palette);
+    let palette_lab = build_palette_lab(palette);
     let spread = ordered_spread(palette);
 
     // Per-threshold gamma LUT: lut[t][v] = srgb_fraction_to_linear((v/255 + threshold_t).clamp).
@@ -430,7 +418,7 @@ mod tests {
         // Find the mono decision midpoint: the smallest gray value whose threshold-free
         // OKLab match flips from black (0) to white (1).
         let pal = fixtures::mono();
-        let (_, pal_lab) = build_palette_lab(pal);
+        let pal_lab = build_palette_lab(pal);
         let midpoint = (0u16..=255)
             .find(|&v| {
                 let lin = srgb_channel_to_linear(v as u8);

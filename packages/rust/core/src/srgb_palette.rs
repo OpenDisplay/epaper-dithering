@@ -4,6 +4,7 @@
 //! [`crate::dither`]. It is public only so the tuning harnesses in `examples/` can drive
 //! individual algorithms.
 
+use crate::color_space::srgb_channel_to_linear;
 use crate::palette::Palette;
 
 #[doc(hidden)]
@@ -11,6 +12,13 @@ use crate::palette::Palette;
 pub struct SrgbPalette {
     /// sRGB of each entry's appearance, in palette index order.
     pub colors: Vec<[u8; 3]>,
+}
+
+impl SrgbPalette {
+    /// Linear RGB (0–1) of each entry, in palette index order.
+    pub(crate) fn linear(&self) -> Vec<[f64; 3]> {
+        self.colors.iter().map(|c| c.map(srgb_channel_to_linear)).collect()
+    }
 }
 
 impl From<&Palette> for SrgbPalette {
