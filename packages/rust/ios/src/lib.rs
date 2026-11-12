@@ -80,20 +80,10 @@ pub struct EdDitherOptions {
     pub dbs_ppi: f64,
 }
 
-/// Static NUL-terminated names, so `ed_dither_options_default` can hand out a pointer that
-/// stays valid forever.
-const MODE_NAMES: [(DitherMode, &CStr); 10] = [
-    (DitherMode::None, c"none"),
-    (DitherMode::Burkes, c"burkes"),
-    (DitherMode::Ordered, c"ordered"),
-    (DitherMode::FloydSteinberg, c"floyd_steinberg"),
-    (DitherMode::Atkinson, c"atkinson"),
-    (DitherMode::Stucki, c"stucki"),
-    (DitherMode::Sierra, c"sierra"),
-    (DitherMode::SierraLite, c"sierra_lite"),
-    (DitherMode::JarvisJudiceNinke, c"jarvis_judice_ninke"),
-    (DitherMode::Dizzy, c"dizzy"),
-];
+/// The core's default mode as a static NUL-terminated string, so
+/// `ed_dither_options_default` can hand out a pointer that stays valid forever.
+/// `defaults_mirror_the_core` fails if the core's default ever changes.
+const DEFAULT_MODE: &CStr = c"burkes";
 
 impl EdDitherOptions {
     /// Translate into the core's options. `Err` carries the `ED_ERR_*` code.
@@ -129,9 +119,8 @@ impl EdDitherOptions {
 pub extern "C" fn ed_dither_options_default() -> EdDitherOptions {
     let core = DitherOptions::default();
     let dbs = DbsParams::default();
-    let mode = MODE_NAMES.iter().find(|(m, _)| *m == core.mode).map_or(c"burkes", |(_, n)| n);
     EdDitherOptions {
-        mode: mode.as_ptr(),
+        mode: DEFAULT_MODE.as_ptr(),
         serpentine: core.serpentine,
         anchor: core.anchor,
         snap: core.snap,

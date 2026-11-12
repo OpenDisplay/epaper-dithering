@@ -42,6 +42,11 @@ jobs:
         working-directory: .
         run: wasm-pack build packages/rust/wasm --target web --out-dir ../../javascript/src/wasm-core
 
+      # Same Node as the publish job in release.yml (vitest and eslint run on Node, not bun).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '25'
+
       - uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies

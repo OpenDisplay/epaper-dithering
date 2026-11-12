@@ -69,15 +69,14 @@ yarn.lock
 *~
 .DS_Store
 
-# Project specific
-/fixtures/expected/
+# Project specific: images are scratch output unless they are docs or test fixtures
 *.png
-!docs/examples/*.png
 *.jpg
 *.jpeg
 *.gif
 *.bmp
-!fixtures/images/
+!docs/examples/*.png
+!packages/rust/core/tests/fixtures/images/**
 uv.lock
 
 # Python scratch / dev files
@@ -91,6 +90,3 @@ packages/python/*.pdf
 # because the Python sdist builds from it.
 packages/rust/Cargo.lock
 packages/rust/wasm/Cargo.lock
-
-# Dev-tool output (tools/pipeline.py)
-packages/python/pipeline_out/

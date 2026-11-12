@@ -27,36 +27,18 @@ pub enum DitherMode {
     Dizzy,
 }
 
-const NAMES: [(DitherMode, &str); 10] = [
-    (DitherMode::None, "none"),
-    (DitherMode::Burkes, "burkes"),
-    (DitherMode::Ordered, "ordered"),
-    (DitherMode::FloydSteinberg, "floyd_steinberg"),
-    (DitherMode::Atkinson, "atkinson"),
-    (DitherMode::Stucki, "stucki"),
-    (DitherMode::Sierra, "sierra"),
-    (DitherMode::SierraLite, "sierra_lite"),
-    (DitherMode::JarvisJudiceNinke, "jarvis_judice_ninke"),
-    (DitherMode::Dizzy, "dizzy"),
-];
-
 impl std::str::FromStr for DitherMode {
     type Err = DitherError;
 
     /// Parse a snake_case mode name, e.g. `"floyd_steinberg"`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        NAMES
-            .iter()
-            .find(|(_, name)| *name == s)
-            .map(|&(mode, _)| mode)
-            .ok_or_else(|| DitherError::UnknownDitherMode(s.to_owned()))
+        Self::ALL.into_iter().find(|mode| mode.name() == s).ok_or_else(|| DitherError::UnknownDitherMode(s.to_owned()))
     }
 }
 
 impl std::fmt::Display for DitherMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = NAMES.iter().find(|(mode, _)| mode == self).map(|(_, name)| *name).unwrap_or("unknown");
-        f.write_str(name)
+        f.write_str(self.name())
     }
 }
 
@@ -74,6 +56,22 @@ impl DitherMode {
         DitherMode::JarvisJudiceNinke,
         DitherMode::Dizzy,
     ];
+
+    /// The snake_case name every binding uses for this mode.
+    fn name(self) -> &'static str {
+        match self {
+            DitherMode::None => "none",
+            DitherMode::Burkes => "burkes",
+            DitherMode::Ordered => "ordered",
+            DitherMode::FloydSteinberg => "floyd_steinberg",
+            DitherMode::Atkinson => "atkinson",
+            DitherMode::Stucki => "stucki",
+            DitherMode::Sierra => "sierra",
+            DitherMode::SierraLite => "sierra_lite",
+            DitherMode::JarvisJudiceNinke => "jarvis_judice_ninke",
+            DitherMode::Dizzy => "dizzy",
+        }
+    }
 
     pub fn kernel(self) -> Option<&'static Kernel> {
         match self {
@@ -97,5 +95,13 @@ mod tests {
     fn dizzy_is_named_and_has_no_kernel() {
         assert_eq!("dizzy".parse::<DitherMode>(), Ok(DitherMode::Dizzy));
         assert!(DitherMode::Dizzy.kernel().is_none(), "dizzy has no fixed kernel");
+    }
+
+    /// `ALL` is maintained by hand and parsing goes through it, so a duplicate there would
+    /// leave some mode unparseable by name.
+    #[test]
+    fn all_has_no_duplicate_modes_or_names() {
+        let names: std::collections::BTreeSet<&str> = DitherMode::ALL.iter().map(|m| m.name()).collect();
+        assert_eq!(names.len(), DitherMode::ALL.len());
     }
 }

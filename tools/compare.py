@@ -5,17 +5,11 @@
     algorithms_{NAME}.png    All dither modes for every idealised and measured palette
     gamut_compression.png    Measured palettes: gc=0 | gc=0.5 | gc=1.0
 
-Add --docs to also generate images for the README in docs/images/:
-    Full resolution in docs/images/
-    50% thumbnails in docs/images/thumbs/
+Usage (from the repo root):
+    uv run --project packages/python python tools/compare.py [image] [--width W] [--height H] [--out DIR]
 
-Usage:
-    uv run scripts/compare.py [image] [--width W] [--height H] [--out DIR] [--docs]
-
-Examples:
-    uv run scripts/compare.py
-    uv run scripts/compare.py photo.jpg --width 400 --height 300
-    uv run scripts/compare.py photo.jpg --docs
+Without an image, the `ubahn_station.png` test fixture is used. The README images are made by
+`generate_docs_examples.py`, not by this script.
 """
 
 from __future__ import annotations
@@ -32,7 +26,7 @@ DISPLAY_WIDTH = 800
 DISPLAY_HEIGHT = 480
 LABEL_H = 32
 FONT_SIZE = 18
-DOCS_SCALE = 0.5
+DEFAULT_IMAGE = example_palettes.ROOT / "packages/rust/core/tests/fixtures/images/ubahn_station.png"
 
 # Discovered automatically from the library — no manual updates needed
 ALL_ALGORITHMS: list[DitherMode] = list(DitherMode)
@@ -69,52 +63,26 @@ def render(
     return dithered.convert("RGB"), time.perf_counter() - t0
 
 
-def make_sheet(
-    cells: list[tuple[str, Image.Image]],
-    cols: int,
-    iw: int,
-    ih: int,
-    scale: float = 1.0,
-) -> Image.Image:
-    """Arrange (label, image) cells into a labeled grid, optionally scaled."""
-    tw = int(iw * scale)
-    th = int(ih * scale)
-    label_h = max(1, int(LABEL_H * scale))
-    font = load_font(max(8, int(FONT_SIZE * scale)))
-
+def make_sheet(cells: list[tuple[str, Image.Image]], cols: int, iw: int, ih: int) -> Image.Image:
+    """Arrange (label, image) cells into a labeled grid."""
+    font = load_font(FONT_SIZE)
     rows = (len(cells) + cols - 1) // cols
-    sheet = Image.new("RGB", (tw * cols, (th + label_h) * rows), (40, 40, 40))
+    sheet = Image.new("RGB", (iw * cols, (ih + LABEL_H) * rows), (40, 40, 40))
     draw = ImageDraw.Draw(sheet)
     for i, (label, img) in enumerate(cells):
         col, row = i % cols, i // cols
-        x, y = col * tw, row * (th + label_h)
-        sheet.paste(img.resize((tw, th), Image.LANCZOS) if scale != 1.0 else img, (x, y))
-        draw.text((x + 4, y + th + 4), label, fill=(220, 220, 220), font=font)
+        x, y = col * iw, row * (ih + LABEL_H)
+        sheet.paste(img, (x, y))
+        draw.text((x + 4, y + ih + 4), label, fill=(220, 220, 220), font=font)
     return sheet
 
 
-def save(sheet: Image.Image, path: Path, also_thumb: bool = False) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def save(sheet: Image.Image, path: Path) -> None:
     sheet.save(path)
     print(f"  → {path}")
-    if also_thumb:
-        thumb_path = path.parent / "thumbs" / path.name
-        thumb_path.parent.mkdir(parents=True, exist_ok=True)
-        w, h = sheet.size
-        sheet.resize((int(w * DOCS_SCALE), int(h * DOCS_SCALE)), Image.LANCZOS).save(thumb_path)
-        print(f"  → {thumb_path}")
 
 
-def run(
-    image_path: Path,
-    out_dir: Path,
-    width: int,
-    height: int,
-    docs: bool,
-    docs_algo: str,
-    docs_gc: str,
-    gamut_compression: float = 0.0,
-) -> None:
+def run(image_path: Path, out_dir: Path, width: int, height: int, gamut_compression: float = 0.0) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     src = Image.open(image_path).convert("RGB").resize((width, height), Image.LANCZOS)
     iw, ih = width, height
@@ -138,14 +106,12 @@ def run(
     # 2. algorithms_{NAME}.png — all dither modes for every palette
     # ------------------------------------------------------------------
     print("── algorithms ───────────────────────────────")
-    algo_cells_by_name: dict[str, list[tuple[str, Image.Image]]] = {}
     for palette_label, palette in ALL_PALETTES_FOR_ALGO:
         cells: list[tuple[str, Image.Image]] = []
         for mode in ALL_ALGORITHMS:
             img, t = render(src, palette, mode, gamut_compression)
             cells.append((f"{mode.name} · {palette_label}{gc_label}", img))
             print(f"  {palette_label:<16} {mode.name:<22} {t * 1000:>6.0f}ms")
-        algo_cells_by_name[palette_label] = cells
         save(make_sheet(cells, 3, iw, ih), out_dir / f"algorithms_{palette_label}.png")
     print()
 
@@ -163,72 +129,22 @@ def run(
     save(make_sheet(gc_cells, 3, iw, ih), out_dir / "gamut_compression.png")
     print()
 
-    # ------------------------------------------------------------------
-    # --docs: full-res + 50% thumbnails for the README
-    # ------------------------------------------------------------------
-    if docs:
-        docs_dir = example_palettes.ROOT / "packages/python/docs/images"
-        print(f"── docs → {docs_dir}")
-
-        # algorithms: use the requested palette, fall back to first available
-        algo_palette_names = list(algo_cells_by_name.keys())
-        algo_key = (
-            docs_algo
-            if docs_algo in algo_cells_by_name
-            else next((n for n in ["BWR", "MONO"] if n in algo_cells_by_name), algo_palette_names[0])
-        )
-        if algo_key != docs_algo:
-            print(f"  (note: --docs-algo-palette '{docs_algo}' not found, using '{algo_key}')")
-
-        measured_palette_names = [name for name, _ in MEASURED_PALETTES]
-        # gamut compression: use the requested palette, fall back to first measured
-        gc_key = docs_gc if docs_gc in measured_palette_names else measured_palette_names[0]
-        if gc_key != docs_gc:
-            print(f"  (note: --docs-gc-palette '{docs_gc}' not found, using '{gc_key}')")
-        gc_cells_docs = [cell for cell in gc_cells if cell[0].startswith(gc_key)]
-
-        save(make_sheet(scheme_cells, 4, iw, ih), docs_dir / "schemes.png", also_thumb=True)
-        save(make_sheet(algo_cells_by_name[algo_key], 3, iw, ih), docs_dir / "algorithms.png", also_thumb=True)
-        print(f"     (palette: {algo_key})")
-        save(make_sheet(gc_cells_docs, 3, iw, ih), docs_dir / "gamut_compression.png", also_thumb=True)
-        print(f"     (palette: {gc_key})")
-
 
 def main() -> None:
-    here = example_palettes.ROOT / "packages/python"
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("image", nargs="?", default=str(here / "marienplatz.jpg"))
+    parser.add_argument("image", nargs="?", default=str(DEFAULT_IMAGE))
     parser.add_argument("--width", type=int, default=DISPLAY_WIDTH)
     parser.add_argument("--height", type=int, default=DISPLAY_HEIGHT)
-    parser.add_argument("--out", default=str(here / "compare_out"))
-    parser.add_argument("--docs", action="store_true", help="Also write images to docs/images/ for the README")
-    parser.add_argument(
-        "--docs-algo-palette", default="BWR", metavar="NAME", help="Palette for docs algorithms image (default: BWR)"
-    )
-    parser.add_argument(
-        "--docs-gc-palette",
-        default="SPECTRA_7_3_6COLOR",
-        metavar="NAME",
-        help="Palette for docs gamut_compression image (default: SPECTRA_7_3_6COLOR)",
-    )
+    parser.add_argument("--out", default=str(example_palettes.ROOT / "packages/python/compare_out"))
     parser.add_argument(
         "--gamut-compression",
-        default="0",
+        type=float,
+        default=0.0,
         metavar="GC",
-        help="Gamut compression strength 0.0–1.0 (default: 0).",
+        help="Gamut compression strength 0.0–1.0 for the schemes and algorithms sheets (default: 0).",
     )
     args = parser.parse_args()
-    gc = float(args.gamut_compression)
-    run(
-        Path(args.image),
-        Path(args.out),
-        args.width,
-        args.height,
-        args.docs,
-        args.docs_algo_palette,
-        args.docs_gc_palette,
-        gc,
-    )
+    run(Path(args.image), Path(args.out), args.width, args.height, args.gamut_compression)
 
 
 if __name__ == "__main__":

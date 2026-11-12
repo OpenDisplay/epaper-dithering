@@ -51,8 +51,8 @@ bun run build                          # tsup
 
 ### Dev tools (`tools/`)
 
-Python scripts for visual comparison and docs images (`compare.py`, `pipeline.py`,
-`generate_patches.py`, `generate_docs_examples.py`, `make_dashboard_fixture.py`). Run them with the
+Python scripts for visual comparison and docs images (`compare.py`, `generate_patches.py`,
+`generate_docs_examples.py`, `make_dashboard_fixture.py`). Run them with the
 Python package's environment, e.g. `uv run --project packages/python python tools/compare.py`.
 Rust tuning harnesses stay in `packages/rust/core/examples/` because cargo needs them there
 (`anchor_compare`, `wab_sweep`, `wab_compare`, `dbs_compare`, `dizzy_compare`, `dither`).

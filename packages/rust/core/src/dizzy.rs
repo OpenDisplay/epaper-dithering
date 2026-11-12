@@ -80,7 +80,7 @@ fn dizzy_dither_impl(
     palette: &SrgbPalette,
     snap: Option<&[Option<u8>]>,
 ) -> Vec<u8> {
-    let (_palette_linear, palette_lab) = build_palette_lab(palette);
+    let palette_lab = build_palette_lab(palette);
     let palette_srgb_f: Vec<[f64; 3]> = palette
         .colors
         .iter()

@@ -264,8 +264,7 @@ class TestToneAndGamut:
 class TestGilRelease:
     """`dither_image` must not hold the GIL for the whole rayon-parallel dither.
 
-    Audit H2: `dither_image`/`gamut_compress` used to run their
-    rayon-parallel work with the GIL held. Because the GIL is process-global,
+    Audit H2: `dither_image` used to run its rayon-parallel work with the GIL held. Because the GIL is process-global,
     calling this from an executor thread (as Home Assistant's `drawcustom`
     pipeline does) stalled the whole event loop for the duration of the dither.
 

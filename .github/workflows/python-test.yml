@@ -78,11 +78,7 @@ jobs:
         run: uv run maturin develop --release
 
       - name: Run tests
-        run: uv run pytest tests/ -v --tb=short
-
-      - name: Generate coverage report
-        if: matrix.python-version == '3.11'
-        run: uv run pytest tests/ --cov=src/epaper_dithering --cov-report=xml --cov-report=term
+        run: uv run pytest tests/ -v --tb=short --cov=src/epaper_dithering --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'

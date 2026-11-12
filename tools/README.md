@@ -9,8 +9,7 @@ uv run --project packages/python python tools/<script>.py --help
 
 | Script | What it does |
 |---|---|
-| `compare.py` | Grids of every algorithm × palette, plus tone and gamut compression sheets |
-| `pipeline.py` | One strip per image showing each pipeline step (linear, tone, gamut, direct map, final) |
+| `compare.py` | Grids of every algorithm × palette, plus a gamut compression sheet |
 | `generate_patches.py` | Calibration patch images for a palette, to photograph and measure |
 | `generate_docs_examples.py` | Regenerates the images in `docs/examples/` used by the READMEs |
 | `make_dashboard_fixture.py` | Regenerates the dashboard + photo success-test fixture |

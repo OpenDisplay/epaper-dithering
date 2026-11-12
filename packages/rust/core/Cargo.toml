@@ -4,18 +4,13 @@ version = "7.0.0"
 edition = "2024"
 description = "High-quality dithering algorithms for e-paper / e-ink displays — OKLab color matching, error diffusion, ordered dithering, measured palettes"
 license = "MIT"
-repository = "https://github.com/OpenDisplay-org/epaper-dithering"
+repository = "https://github.com/OpenDisplay/epaper-dithering"
 homepage = "https://opendisplay.org"
 documentation = "https://docs.rs/epaper-dithering-core"
 keywords = ["epaper", "eink", "dithering", "color", "embedded"]
 categories = ["graphics", "multimedia::images", "embedded"]
 readme = "README.md"
-exclude = [
-    "tests/fixtures/",
-    "examples/",
-    "out.png",
-    "out_rgb.png",
-]
+exclude = ["tests/fixtures/", "examples/"]
 
 [dependencies]
 rayon = "1.10"

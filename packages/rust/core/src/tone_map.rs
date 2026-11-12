@@ -5,31 +5,15 @@
 
 use rayon::prelude::*;
 
-use crate::color_space::{linear_fraction_to_srgb, srgb_channel_to_linear, srgb_fraction_to_linear};
+use crate::color_space::{linear_fraction_to_srgb, srgb_fraction_to_linear};
 use crate::color_space_lab::{oklab_to_rgb, rgb_to_oklab, OkLab};
+use crate::lab::SRGB_TO_XYZ;
 use crate::srgb_palette::SrgbPalette;
 
-// ITU-R BT.709 / sRGB luminance coefficients
-const LUM_R: f64 = 0.2126729;
-const LUM_G: f64 = 0.7151522;
-const LUM_B: f64 = 0.0721750;
-
+/// Relative luminance (CIE Y) of a linear-RGB pixel.
 fn luminance([r, g, b]: [f64; 3]) -> f64 {
-    LUM_R * r + LUM_G * g + LUM_B * b
-}
-
-fn palette_to_linear(palette: &SrgbPalette) -> Vec<[f64; 3]> {
-    palette
-        .colors
-        .iter()
-        .map(|&[r, g, b]| {
-            [
-                srgb_channel_to_linear(r),
-                srgb_channel_to_linear(g),
-                srgb_channel_to_linear(b),
-            ]
-        })
-        .collect()
+    let [lum_r, lum_g, lum_b] = SRGB_TO_XYZ[1];
+    lum_r * r + lum_g * g + lum_b * b
 }
 
 // ── apply_exposure ────────────────────────────────────────────────────────────
@@ -115,7 +99,8 @@ pub fn apply_shadows_highlights(pixels: &mut [[f64; 3]], shadows: f64, highlight
 /// Luminance of the palette's darkest and lightest entries: the display's black and
 /// white, whatever order the palette lists them in.
 fn display_luminance_range(palette: &SrgbPalette) -> (f64, f64) {
-    palette_to_linear(palette)
+    palette
+        .linear()
         .into_iter()
         .map(luminance)
         .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), y| (lo.min(y), hi.max(y)))
@@ -215,7 +200,7 @@ pub fn gamut_compress(pixels: &mut [[f64; 3]], palette: &SrgbPalette, strength: 
         return;
     }
 
-    let pal_linear = palette_to_linear(palette);
+    let pal_linear = palette.linear();
     let pal_lab: Vec<_> = pal_linear
         .iter()
         .map(|&[r, g, b]| rgb_to_oklab(r, g, b))
@@ -244,11 +229,10 @@ pub fn gamut_compress(pixels: &mut [[f64; 3]], palette: &SrgbPalette, strength: 
         let px_lab = rgb_to_oklab(pixel[0], pixel[1], pixel[2]);
         let px_lab_arr = [px_lab.l, px_lab.a, px_lab.b];
 
-        // Find nearest point on any palette edge or vertex
+        // Nearest point on any palette edge. Vertices need no separate pass: the clamped
+        // projection returns an endpoint when it falls outside the segment.
         let mut best_dist_sq = f64::INFINITY;
         let mut best_target = *pixel;
-
-        // Edges (endpoints precomputed above; vertices covered via clamped projection)
         for e in &edges {
             let t = nearest_on_segment(px_lab_arr, e.a_lab, e.b_lab);
             let nearest_lab = lerp3(e.a_lab, e.b_lab, t);
@@ -258,9 +242,6 @@ pub fn gamut_compress(pixels: &mut [[f64; 3]], palette: &SrgbPalette, strength: 
                 best_target = lerp3(e.a_lin, e.b_lin, t);
             }
         }
-
-        // Note: vertices are already covered by the edge loop — nearest_on_segment
-        // returns the endpoint (t=0 or t=1) when the projection falls outside the segment.
 
         let nearest_dist = best_dist_sq.sqrt();
         let blend = smoothstep(GAMUT_THRESHOLD, GAMUT_THRESHOLD_MAX, nearest_dist) * strength;
@@ -311,12 +292,7 @@ mod tests {
     fn gamut_compress_identity_on_palette_colors() {
         // A pixel that exactly matches a palette color should be unchanged
         let pal = spectra_palette();
-        let [r, g, b] = pal.colors[0];
-        let mut pixels = vec![[
-            srgb_channel_to_linear(r),
-            srgb_channel_to_linear(g),
-            srgb_channel_to_linear(b),
-        ]];
+        let mut pixels = vec![pal.linear()[0]];
         let original = pixels[0];
         gamut_compress(&mut pixels, pal, 1.0);
         let d = dist_sq(pixels[0], original);

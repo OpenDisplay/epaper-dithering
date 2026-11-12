@@ -235,13 +235,14 @@ must pick a single ink.
 
 ## Preview Tool
 
-An interactive browser tool for comparing dithering modes and palettes.
+An interactive browser tool for comparing dithering modes and palettes:
+<https://opendisplay.github.io/epaper-dithering/> (the published package and example palettes).
 
-**Local** (against your working branch, using the repo's example palettes):
+The same page (`docs/index.html`) runs against your working branch when served from localhost:
 ```bash
 cd packages/javascript
 bun run dev
-# → http://localhost:3456/packages/javascript/dev.html
+# → http://localhost:3456/docs/
 ```
 
 ## Development
@@ -252,10 +253,15 @@ bun install
 # When Rust source changes, rebuild the WASM (from repo root):
 wasm-pack build packages/rust/wasm --target web --out-dir ../../javascript/src/wasm-core
 
-bun run test        # vitest (needs Node ≥18)
+bun run test        # vitest (the dev tooling needs Node ≥22.12; the published package runs on ≥18)
 bun run build       # tsup → dist/
 bun run type-check
 ```
+
+## Changelog
+
+This package is versioned and released together with the Python package; see
+[`packages/python/CHANGELOG.md`](../python/CHANGELOG.md).
 
 ## Related Projects
 

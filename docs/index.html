@@ -696,11 +696,20 @@
 </div>
 
 <script type="module">
-import { ditherImage, DitherMode, Palette } from 'https://cdn.jsdelivr.net/npm/@opendisplay/epaper-dithering@7/dist/index.js';
+// One page for both uses. On localhost (`bun run dev` in packages/javascript, which serves the
+// repo root) it runs the working tree's build and example palettes; anywhere else it loads the
+// published package and the example palettes through jsDelivr.
+const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+const { ditherImage, DitherMode, Palette } = await import(
+  LOCAL
+    ? '/packages/javascript/dist/index.js'
+    : 'https://cdn.jsdelivr.net/npm/@opendisplay/epaper-dithering@7/dist/index.js'
+);
+const PALETTE_BASE = LOCAL
+  ? '/examples/palettes'
+  : 'https://cdn.jsdelivr.net/gh/OpenDisplay/epaper-dithering@main/examples/palettes';
 
 // ── Palette / mode lookup ────────────────────────────────────────
-// Palettes are the repo's example files, fetched from GitHub through jsDelivr.
-const PALETTE_BASE = 'https://cdn.jsdelivr.net/gh/OpenDisplay/epaper-dithering@main/examples/palettes';
 
 const paletteCache = new Map();
 async function loadPalette(name) {
