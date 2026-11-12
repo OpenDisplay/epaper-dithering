@@ -231,7 +231,6 @@
     .slider-val.muted { color: var(--muted); }
 
     /* Compression section hidden when not applicable */
-    #compressionSection { display: none; }
 
     .sub-group-label {
       font-size: 9px;
@@ -350,7 +349,6 @@
       max-height: 65vh;
       width: auto;
       height: auto;
-      image-rendering: pixelated;
     }
 
     /* Empty state */
@@ -554,27 +552,20 @@
       <div class="field">
         <div class="group-label">Color Scheme</div>
         <select id="schemeSelect">
-          <optgroup label="Standard">
-            <option value="MONO">MONO — 2 color</option>
-            <option value="BWR">BWR — black/white/red</option>
-            <option value="BWY">BWY — black/white/yellow</option>
-            <option value="BWRY">BWRY — 4 color</option>
-            <option value="BWGBRY" selected>BWGBRY — Spectra 6</option>
-            <option value="GRAYSCALE_4">GRAYSCALE 4</option>
-            <option value="GRAYSCALE_16">GRAYSCALE 16</option>
-            <option value="SEVEN_COLOR">SEVEN COLOR — Spectra/ACeP 7</option>
-            <option value="BWGBRY_SPLIT">BWGBRY SPLIT — Spectra 6, split planes</option>
-            <option value="GRAYSCALE_8">GRAYSCALE 8 — e.g. Inkplate 10 (not a firmware value)</option>
+          <optgroup label="Ideal (examples/palettes)">
+            <option value="ideal_mono">Ideal mono</option>
+            <option value="ideal_bwr">Ideal BWR</option>
+            <option value="ideal_bwy">Ideal BWY</option>
+            <option value="ideal_bwry">Ideal BWRY</option>
+            <option value="ideal_bwgbry">Ideal BWGBRY (Spectra 6)</option>
+            <option value="ideal_grayscale4">Ideal grayscale 4</option>
+            <option value="ideal_grayscale16">Ideal grayscale 16</option>
+            <option value="ideal_seven_color">Ideal 7-colour</option>
+            <option value="ideal_grayscale8">Ideal grayscale 8</option>
           </optgroup>
-          <optgroup label="Measured Palettes">
-            <option value="SPECTRA_7_3_6COLOR">Spectra 7.3" 6-color</option>
-            <option value="SPECTRA_7_3_6COLOR_V2">Spectra 7.3" 6-color v2</option>
-            <option value="BWRY_3_97">BWRY 3.97" 800×480</option>
-            <option value="MONO_4_26">Mono 4.26"</option>
-            <option value="BWRY_4_2">BWRY 4.2"</option>
-            <option value="SOLUM_BWR">Solum BWR</option>
-            <option value="HANSHOW_BWR">Hanshow BWR</option>
-            <option value="HANSHOW_BWY">Hanshow BWY</option>
+          <optgroup label="Measured (examples/palettes)">
+            <option value="spectra_7_3_6color" selected>Spectra 7.3" 6-colour</option>
+            <option value="spectra_7_3_6color_v2">Spectra 7.3" 6-colour v2</option>
           </optgroup>
         </select>
       </div>
@@ -598,7 +589,7 @@
 
     </div>
 
-    <!-- Serpentine + tone compression -->
+    <!-- Serpentine -->
     <div>
       <div class="group-label">Options</div>
       <div class="toggle-row">
@@ -610,31 +601,42 @@
       </div>
     </div>
 
-    <!-- Compression controls (measured palettes only) -->
+    <!-- Pre-dither adjustments (apply to all palettes) -->
+    <div>
+      <div class="group-label">Pre-dither</div>
+      <div class="sub-group-label">Exposure</div>
+      <div class="slider-row">
+        <input type="range" id="exposureSlider" min="25" max="400" value="100" step="5">
+        <span class="slider-val" id="exposureVal">1.00</span>
+      </div>
+      <div class="sub-group-label">Saturation</div>
+      <div class="slider-row">
+        <input type="range" id="saturationSlider" min="0" max="200" value="100" step="5">
+        <span class="slider-val" id="saturationVal">1.00</span>
+      </div>
+      <div class="sub-group-label">Shadows</div>
+      <div class="slider-row">
+        <input type="range" id="shadowsSlider" min="0" max="100" value="0" step="5">
+        <span class="slider-val muted" id="shadowsVal">0.00</span>
+      </div>
+      <div class="sub-group-label">Highlights</div>
+      <div class="slider-row">
+        <input type="range" id="highlightsSlider" min="0" max="100" value="0" step="5">
+        <span class="slider-val muted" id="highlightsVal">0.00</span>
+      </div>
+    </div>
+
+    <!-- Tone and gamut (opt-in) -->
     <div id="compressionSection">
-      <div class="group-label">Tone Compression</div>
-      <div class="toggle-row">
-        <span>Auto levels</span>
-        <label class="toggle">
-          <input type="checkbox" id="toneAutoToggle" checked>
-          <span class="track"></span>
-        </label>
-      </div>
+      <div class="group-label">Black-point lift (tone)</div>
       <div class="slider-row">
-        <input type="range" id="toneSlider" min="0" max="100" value="100" step="5" disabled>
-        <span class="slider-val muted" id="toneVal">auto</span>
+        <input type="range" id="toneSlider" min="0" max="100" value="0" step="5">
+        <span class="slider-val muted" id="toneVal">0%</span>
       </div>
-      <div class="sub-group-label">Gamut Compression</div>
-      <div class="toggle-row">
-        <span>Auto gamut</span>
-        <label class="toggle">
-          <input type="checkbox" id="gamutAutoToggle" checked>
-          <span class="track"></span>
-        </label>
-      </div>
+      <div class="group-label">Gamut Compression</div>
       <div class="slider-row">
-        <input type="range" id="gamutSlider" min="0" max="100" value="80" step="5" disabled>
-        <span class="slider-val muted" id="gamutVal">auto</span>
+        <input type="range" id="gamutSlider" min="0" max="100" value="0" step="5">
+        <span class="slider-val" id="gamutVal">0%</span>
       </div>
     </div>
 
@@ -694,42 +696,21 @@
 </div>
 
 <script type="module">
-import {
-  ditherImage,
-  ColorScheme,
-  DitherMode,
-  SPECTRA_7_3_6COLOR,
-  SPECTRA_7_3_6COLOR_V2,
-  BWRY_3_97,
-  MONO_4_26,
-  BWRY_4_2,
-  SOLUM_BWR,
-  HANSHOW_BWR,
-  HANSHOW_BWY,
-} from 'https://esm.sh/@opendisplay/epaper-dithering@6';
+import { ditherImage, DitherMode, Palette } from 'https://cdn.jsdelivr.net/npm/@opendisplay/epaper-dithering@7/dist/index.js';
 
-// ── Scheme / mode lookup maps ────────────────────────────────────
+// ── Palette / mode lookup ────────────────────────────────────────
+// Palettes are the repo's example files, fetched from GitHub through jsDelivr.
+const PALETTE_BASE = 'https://cdn.jsdelivr.net/gh/OpenDisplay/epaper-dithering@main/examples/palettes';
 
-const SCHEMES = {
-  MONO:             ColorScheme.MONO,
-  BWR:              ColorScheme.BWR,
-  BWY:              ColorScheme.BWY,
-  BWRY:             ColorScheme.BWRY,
-  BWGBRY:           ColorScheme.BWGBRY,
-  GRAYSCALE_4:      ColorScheme.GRAYSCALE_4,
-  GRAYSCALE_16:     ColorScheme.GRAYSCALE_16,
-  SEVEN_COLOR:      ColorScheme.SEVEN_COLOR,
-  BWGBRY_SPLIT:     ColorScheme.BWGBRY_SPLIT,
-  GRAYSCALE_8:      ColorScheme.GRAYSCALE_8,
-  SPECTRA_7_3_6COLOR,
-  SPECTRA_7_3_6COLOR_V2,
-  BWRY_3_97,
-  MONO_4_26,
-  BWRY_4_2,
-  SOLUM_BWR,
-  HANSHOW_BWR,
-  HANSHOW_BWY,
-};
+const paletteCache = new Map();
+async function loadPalette(name) {
+  if (!paletteCache.has(name)) {
+    const res = await fetch(`${PALETTE_BASE}/${name}.json`);
+    if (!res.ok) throw new Error(`cannot load palette ${name}: HTTP ${res.status}`);
+    paletteCache.set(name, Palette.fromJson(await res.text()));
+  }
+  return paletteCache.get(name);
+}
 
 const MODES = {
   NONE:              DitherMode.NONE,
@@ -747,7 +728,6 @@ const MODES = {
 // ── State ────────────────────────────────────────────────────────
 
 let currentImageData = null;
-let pendingRaf = null;
 
 // ── DOM refs ─────────────────────────────────────────────────────
 
@@ -757,12 +737,18 @@ const schemeSelect    = document.getElementById('schemeSelect');
 const modeSelect      = document.getElementById('modeSelect');
 const serpentine      = document.getElementById('serpentineToggle');
 const compressionSection = document.getElementById('compressionSection');
-const toneAutoToggle  = document.getElementById('toneAutoToggle');
 const toneSlider      = document.getElementById('toneSlider');
 const toneVal         = document.getElementById('toneVal');
-const gamutAutoToggle = document.getElementById('gamutAutoToggle');
 const gamutSlider     = document.getElementById('gamutSlider');
 const gamutVal        = document.getElementById('gamutVal');
+const exposureSlider   = document.getElementById('exposureSlider');
+const exposureVal      = document.getElementById('exposureVal');
+const saturationSlider = document.getElementById('saturationSlider');
+const saturationVal    = document.getElementById('saturationVal');
+const shadowsSlider    = document.getElementById('shadowsSlider');
+const shadowsVal       = document.getElementById('shadowsVal');
+const highlightsSlider = document.getElementById('highlightsSlider');
+const highlightsVal    = document.getElementById('highlightsVal');
 const origCanvas      = document.getElementById('origCanvas');
 const dithCanvas      = document.getElementById('dithCanvas');
 const canvasRow       = document.getElementById('canvasRow');
@@ -796,23 +782,20 @@ function onSettingChange() {
 
 // ── Compression helpers ──────────────────────────────────────────
 
-function isMeasuredPalette() {
-  return typeof SCHEMES[schemeSelect.value] !== 'number';
-}
-
-function updateCompressionSection() {
-  compressionSection.style.display = isMeasuredPalette() ? 'block' : 'none';
-}
-
-function getToneCompression() {
-  if (!isMeasuredPalette()) return 'auto';
-  return toneAutoToggle.checked ? 'auto' : toneSlider.value / 100;
-}
-
 function getGamutCompression() {
-  if (!isMeasuredPalette()) return 'auto';
-  return gamutAutoToggle.checked ? 'auto' : gamutSlider.value / 100;
+  return gamutSlider.value / 100;
 }
+
+function getTone() {
+  return toneSlider.value / 100;
+}
+
+// ── Pre-dither helpers ───────────────────────────────────────────
+
+function getExposure()   { return exposureSlider.value   / 100; }
+function getSaturation() { return saturationSlider.value / 100; }
+function getShadows()    { return shadowsSlider.value    / 100; }
+function getHighlights() { return highlightsSlider.value / 100; }
 
 // ── Core: dither and render ──────────────────────────────────────
 
@@ -822,24 +805,29 @@ function runDither() {
   const schemeKey = schemeSelect.value;
   const modeKey   = modeSelect.value;
   const useSerpentine = serpentine.checked;
-  const toneComp  = getToneCompression();
   const gamutComp = getGamutCompression();
 
-  const scheme = SCHEMES[schemeKey];
   const mode   = MODES[modeKey];
 
   setStatus('working', 'processing…');
   algoBadge.textContent = modeKey.replace(/_/g, '-');
 
-  if (pendingRaf !== null) cancelAnimationFrame(pendingRaf);
-  pendingRaf = requestAnimationFrame(() => {
-    pendingRaf = null;
+  loadPalette(schemeKey).then((palette) => requestAnimationFrame(() => {
     const t0 = performance.now();
 
     const result = ditherImage(
       { width: currentImageData.width, height: currentImageData.height, data: currentImageData.data },
-      scheme,
-      { mode, serpentine: useSerpentine, tone: toneComp, gamut: gamutComp },
+      palette,
+      {
+        mode,
+        serpentine: useSerpentine,
+        exposure:   getExposure(),
+        saturation: getSaturation(),
+        shadows:    getShadows(),
+        highlights: getHighlights(),
+        tone:  getTone(),
+        gamut: gamutComp,
+      },
     );
 
     const elapsed = performance.now() - t0;
@@ -873,7 +861,7 @@ function runDither() {
       : `${(elapsed / 1000).toFixed(2)} s`;
 
     setStatus('ready', `${result.width}×${result.height} · ${elapsed.toFixed(0)}ms`);
-  });
+  })).catch((err) => setStatus('error', String(err)));
 }
 
 // ── Image loading ────────────────────────────────────────────────
@@ -908,7 +896,6 @@ function loadFile(file) {
       statSize.textContent = `${img.naturalWidth}×${img.naturalHeight}`;
       document.title = `Dither Lab — ${file.name}`;
 
-      updateCompressionSection();
       runDither();
     };
     img.src = e.target.result;
@@ -927,31 +914,32 @@ function setStatus(type, text) {
 
 uploadZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
-schemeSelect.addEventListener('change', () => { updateCompressionSection(); onSettingChange(); });
+schemeSelect.addEventListener('change', onSettingChange);
 modeSelect.addEventListener('change', onSettingChange);
 serpentine.addEventListener('change', onSettingChange);
-toneAutoToggle.addEventListener('change', () => {
-  const isAuto = toneAutoToggle.checked;
-  toneSlider.disabled = isAuto;
-  toneVal.textContent = isAuto ? 'auto' : `${toneSlider.value}%`;
-  toneVal.className   = 'slider-val' + (isAuto ? ' muted' : '');
-  onSettingChange();
-});
-toneSlider.addEventListener('input', () => {
-  toneVal.textContent = `${toneSlider.value}%`;
-  runDither();
-});
-gamutAutoToggle.addEventListener('change', () => {
-  const isAuto = gamutAutoToggle.checked;
-  gamutSlider.disabled = isAuto;
-  gamutVal.textContent = isAuto ? 'auto' : `${gamutSlider.value}%`;
-  gamutVal.className   = 'slider-val' + (isAuto ? ' muted' : '');
-  onSettingChange();
-});
 gamutSlider.addEventListener('input', () => {
   gamutVal.textContent = `${gamutSlider.value}%`;
   runDither();
 });
+toneSlider.addEventListener('input', () => {
+  toneVal.textContent = `${toneSlider.value}%`;
+  toneVal.className   = 'slider-val' + (toneSlider.value === '0' ? ' muted' : '');
+  runDither();
+});
+
+// Pre-dither sliders. Mute the value label when at identity (no effect).
+function wireFloatSlider(slider, label, identityValue) {
+  slider.addEventListener('input', () => {
+    const v = slider.value / 100;
+    label.textContent = v.toFixed(2);
+    label.className = 'slider-val' + (v === identityValue ? ' muted' : '');
+    runDither();
+  });
+}
+wireFloatSlider(exposureSlider,   exposureVal,   1.0);
+wireFloatSlider(saturationSlider, saturationVal, 1.0);
+wireFloatSlider(shadowsSlider,    shadowsVal,    0.0);
+wireFloatSlider(highlightsSlider, highlightsVal, 0.0);
 
 uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('over'); });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('over'));
