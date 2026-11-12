@@ -62,8 +62,16 @@ fn rejects_unknown_version() {
 
 #[test]
 fn rejects_bad_nominal() {
-    let err = Palette::from_json(&with("\"#000000\"", "\"red\"")).unwrap_err();
-    assert!(matches!(err, PaletteError::InvalidNominal(ref s) if s == "red"), "{err:?}");
+    for bad in ["red", "#fff", "#gggggg", "000000", "#0000000", "#+0+0+0", "#00 000", "#ｆｆｆｆｆｆ"] {
+        let err = Palette::from_json(&with("\"#000000\"", &format!("\"{bad}\""))).unwrap_err();
+        assert!(matches!(err, PaletteError::InvalidNominal(ref s) if s == bad), "{bad}: {err:?}");
+    }
+}
+
+#[test]
+fn nominal_hex_is_case_insensitive() {
+    let p = Palette::from_json(&with("\"#ffffff\"", "\"#FFFFFF\"")).unwrap();
+    assert_eq!(p.entries()[0].ink.as_ref().unwrap().nominal, [255, 255, 255]);
 }
 
 #[test]

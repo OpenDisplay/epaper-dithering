@@ -47,7 +47,11 @@ struct EntryOut<'a> {
 
 pub(crate) fn parse_nominal(s: &str) -> Result<[u8; 3], PaletteError> {
     let invalid = || PaletteError::InvalidNominal(s.to_owned());
-    let hex = s.strip_prefix('#').filter(|h| h.len() == 6 && h.is_ascii()).ok_or_else(invalid)?;
+    // `from_str_radix` alone would also accept a sign, e.g. "#+f+f+f".
+    let hex = s
+        .strip_prefix('#')
+        .filter(|h| h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit()))
+        .ok_or_else(invalid)?;
     let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|_| invalid());
     Ok([channel(0)?, channel(2)?, channel(4)?])
 }

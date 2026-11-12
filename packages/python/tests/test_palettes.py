@@ -84,7 +84,7 @@ class TestValidation:
         with pytest.raises(PaletteError):
             Palette.from_json("{")
 
-    @pytest.mark.parametrize("nominal", ["#fff", "#gggggg", "ffffffff"])
+    @pytest.mark.parametrize("nominal", ["#fff", "#gggggg", "ffffffff", "#+f+f+f", "# f f f", "#f_f_f_"])
     def test_bad_nominal_string_is_rejected(self, nominal):
         with pytest.raises(ValueError, match="#rrggbb"):
             PaletteEntry((50.0, 0.0, 0.0), name="grey", nominal=nominal)

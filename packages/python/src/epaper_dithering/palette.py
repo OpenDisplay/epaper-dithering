@@ -11,6 +11,7 @@ All validation happens in the Rust core; this module only adapts Python values t
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -21,16 +22,17 @@ PaletteError = _rs.PaletteError
 RGB = tuple[int, int, int]
 Nominal = str | RGB
 
+# Exactly six hex digits: int(text, 16) alone would also accept signs, spaces and underscores.
+_HEX_COLOUR = re.compile(r"#?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})")
+
 
 def _parse_nominal(value: Nominal) -> RGB:
     if isinstance(value, str):
-        text = value.removeprefix("#")
-        if len(text) != 6:
+        match = _HEX_COLOUR.fullmatch(value)
+        if match is None:
             raise ValueError(f"nominal colour {value!r} is not #rrggbb")
-        try:
-            return (int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16))
-        except ValueError as exc:
-            raise ValueError(f"nominal colour {value!r} is not #rrggbb") from exc
+        r, g, b = (int(channel, 16) for channel in match.groups())
+        return (r, g, b)
     r, g, b = value
     return (int(r), int(g), int(b))
 
