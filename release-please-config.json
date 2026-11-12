@@ -9,7 +9,6 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         "pyproject.toml",
-        "Cargo.toml",
         "src/epaper_dithering/__init__.py",
         "/packages/javascript/package.json",
         "/packages/javascript/src/index.ts"

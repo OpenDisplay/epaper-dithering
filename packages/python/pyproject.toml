@@ -44,8 +44,8 @@ dev = [
 
 [project.urls]
 Homepage = "https://opendisplay.org"
-Repository = "https://github.com/OpenDisplay-org/epaper-dithering"
-Documentation = "https://github.com/OpenDisplay-org/epaper-dithering#readme"
+Repository = "https://github.com/OpenDisplay/epaper-dithering"
+Documentation = "https://github.com/OpenDisplay/epaper-dithering#readme"
 
 [tool.maturin]
 # The sdist embeds the Rust workspace root (../../packages/rust/Cargo.toml) to resolve

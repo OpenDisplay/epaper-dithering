@@ -2,8 +2,8 @@
 
 [![PyPI](https://img.shields.io/pypi/v/epaper-dithering?style=flat-square)](https://pypi.org/project/epaper-dithering/)
 [![npm](https://img.shields.io/npm/v/@opendisplay/epaper-dithering?style=flat-square)](https://www.npmjs.com/package/@opendisplay/epaper-dithering)
-[![Python Tests](https://img.shields.io/github/actions/workflow/status/OpenDisplay-org/epaper-dithering/python-test.yml?style=flat-square&label=python)](https://github.com/OpenDisplay-org/epaper-dithering/actions/workflows/python-test.yml)
-[![JS Tests](https://img.shields.io/github/actions/workflow/status/OpenDisplay-org/epaper-dithering/javascript-test.yml?style=flat-square&label=javascript)](https://github.com/OpenDisplay-org/epaper-dithering/actions/workflows/javascript-test.yml)
+[![Python Tests](https://img.shields.io/github/actions/workflow/status/OpenDisplay/epaper-dithering/python-test.yml?style=flat-square&label=python)](https://github.com/OpenDisplay/epaper-dithering/actions/workflows/python-test.yml)
+[![JS Tests](https://img.shields.io/github/actions/workflow/status/OpenDisplay/epaper-dithering/javascript-test.yml?style=flat-square&label=javascript)](https://github.com/OpenDisplay/epaper-dithering/actions/workflows/javascript-test.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json&style=flat-square)](https://github.com/astral-sh/ruff)
 
 Dithering for e-paper/e-ink displays: an image and your panel's palette in, palette indices out. Rust core with Python, JavaScript/TypeScript and iOS (C ABI) bindings.
@@ -135,7 +135,7 @@ uv sync --all-extras
 uv run maturin develop --release
 uv run pytest tests/ -v
 
-# JavaScript (requires Node ≥18, wasm-pack and the wasm32-unknown-unknown target)
+# JavaScript (requires Node ≥22.12 for the test tooling, wasm-pack and the wasm32-unknown-unknown target)
 wasm-pack build packages/rust/wasm --target web --out-dir ../../javascript/src/wasm-core
 cd packages/javascript
 bun install
@@ -148,6 +148,6 @@ cargo test --workspace
 
 ## Related Projects
 
-- **py-opendisplay**: [Python library for OpenDisplay BLE e-paper devices](https://github.com/OpenDisplay-org/py-opendisplay)
+- **py-opendisplay**: [Python library for OpenDisplay BLE e-paper devices](https://github.com/OpenDisplay/py-opendisplay)
 - **hass-eink-dashboard**: [Home Assistant custom component that renders e-ink dashboard images for Kindle, TRMNL, and OpenDisplay devices.](https://github.com/cryptomilk/hass-eink-dashboard)
 - **OpenDithering**: [Browser tool by Guy Sie for previewing dithering on e-paper palettes and uploading images to OpenDisplay devices over Bluetooth](https://guysie.github.io/opendithering/) ([source](https://github.com/guysie/opendithering)). An independent implementation, so results differ from this library; our DBS refinement is ported from it.

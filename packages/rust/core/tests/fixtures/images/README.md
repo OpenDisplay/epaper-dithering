@@ -10,7 +10,7 @@ All images © Gabriel. Included in this repository for testing purposes only.
 
 | File | Content | Primary test coverage |
 |---|---|---|
-| `frankfurt_nacht.png` | Frankfurt skyline at night | Auto tone compression — dark scene |
+| `frankfurt_nacht.png` | Frankfurt skyline at night | Dark scene, black-point lift (`tone`) |
 | `unicorn.png` | Unicorn sculpture, Tollwood festival Munich | Gamut compression — vivid colors |
 | `cat_orange.png` | Orange cat in grass, golden hour | Fine detail, warm tones |
 | `cat.png` | Calico cat on tiles | High contrast B&W + color patches |
@@ -21,15 +21,11 @@ All images © Gabriel. Included in this repository for testing purposes only.
 
 ## Benchmark-only
 
-Images in `benchmark_only/` are full-resolution camera files used only for performance
-benchmarks. They are not included in regression tests.
+`benchmark_only/marienplatz.png` (Marienplatz U-Bahn, 1280×960) is used only by the `full_res`
+benchmark in `benches/dithering.rs`. It is not included in regression tests.
 
-| File | Content |
-|---|---|
-| `cat.png` | Calico cat — full resolution |
-| `cat_orange.png` / `orange_cat.png` | Orange cat — full resolution |
-| `marienplatz.png` | Marienplatz U-Bahn — full resolution |
-| `river.png` | River/waterway — full resolution |
+`success/dashboard_photo.png` is the dashboard + photo fixture for `tests/success.rs`, written by
+`tools/make_dashboard_fixture.py`.
 
 ## Adding more images
 
@@ -39,5 +35,5 @@ Drop any `.png` or `.jpg` file into this directory and run:
 UPDATE_FIXTURES=1 cargo test --test regression
 ```
 
-This generates reference outputs for all three regression suites and locks them in.
-No code changes needed.
+This generates reference outputs for every regression suite and locks them in.
+No code changes needed. Regression images are 800×480 (the `real_images` benchmark relies on it).
