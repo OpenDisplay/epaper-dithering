@@ -23,7 +23,8 @@ updates:
       cargo-minor-patch:
         update-types: [minor, patch]
 
-  - package-ecosystem: npm
+  # bun rather than npm: the lockfile is bun.lock, and CI installs with --frozen-lockfile.
+  - package-ecosystem: bun
     directory: /packages/javascript
     schedule:
       interval: weekly
