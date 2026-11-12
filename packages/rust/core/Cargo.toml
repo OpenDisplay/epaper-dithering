@@ -10,7 +10,9 @@ documentation = "https://docs.rs/epaper-dithering-core"
 keywords = ["epaper", "eink", "dithering", "color", "embedded"]
 categories = ["graphics", "multimedia::images", "embedded"]
 readme = "README.md"
-exclude = ["tests/fixtures/", "examples/"]
+# tests/ needs the fixtures and the repository's example palettes, so none of it is packaged;
+# the unit tests in src/ are self-contained and run from the published crate.
+exclude = ["tests/", "examples/"]
 
 [dependencies]
 rayon = "1.10"

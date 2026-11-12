@@ -206,6 +206,27 @@ impl Palette {
     }
 }
 
+/// A measured palette for unit tests, kept inside the crate so `cargo test` also works from the
+/// published package (which has no `examples/`).
+#[cfg(test)]
+pub(crate) mod fixtures {
+    use super::Palette;
+
+    /// Measured Spectra 6: black, white, yellow, red, blue, green, each an ink with its ideal
+    /// nominal. The entries of `examples/palettes/spectra_7_3_6color.json`.
+    pub(crate) fn spectra6() -> Palette {
+        const JSON: &str = r##"{"format": "epaper-palette", "version": 1, "measured": true, "entries": [
+            {"appearance": [9.857322728112518, 15.699928722802056, -14.068503296028872], "name": "black", "nominal": "#000000"},
+            {"appearance": [100.0, 0.0, 0.0], "name": "white", "nominal": "#ffffff"},
+            {"appearance": [92.89785052271975, -3.0938637452868067, 93.65046072784904], "name": "yellow", "nominal": "#ffff00"},
+            {"appearance": [33.44057677171205, 55.239621145235176, 48.31440284179419], "name": "red", "nominal": "#ff0000"},
+            {"appearance": [38.86842837850761, 13.041985243950144, -50.566635625568146], "name": "blue", "nominal": "#0000ff"},
+            {"appearance": [40.992472134150994, -21.808973021001517, 13.97914028592756], "name": "green", "nominal": "#00ff00"}
+        ]}"##;
+        Palette::from_json(JSON).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
