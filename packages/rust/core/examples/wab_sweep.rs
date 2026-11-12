@@ -119,7 +119,9 @@ fn dither_burkes_oklab(pixels: &[u8], width: usize, height: usize, palette: &Pal
 fn to_oklab_image(pixels: &[u8]) -> Vec<OkLab> {
     let lut: Vec<f64> = (0u8..=255).map(srgb_channel_to_linear).collect();
     pixels
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| rgb_to_oklab(lut[c[0] as usize], lut[c[1] as usize], lut[c[2] as usize]))
         .collect()
 }

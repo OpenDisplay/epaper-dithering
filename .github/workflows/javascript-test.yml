@@ -50,6 +50,9 @@ jobs:
       - name: Type check
         run: bun run type-check
 
+      - name: Lint
+        run: bun run lint
+
       - name: Run tests
         run: bun run test
 

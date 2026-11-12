@@ -464,13 +464,13 @@ class TestDizzy:
         # Snapping off: the vector pins the raw algorithm, shared with Rust and JavaScript.
         out = dither_image(img, example("ideal_bwr"), DitherOptions(mode=DitherMode.DIZZY, snap=False))
         # Frozen literals, identical to the Rust and JavaScript suites.
-        assert list(out.getdata()) == [0, 0, 1, 0, 0, 2, 2, 1, 0, 1, 1, 1, 0, 0, 2, 1]
+        assert list(out.get_flattened_data()) == [0, 0, 1, 0, 0, 2, 2, 1, 0, 1, 1, 1, 0, 0, 2, 1]
 
     def test_is_deterministic(self):
         img = Image.new("RGB", (16, 16), (128, 128, 128))
         a = dither_image(img, example("ideal_bwr"), DitherOptions(mode=DitherMode.DIZZY))
         b = dither_image(img, example("ideal_bwr"), DitherOptions(mode=DitherMode.DIZZY))
-        assert list(a.getdata()) == list(b.getdata())
+        assert list(a.get_flattened_data()) == list(b.get_flattened_data())
 
 
 def _color_gradient(width: int = 40, height: int = 30) -> Image.Image:

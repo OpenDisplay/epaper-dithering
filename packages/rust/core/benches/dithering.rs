@@ -73,7 +73,9 @@ fn synthetic_image(w: usize, h: usize) -> Vec<u8> {
 /// Synthetic image converted to linear [f64; 3] pixels (for preprocessing benchmarks).
 fn synthetic_linear(w: usize, h: usize) -> Vec<[f64; 3]> {
     synthetic_image(w, h)
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| {
             [
                 srgb_channel_to_linear(c[0]),
