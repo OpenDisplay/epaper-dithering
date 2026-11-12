@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "dev": "bun run build && echo 'open http://localhost:3456/packages/javascript/dev.html' && bunx serve ../.. --listen 3456",
+    "dev": "bun run build && echo 'open http://localhost:3456/docs/' && bunx serve ../.. --listen 3456",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
