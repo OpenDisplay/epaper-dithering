@@ -1,6 +1,6 @@
 //! Error diffusion and ordered dithering on raw RGB pixel buffers.
 
-use crate::color_space::{srgb_channel_to_linear, srgb_fraction_to_linear};
+use crate::color_space::{srgb_fraction_to_linear, srgb_to_linear_lut};
 use crate::color_space_lab::{PaletteLab, match_pixel_oklab, rgb_to_oklab, WAB};
 use crate::srgb_palette::SrgbPalette;
 use rayon::prelude::*;
@@ -67,8 +67,7 @@ fn error_diffusion_dither_impl(
     // Working buffer in sRGB float space [0, 255]; accumulates diffused error.
     let mut buf: Vec<f64> = pixels.iter().map(|&v| v as f64).collect();
 
-    // LUT: u8 sRGB -> linear f64 (avoids powf per pixel in the inner loop)
-    let lut: Vec<f64> = (0u8..=255).map(srgb_channel_to_linear).collect();
+    let lut = srgb_to_linear_lut();
 
     let mut output = vec![0u8; width * height];
 
@@ -154,6 +153,7 @@ pub fn jarvis_judice_ninke(pixels: &[u8], w: usize, h: usize, palette: &SrgbPale
 /// Pixels with `Some` in `snap` take that index directly.
 pub fn direct_map(pixels: &[u8], palette: &SrgbPalette, snap: Option<&[Option<u8>]>) -> Vec<u8> {
     let palette_lab = build_palette_lab(palette);
+    let lut = srgb_to_linear_lut();
     pixels
         .par_chunks(3)
         .enumerate()
@@ -162,10 +162,7 @@ pub fn direct_map(pixels: &[u8], palette: &SrgbPalette, snap: Option<&[Option<u8
                 return idx;
             }
 
-            let r = srgb_channel_to_linear(rgb[0]);
-            let g = srgb_channel_to_linear(rgb[1]);
-            let b = srgb_channel_to_linear(rgb[2]);
-            let lab = rgb_to_oklab(r, g, b);
+            let lab = rgb_to_oklab(lut[rgb[0] as usize], lut[rgb[1] as usize], lut[rgb[2] as usize]);
             match_pixel_oklab(lab, &palette_lab, WAB) as u8
         })
         .collect()
@@ -421,7 +418,7 @@ mod tests {
         let pal_lab = build_palette_lab(pal);
         let midpoint = (0u16..=255)
             .find(|&v| {
-                let lin = srgb_channel_to_linear(v as u8);
+                let lin = crate::color_space::srgb_channel_to_linear(v as u8);
                 let lab = rgb_to_oklab(lin, lin, lin);
                 match_pixel_oklab(lab, &pal_lab, WAB) == 1
             })

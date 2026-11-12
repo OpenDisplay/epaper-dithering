@@ -20,7 +20,9 @@ pub mod srgb_palette;
 pub mod tone_map;
 pub mod types;
 
-use crate::color_space::{linear_channel_to_srgb, srgb_channel_to_linear};
+use rayon::prelude::*;
+
+use crate::color_space::{linear_channel_to_srgb, srgb_to_linear_lut};
 use crate::dbs::DbsParams;
 use crate::enums::DitherMode;
 use crate::palette::Palette;
@@ -173,17 +175,9 @@ pub fn dither(img: &ImageBuffer, palette: &Palette, options: &DitherOptions) -> 
     }
 
     // Convert sRGB bytes → linear, apply pre-processing pipeline, convert back.
-    let mut linear: Vec<[f64; 3]> = img
-        .data
-        .as_chunks::<3>()
-        .0
-        .iter()
-        .map(|c| [
-            srgb_channel_to_linear(c[0]),
-            srgb_channel_to_linear(c[1]),
-            srgb_channel_to_linear(c[2]),
-        ])
-        .collect();
+    let lut = srgb_to_linear_lut();
+    let mut linear: Vec<[f64; 3]> =
+        img.data.as_chunks::<3>().0.iter().map(|c| c.map(|v| lut[v as usize])).collect();
 
     tone_map::apply_exposure(&mut linear, options.exposure);
     tone_map::adjust_saturation(&mut linear, options.saturation);
@@ -194,14 +188,12 @@ pub fn dither(img: &ImageBuffer, palette: &Palette, options: &DitherOptions) -> 
     }
     tone_map::gamut_compress(&mut linear, &p, options.gamut.min(1.0));
 
-    let processed: Vec<u8> = linear
-        .iter()
-        .flat_map(|&[r, g, b]| [
-            linear_channel_to_srgb(r),
-            linear_channel_to_srgb(g),
-            linear_channel_to_srgb(b),
-        ])
-        .collect();
+    // Three `powf` per pixel: by far the most expensive part of this round trip, so in parallel.
+    let mut processed = vec![0u8; img.data.len()];
+    processed
+        .par_chunks_exact_mut(3)
+        .zip(linear.par_iter())
+        .for_each(|(out, px)| out.copy_from_slice(&px.map(linear_channel_to_srgb)));
 
     let processed_img = ImageBuffer { data: &processed, width: img.width, height: img.height };
     let indices = dispatch(&processed_img, &p, snap, options.mode, options.serpentine);
