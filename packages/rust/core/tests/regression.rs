@@ -90,11 +90,15 @@ fn assert_regression(
         )
     });
 
-    assert_eq!(
-        output, reference,
+    // Not assert_eq!: on failure it would print both full index buffers.
+    let differing = output.iter().zip(&reference).filter(|(a, b)| a != b).count();
+    assert!(
+        output.len() == reference.len() && differing == 0,
         "Regression failure: {filename} × {tag}\n\
-         Output differs from reference. If this change is intentional, \
-         regenerate with UPDATE_FIXTURES=1."
+         {differing} of {} pixels differ from the reference (reference has {}). If this change \
+         is intentional, regenerate with UPDATE_FIXTURES=1.",
+        output.len(),
+        reference.len(),
     );
 }
 
@@ -125,7 +129,7 @@ fn discover_images() -> Vec<String> {
 // ── Regression suites ─────────────────────────────────────────────────────────
 
 /// Primary path: Burkes + 6-color measured palette + full gamut compression.
-/// This is the most common real-world usage.
+/// (The `_auto` in the tags is historical: it now means gamut 1.0.)
 #[test]
 fn burkes_spectra6_auto() {
     for img in discover_images() {
@@ -154,7 +158,7 @@ fn floyd_steinberg_mono_raw() {
     }
 }
 
-/// Ordered dithering + 6-color measured palette + auto preprocessing.
+/// Ordered dithering + 6-color measured palette + full gamut compression.
 /// Different algorithm family — verifies the Bayer path independently.
 #[test]
 fn ordered_spectra6_auto() {
@@ -169,7 +173,7 @@ fn ordered_spectra6_auto() {
     }
 }
 
-/// Dizzy + 6-color measured palette + auto preprocessing.
+/// Dizzy + 6-color measured palette + full gamut compression.
 /// Random-traversal family — pins the permutation walk against accidental change.
 #[test]
 fn dizzy_spectra6_auto() {
