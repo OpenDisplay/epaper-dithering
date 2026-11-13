@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "epaper-dithering"
-version = "7.0.0"
+version = "7.0.1"
 description = "Dithering algorithms for e-paper/e-ink displays"
 readme = "README.md"
 license = "MIT"
