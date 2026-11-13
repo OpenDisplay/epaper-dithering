@@ -79,6 +79,9 @@ yarn.lock
 !packages/rust/core/tests/fixtures/images/**
 uv.lock
 
+# Agent planning notes. GitHub Pages publishes everything under docs/, so they stay local.
+docs/superpowers/
+
 # Python scratch / dev files
 packages/python/test.py
 packages/python/test_timed.py

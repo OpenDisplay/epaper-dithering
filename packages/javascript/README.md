@@ -248,7 +248,7 @@ bun run dev
 ## Development
 
 ```bash
-bun install
+bun install         # CI uses --frozen-lockfile; commit bun.lock when dependencies change
 
 # When Rust source changes, rebuild the WASM (from repo root):
 wasm-pack build packages/rust/wasm --target web --out-dir ../../javascript/src/wasm-core

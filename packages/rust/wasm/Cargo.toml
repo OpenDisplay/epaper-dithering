@@ -1,6 +1,7 @@
 [package]
 name = "epaper-dithering-wasm"
-version = "3.0.0"
+# No version: this crate is never published. The npm package's version is package.json's.
+publish = false
 edition = "2024"
 
 [lib]

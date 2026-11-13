@@ -228,10 +228,7 @@ mod tests {
         ImageBuffer::new(data, width).unwrap()
     }
 
-    /// Measured Spectra 6: black, white, yellow, red, blue, green, each an ink with its ideal nominal.
-    fn spectra6() -> Palette {
-        Palette::from_json(include_str!("../../../../examples/palettes/spectra_7_3_6color.json")).unwrap()
-    }
+    use crate::palette::fixtures::spectra6;
 
     /// The same measured colours with no ink identity: nothing snaps, nothing anchors.
     fn spectra6_unnamed() -> Palette {

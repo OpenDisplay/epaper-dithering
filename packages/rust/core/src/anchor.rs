@@ -108,9 +108,7 @@ mod tests {
     use crate::lab::{delta_e76, srgb_to_lab};
     use crate::palette::{Ink, Palette, PaletteEntry};
 
-    fn spectra6() -> Palette {
-        Palette::from_json(include_str!("../../../../examples/palettes/spectra_7_3_6color.json")).unwrap()
-    }
+    use crate::palette::fixtures::spectra6;
 
     fn linear(rgb: [u8; 3]) -> [f64; 3] {
         rgb.map(srgb_channel_to_linear)
