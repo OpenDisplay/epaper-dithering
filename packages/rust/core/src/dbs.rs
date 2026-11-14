@@ -592,7 +592,7 @@ mod tests {
     }
 
     fn burkes(px: &[u8], w: usize, h: usize, palette: &SrgbPalette) -> Vec<u8> {
-        error_diffusion_dither(px, w, h, palette, &BURKES, true)
+        error_diffusion_dither(px, w, h, palette, None, &BURKES, true)
     }
 
     #[test]

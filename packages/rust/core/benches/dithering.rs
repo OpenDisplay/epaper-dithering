@@ -106,7 +106,7 @@ fn bench_error_diffusion(c: &mut Criterion) {
             group.bench_with_input(
                 BenchmarkId::new(name, format!("{w}x{h}")),
                 &(),
-                |b, _| b.iter(|| error_diffusion_dither(&pixels, w, h, palette, kernel, false)),
+                |b, _| b.iter(|| error_diffusion_dither(&pixels, w, h, palette, None, kernel, false)),
             );
         }
 
@@ -116,7 +116,7 @@ fn bench_error_diffusion(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("dizzy", format!("{w}x{h}")),
             &(),
-            |b, _| b.iter(|| dizzy_dither(&pixels, w, h, palette)),
+            |b, _| b.iter(|| dizzy_dither(&pixels, w, h, palette, None)),
         );
     }
 
@@ -133,7 +133,7 @@ fn bench_ordered_dither(c: &mut Criterion) {
         let pixels = synthetic_image(w, h);
         group.throughput(Throughput::Elements((w * h) as u64));
         group.bench_with_input(BenchmarkId::from_parameter(format!("{w}x{h}")), &(), |b, _| {
-            b.iter(|| ordered_dither(&pixels, w, palette))
+            b.iter(|| ordered_dither(&pixels, w, palette, None))
         });
     }
 

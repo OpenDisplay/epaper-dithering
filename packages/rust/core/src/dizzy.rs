@@ -57,23 +57,8 @@ const NEIGHBORS: [(i64, i64, f64); 8] = [
 ];
 
 /// Dither with pseudo-random traversal, diffusing error only to unquantized neighbours.
-pub fn dizzy_dither(pixels: &[u8], width: usize, height: usize, palette: &SrgbPalette) -> Vec<u8> {
-    dizzy_dither_impl(pixels, width, height, palette, None)
-}
-
-/// As [`dizzy_dither`], but pixels with `Some` in `snap` take that index and are
-/// excluded from error distribution.
-pub fn dizzy_dither_snapped(
-    pixels: &[u8],
-    width: usize,
-    height: usize,
-    palette: &SrgbPalette,
-    snap: &[Option<u8>],
-) -> Vec<u8> {
-    dizzy_dither_impl(pixels, width, height, palette, Some(snap))
-}
-
-fn dizzy_dither_impl(
+/// Pixels with `Some` in `snap` take that index and are excluded from error distribution.
+pub fn dizzy_dither(
     pixels: &[u8],
     width: usize,
     height: usize,
@@ -188,8 +173,8 @@ mod tests {
     fn output_is_deterministic() {
         let img = gray_image(128, 64);
         let p = fixtures::bwr();
-        let a = dizzy_dither(&img, 8, 8, p);
-        let b = dizzy_dither(&img, 8, 8, p);
+        let a = dizzy_dither(&img, 8, 8, p, None);
+        let b = dizzy_dither(&img, 8, 8, p, None);
         assert_eq!(a, b, "dizzy must be deterministic for identical input");
     }
 
@@ -197,7 +182,7 @@ mod tests {
     fn output_length_and_indices_are_in_range() {
         let img = gray_image(90, 96);
         let p = fixtures::bwgbry();
-        let out = dizzy_dither(&img, 12, 8, p);
+        let out = dizzy_dither(&img, 12, 8, p, None);
         assert_eq!(out.len(), 96);
         assert!(out.iter().all(|&i| (i as usize) < p.colors.len()));
     }
@@ -206,7 +191,7 @@ mod tests {
     fn flat_midgray_uses_more_than_one_ink() {
         // A flat field must dither, not collapse to a single nearest colour.
         let img = gray_image(128, 1024);
-        let out = dizzy_dither(&img, 32, 32, fixtures::mono());
+        let out = dizzy_dither(&img, 32, 32, fixtures::mono(), None);
         let black = out.iter().filter(|&&i| i == 0).count();
         assert!(black > 0 && black < 1024, "expected a mix of inks, got {black}/1024 black");
     }
@@ -218,7 +203,7 @@ mod tests {
         // A skew here (e.g. 99/1) would indicate the error normalization is
         // wrong even though every other test still passes.
         let img = gray_image(128, 1024);
-        let out = dizzy_dither(&img, 32, 32, fixtures::mono());
+        let out = dizzy_dither(&img, 32, 32, fixtures::mono(), None);
         let black = out.iter().filter(|&&i| i == 0).count();
         let ratio = black as f64 / 1024.0;
         assert!(
@@ -260,7 +245,7 @@ mod tests {
         let mut snap = vec![None; 8];
         snap[0] = Some(5);
         snap[3] = Some(5);
-        let out = dizzy_dither_snapped(&image, 4, 2, crate::srgb_palette::fixtures::spectra6(), &snap);
+        let out = dizzy_dither(&image, 4, 2, crate::srgb_palette::fixtures::spectra6(), Some(&snap));
         assert_eq!(out[0], 5, "exact green at pixel 0 should be pinned");
         assert_eq!(out[3], 5, "exact green at pixel 3 should be pinned");
     }
@@ -306,7 +291,7 @@ mod tests {
                 img.extend_from_slice(&[v, v, v]);
             }
         }
-        let out = dizzy_dither(&img, 4, 4, fixtures::bwr());
+        let out = dizzy_dither(&img, 4, 4, fixtures::bwr(), None);
         assert_eq!(out, vec![0, 0, 1, 0, 0, 2, 2, 1, 0, 1, 1, 1, 0, 0, 2, 1]);
     }
 }
