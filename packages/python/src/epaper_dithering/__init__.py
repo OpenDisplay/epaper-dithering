@@ -8,7 +8,7 @@ from .core import DbsParams, DitherOptions, dither_image
 from .enums import DitherMode
 from .palette import Palette, PaletteEntry, PaletteError
 
-__version__ = "7.0.0"
+__version__ = "7.0.1"
 
 __all__ = [
     "dither_image",

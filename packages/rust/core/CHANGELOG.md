@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.0.1](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v7.0.0...epaper-dithering-core-v7.0.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* accept only six hex digits as a nominal colour ([d3ec662](https://github.com/OpenDisplay/epaper-dithering/commit/d3ec6628b957e6c9eb22ce0683ea184a28954766))
+
+
+### Performance Improvements
+
+* **core:** table lookup and parallel conversion around pre-processing ([b014750](https://github.com/OpenDisplay/epaper-dithering/commit/b01475058263a0e5f02f7c758e0841707d8783e2))
+
 ## [7.0.0](https://github.com/OpenDisplay/epaper-dithering/compare/epaper-dithering-core-v6.0.0...epaper-dithering-core-v7.0.0) (2026-11-11)
 
 
