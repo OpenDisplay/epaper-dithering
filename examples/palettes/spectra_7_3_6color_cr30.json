@@ -1,0 +1,62 @@
+{
+  "format": "epaper-palette",
+  "version": 1,
+  "measured": true,
+  "source": "7.3in Spectra 6 panel (OpenDisplay OD216205, panel IC 0x0023); CHNSpec CR30 s/n CM454M1246, measured 2026-11-19, D65/2°, panel at 18.5°C",
+  "entries": [
+    {
+      "appearance": [
+        25.076178939673404,
+        15.174597445499316,
+        -13.405238602653336
+      ],
+      "name": "black",
+      "nominal": "#000000"
+    },
+    {
+      "appearance": [
+        100.0,
+        0.0,
+        0.0
+      ],
+      "name": "white",
+      "nominal": "#ffffff"
+    },
+    {
+      "appearance": [
+        97.5746659237708,
+        -12.608779149852534,
+        95.03129957075444
+      ],
+      "name": "yellow",
+      "nominal": "#ffff00"
+    },
+    {
+      "appearance": [
+        42.62515210512776,
+        53.62022398010935,
+        38.880360325358595
+      ],
+      "name": "red",
+      "nominal": "#ff0000"
+    },
+    {
+      "appearance": [
+        51.81664151657341,
+        6.584762267693778,
+        -52.11918045741199
+      ],
+      "name": "blue",
+      "nominal": "#0000ff"
+    },
+    {
+      "appearance": [
+        52.500444519931435,
+        -31.556247837539463,
+        9.79374988974513
+      ],
+      "name": "green",
+      "nominal": "#00ff00"
+    }
+  ]
+}
