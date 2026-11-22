@@ -19,34 +19,10 @@ pub(crate) fn build_palette_lab(palette: &SrgbPalette) -> PaletteLab {
 // ── Main function ─────────────────────────────────────────────────────────────
 
 /// Error diffusion dither. Returns palette indices (len = width × height).
-pub fn error_diffusion_dither(
-    pixels: &[u8],
-    width: usize,
-    height: usize,
-    palette: &SrgbPalette,
-    kernel: &Kernel,
-    serpentine: bool,
-) -> Vec<u8> {
-    error_diffusion_dither_impl(pixels, width, height, palette, None, kernel, serpentine)
-}
-
-/// Error diffusion with snapped pixels pinned.
 ///
 /// `snap[i]` is `Some(index)` for a pixel that requested an ink exactly: it emits that
 /// index and absorbs any accumulated error instead of diffusing it into neighbours.
-pub fn error_diffusion_dither_snapped(
-    pixels: &[u8],
-    width: usize,
-    height: usize,
-    palette: &SrgbPalette,
-    snap: &[Option<u8>],
-    kernel: &Kernel,
-    serpentine: bool,
-) -> Vec<u8> {
-    error_diffusion_dither_impl(pixels, width, height, palette, Some(snap), kernel, serpentine)
-}
-
-fn error_diffusion_dither_impl(
+pub fn error_diffusion_dither(
     pixels: &[u8],
     width: usize,
     height: usize,
@@ -123,30 +99,6 @@ fn error_diffusion_dither_impl(
     output
 }
 
-// ── Thin wrappers ─────────────────────────────────────────────────────────────
-
-pub fn floyd_steinberg(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
-    error_diffusion_dither(pixels, w, h, palette, &FLOYD_STEINBERG, serpentine)
-}
-pub fn atkinson(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
-    error_diffusion_dither(pixels, w, h, palette, &ATKINSON, serpentine)
-}
-pub fn burkes(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
-    error_diffusion_dither(pixels, w, h, palette, &BURKES, serpentine)
-}
-pub fn stucki(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
-    error_diffusion_dither(pixels, w, h, palette, &STUCKI, serpentine)
-}
-pub fn sierra(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
-    error_diffusion_dither(pixels, w, h, palette, &SIERRA, serpentine)
-}
-pub fn sierra_lite(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
-    error_diffusion_dither(pixels, w, h, palette, &SIERRA_LITE, serpentine)
-}
-pub fn jarvis_judice_ninke(pixels: &[u8], w: usize, h: usize, palette: &SrgbPalette, serpentine: bool) -> Vec<u8> {
-    error_diffusion_dither(pixels, w, h, palette, &JARVIS_JUDICE_NINKE, serpentine)
-}
-
 // ── Direct palette map (no dithering) ────────────────────────────────────────
 
 /// Nearest-color mapping with no dithering. Each pixel maps independently.
@@ -211,16 +163,9 @@ fn ordered_spread(palette: &SrgbPalette) -> f64 {
 ///
 /// The threshold amplitude is scaled by `ordered_spread` to the palette's quantization
 /// step so dense grayscale ramps are not swamped by full-range dither noise.
-pub fn ordered_dither(pixels: &[u8], width: usize, palette: &SrgbPalette) -> Vec<u8> {
-    ordered_dither_impl(pixels, width, palette, None)
-}
-
-/// Ordered dither with snapped pixels pinned (see [`error_diffusion_dither_snapped`]).
-pub fn ordered_dither_snapped(pixels: &[u8], width: usize, palette: &SrgbPalette, snap: &[Option<u8>]) -> Vec<u8> {
-    ordered_dither_impl(pixels, width, palette, Some(snap))
-}
-
-fn ordered_dither_impl(
+///
+/// Pixels with `Some` in `snap` take that index directly.
+pub fn ordered_dither(
     pixels: &[u8],
     width: usize,
     palette: &SrgbPalette,
@@ -279,7 +224,7 @@ mod tests {
     #[test]
     fn solid_white_maps_to_white() {
         let pixels = solid_image(255, 255, 255, 4, 4);
-        let out = floyd_steinberg(&pixels, 4, 4, fixtures::mono(), true);
+        let out = error_diffusion_dither(&pixels, 4, 4, fixtures::mono(), None, &FLOYD_STEINBERG, true);
         // White palette index in Mono is 1
         assert!(out.iter().all(|&v| v == 1));
     }
@@ -287,14 +232,14 @@ mod tests {
     #[test]
     fn solid_black_maps_to_black() {
         let pixels = solid_image(0, 0, 0, 4, 4);
-        let out = floyd_steinberg(&pixels, 4, 4, fixtures::mono(), true);
+        let out = error_diffusion_dither(&pixels, 4, 4, fixtures::mono(), None, &FLOYD_STEINBERG, true);
         assert!(out.iter().all(|&v| v == 0));
     }
 
     #[test]
     fn output_length_matches_pixels() {
         let pixels = solid_image(128, 64, 200, 10, 7);
-        let out = floyd_steinberg(&pixels, 10, 7, fixtures::bwr(), true);
+        let out = error_diffusion_dither(&pixels, 10, 7, fixtures::bwr(), None, &FLOYD_STEINBERG, true);
         assert_eq!(out.len(), 10 * 7);
     }
 
@@ -302,13 +247,10 @@ mod tests {
     fn all_algorithms_produce_correct_length() {
         let pixels = solid_image(128, 64, 200, 10, 7);
         let pal = fixtures::bwr();
-        assert_eq!(burkes(&pixels, 10, 7, pal, false).len(), 70);
-        assert_eq!(atkinson(&pixels, 10, 7, pal, false).len(), 70);
-        assert_eq!(stucki(&pixels, 10, 7, pal, false).len(), 70);
-        assert_eq!(sierra(&pixels, 10, 7, pal, false).len(), 70);
-        assert_eq!(sierra_lite(&pixels, 10, 7, pal, false).len(), 70);
-        assert_eq!(jarvis_judice_ninke(&pixels, 10, 7, pal, false).len(), 70);
-        assert_eq!(ordered_dither(&pixels, 10, pal).len(), 70);
+        for kernel in [&FLOYD_STEINBERG, &BURKES, &ATKINSON, &STUCKI, &SIERRA, &SIERRA_LITE, &JARVIS_JUDICE_NINKE] {
+            assert_eq!(error_diffusion_dither(&pixels, 10, 7, pal, None, kernel, false).len(), 70);
+        }
+        assert_eq!(ordered_dither(&pixels, 10, pal, None).len(), 70);
         assert_eq!(direct_map(&pixels, pal, None).len(), 70);
     }
 
@@ -337,8 +279,8 @@ mod tests {
             .cycle()
             .take(16 * 16 * 3)
             .collect();
-        let raster = floyd_steinberg(&pixels, 16, 16, fixtures::mono(), false);
-        let serpentine = floyd_steinberg(&pixels, 16, 16, fixtures::mono(), true);
+        let raster = error_diffusion_dither(&pixels, 16, 16, fixtures::mono(), None, &FLOYD_STEINBERG, false);
+        let serpentine = error_diffusion_dither(&pixels, 16, 16, fixtures::mono(), None, &FLOYD_STEINBERG, true);
         assert_ne!(raster, serpentine, "serpentine and raster should differ on a gradient");
     }
 
@@ -374,7 +316,7 @@ mod tests {
                 pixels.extend_from_slice(&[v, v, v]);
             }
         }
-        let out = ordered_dither(&pixels, W, fixtures::mono());
+        let out = ordered_dither(&pixels, W, fixtures::mono(), None);
 
         // Count per-band horizontal transitions (adjacent columns with differing index).
         let mut transitions = [0usize; BANDS];
@@ -428,7 +370,7 @@ mod tests {
         // fraction should sit near 0.5; the old -1/32 bias produced ≈ 7/16.
         const N: usize = 32;
         let pixels = solid_image(midpoint, midpoint, midpoint, N, N);
-        let out = ordered_dither(&pixels, N, pal);
+        let out = ordered_dither(&pixels, N, pal, None);
         let white = out.iter().filter(|&&v| v == 1).count() as f64 / out.len() as f64;
         assert!(
             (white - 0.5).abs() <= 1.0 / 16.0,
@@ -452,7 +394,7 @@ mod tests {
                 pixels.extend_from_slice(&[v, v, v]);
             }
         }
-        let out = ordered_dither(&pixels, W, pal);
+        let out = ordered_dither(&pixels, W, pal, None);
 
         // (a) 4-wide block average of palette level tracks the input level.
         let levels: Vec<f64> = pal.colors.iter().map(|&[r, _, _]| r as f64).collect();
@@ -488,8 +430,8 @@ mod tests {
             .cycle()
             .take(8 * 4 * 3)
             .collect();
-        let raster = floyd_steinberg(&pixels, 8, 4, fixtures::mono(), false);
-        let serpentine = floyd_steinberg(&pixels, 8, 4, fixtures::mono(), true);
+        let raster = error_diffusion_dither(&pixels, 8, 4, fixtures::mono(), None, &FLOYD_STEINBERG, false);
+        let serpentine = error_diffusion_dither(&pixels, 8, 4, fixtures::mono(), None, &FLOYD_STEINBERG, true);
         assert_eq!(
             &raster[0..8],
             &serpentine[0..8],

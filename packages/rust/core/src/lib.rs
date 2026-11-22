@@ -99,35 +99,14 @@ fn dispatch(
     mode: DitherMode,
     serpentine: bool,
 ) -> Vec<u8> {
-    match mode {
-        DitherMode::None => algorithms::direct_map(img.data, p, snap),
-        DitherMode::Ordered => match snap {
-            Some(s) => algorithms::ordered_dither_snapped(img.data, img.width, p, s),
-            None => algorithms::ordered_dither(img.data, img.width, p),
-        },
-        DitherMode::Dizzy => match snap {
-            Some(s) => dizzy::dizzy_dither_snapped(img.data, img.width, img.height, p, s),
-            None => dizzy::dizzy_dither(img.data, img.width, img.height, p),
-        },
-        DitherMode::FloydSteinberg
-        | DitherMode::Burkes
-        | DitherMode::Atkinson
-        | DitherMode::Stucki
-        | DitherMode::Sierra
-        | DitherMode::SierraLite
-        | DitherMode::JarvisJudiceNinke => {
-            // Every arm in this group has `kernel() == Some(_)` by construction
-            // (see `DitherMode::kernel` in enums.rs); `None`/`Ordered` are handled above.
-            let kernel = mode
-                .kernel()
-                .expect("kernel-based DitherMode variants always return Some from kernel()");
-            match snap {
-                Some(s) => algorithms::error_diffusion_dither_snapped(
-                    img.data, img.width, img.height, p, s, kernel, serpentine,
-                ),
-                None => algorithms::error_diffusion_dither(img.data, img.width, img.height, p, kernel, serpentine),
-            }
-        }
+    let (pixels, width, height) = (img.data, img.width, img.height);
+    match (mode, mode.kernel()) {
+        (_, Some(kernel)) => algorithms::error_diffusion_dither(pixels, width, height, p, snap, kernel, serpentine),
+        (DitherMode::Ordered, None) => algorithms::ordered_dither(pixels, width, p, snap),
+        (DitherMode::Dizzy, None) => dizzy::dizzy_dither(pixels, width, height, p, snap),
+        (DitherMode::None, None) => algorithms::direct_map(pixels, p, snap),
+        // Every other mode has a kernel (see `DitherMode::kernel`).
+        (_, None) => unreachable!("{mode} is an error-diffusion mode without a kernel"),
     }
 }
 
